@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { SefiLogo } from "@/components/sefi-logo";
 import {
   Sidebar,
   SidebarContent,
@@ -24,50 +25,37 @@ import {
   DropdownMenuSeparator, 
   DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu";
-import { 
-  Users, 
-  UserCircle, 
-  CreditCard, 
-  ClipboardList, 
-  Component, 
-  User, 
-  LogOut, 
+import type React from "react";
+import {
+  Users,
+  UserCircle,
+  User,
+  Component,
+  ClipboardList,
+  LogOut,
   ChevronsUpDown,
-  Settings,
   Shield
 } from "lucide-react";
 
-// Menu items
-const items = [
+const groups = [
   {
-    title: "Clientes",
-    url: "/dashboard/clientes",
-    icon: Users,
+    label: "Catálogos",
+    items: [
+      { title: "Clientes", url: "/dashboard/clientes", icon: Users },
+      { title: "Asesores", url: "/dashboard/asesores", icon: UserCircle },
+      { title: "Tasas y Plazos", url: "/dashboard/catalogos", icon: ClipboardList },
+    ],
   },
   {
-    title: "Asesores",
-    url: "/dashboard/asesores",
-    icon: UserCircle,
+    label: "Contabilidad",
+    items: [
+      { title: "Crédito Individual", url: "/dashboard/creditos-individuales", icon: User },
+      { title: "Crédito Grupal", url: "/dashboard/grupos", icon: Component },
+    ],
   },
   {
-    title: "Créditos",
-    url: "/dashboard/creditos",
-    icon: CreditCard,
-  },
-  {
-    title: "Créditos Indiv.",
-    url: "/dashboard/creditos-individuales",
-    icon: User,
-  },
-  {
-    title: "Créditos Grupales",
-    url: "/dashboard/grupos",
-    icon: Component,
-  },
-  {
-    title: "Tasas y Plazos",
-    url: "/dashboard/catalogos",
-    icon: ClipboardList,
+    label: "Reportes",
+    items: [] as { title: string; url: string; icon: React.ElementType }[],
   },
 ];
 
@@ -78,35 +66,40 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>
-        <div className="flex h-14 items-center px-4 font-bold text-lg border-b">
-          SEFI Panel
+        <div className="flex h-16 items-center gap-2 px-2 border-b overflow-hidden group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
+          <SefiLogo />
+          <span className="font-bold text-lg truncate group-data-[collapsible=icon]:hidden">
+            AGC SEFI
+          </span>
         </div>
       </SidebarHeader>
       <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>Módulos</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {items.map((item) => {
-                const isActive = pathname === item.url || pathname.startsWith(`${item.url}/`);
-                return (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton
-                      isActive={isActive}
-                      tooltip={item.title}
-                      render={
-                        <Link href={item.url}>
-                          <item.icon />
-                          <span>{item.title}</span>
-                        </Link>
-                      }
-                    />
-                  </SidebarMenuItem>
-                );
-              })}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {groups.map((group) => (
+          <SidebarGroup key={group.label}>
+            <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {group.items.map((item) => {
+                  const isActive = pathname === item.url || pathname.startsWith(`${item.url}/`);
+                  return (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton
+                        isActive={isActive}
+                        tooltip={item.title}
+                        render={
+                          <Link href={item.url}>
+                            <item.icon />
+                            <span>{item.title}</span>
+                          </Link>
+                        }
+                      />
+                    </SidebarMenuItem>
+                  );
+                })}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        ))}
       </SidebarContent>
       <SidebarFooter>
         <SidebarMenu>
