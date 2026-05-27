@@ -22,6 +22,7 @@ const groups = [
     label: "Catálogos",
     items: [
       { title: "Clientes", url: "/dashboard/clientes", icon: Users },
+      { title: "Grupos", url: "/dashboard/grupos", icon: Component },
       { title: "Asesores", url: "/dashboard/asesores", icon: UserCircle },
       { title: "Tasas y Plazos", url: "/dashboard/catalogos", icon: ClipboardList },
     ],
@@ -30,7 +31,7 @@ const groups = [
     label: "Contabilidad",
     items: [
       { title: "Crédito Individual", url: "/dashboard/creditos-individuales", icon: User },
-      { title: "Crédito Grupal", url: "/dashboard/grupos", icon: Component },
+      { title: "Crédito Grupal", url: "/dashboard/creditos-grupales", icon: Component },
     ],
   },
   {

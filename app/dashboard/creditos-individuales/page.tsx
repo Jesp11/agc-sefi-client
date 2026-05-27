@@ -111,14 +111,13 @@ export default function CreditosIndividualesPage() {
               <TableHead>Monto</TableHead>
               <TableHead>Interés</TableHead>
               <TableHead>Total</TableHead>
-              <TableHead>Desembolso</TableHead>
               <TableHead className="text-right">Acción</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={11} className="h-32 text-center">
+                <TableCell colSpan={10} className="h-32 text-center">
                   <div className="flex flex-col items-center gap-2">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
                     <p className="text-sm text-muted-foreground">Cargando créditos...</p>
@@ -127,7 +126,7 @@ export default function CreditosIndividualesPage() {
               </TableRow>
             ) : filtered.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={11} className="h-32 text-center text-muted-foreground">
+                <TableCell colSpan={10} className="h-32 text-center text-muted-foreground">
                   No se encontraron créditos individuales para mostrar.
                 </TableCell>
               </TableRow>
@@ -150,7 +149,6 @@ export default function CreditosIndividualesPage() {
                   <TableCell className="text-xs font-semibold">${c.monto_otorgado}</TableCell>
                   <TableCell className="text-xs text-muted-foreground">${c.interes}</TableCell>
                   <TableCell className="text-xs font-bold text-primary">${c.total}</TableCell>
-                  <TableCell className="text-xs">{fmtFecha(c.fecha_otorgacion)}</TableCell>
                   <TableCell className="text-right">
                     <Button
                       size="sm"
