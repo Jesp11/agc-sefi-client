@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ArrowLeft, User, Users, CreditCard, Component, PlusCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
+import { fmtFecha } from "@/lib/utils";
 import { 
   Dialog, 
   DialogContent, 
@@ -181,7 +182,7 @@ export default function GrupoDetallePage() {
                       grupo.creditos.map((credito: any) => (
                         <TableRow key={credito.id}>
                           <TableCell className="font-bold">Ciclo {credito.ciclo}</TableCell>
-                          <TableCell className="text-xs">{credito.fecha_otorgacion}</TableCell>
+                          <TableCell className="text-xs">{fmtFecha(credito.fecha_otorgacion)}</TableCell>
                           <TableCell>{credito.dias_pago}</TableCell>
                           <TableCell className="text-center">{credito.plazos} sem</TableCell>
                           <TableCell className="font-bold">${credito.monto_otorgado}</TableCell>

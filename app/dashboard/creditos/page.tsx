@@ -16,6 +16,7 @@ import { PlusCircle, User, Users, Sparkles } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
+import { fmtFecha } from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -146,7 +147,7 @@ export default function CreditosPage() {
                     #{c.num_prog}
                   </TableCell>
                   <TableCell className="text-xs">
-                    {c.fecha_otorgacion || "N/A"}
+                    {fmtFecha(c.fecha_otorgacion)}
                   </TableCell>
                   <TableCell>
                     <Badge variant={c.tipo_credito === 'Individual' ? 'outline' : 'secondary'} className="text-[10px]">

@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { CreditForm } from "@/components/credit-form";
 import { Badge } from "../../../../components/ui/badge";
+import { fmtFecha } from "@/lib/utils";
 
 export default function ClienteDetallePage() {
   const { id } = useParams();
@@ -125,14 +126,14 @@ export default function ClienteDetallePage() {
                   <span className="text-xs text-muted-foreground font-medium">Fecha de Nacimiento</span>
                   <span className="flex items-center gap-2">
                     <Cake className="h-3 w-3" />
-                    {new Date(cliente.fecha_nacimiento).toLocaleDateString("es-MX", { day: "2-digit", month: "long", year: "numeric" })}
+                    {fmtFecha(cliente.fecha_nacimiento)}
                   </span>
                 </div>
               )}
               {cliente.created_at && (
                 <div className="flex flex-col gap-1">
                   <span className="text-xs text-muted-foreground font-medium">Cliente desde</span>
-                  <span>{new Date(cliente.created_at).toLocaleDateString("es-MX", { day: "2-digit", month: "long", year: "numeric" })}</span>
+                  <span>{fmtFecha(cliente.created_at.split("T")[0])}</span>
                 </div>
               )}
             </CardContent>

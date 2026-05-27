@@ -12,6 +12,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
+import { fmtFecha } from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -24,12 +25,6 @@ import { PlusCircle } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { toast } from "sonner";
 
-function formatFecha(fecha: string) {
-  if (!fecha) return "—";
-  const [y, m, d] = fecha.split("-");
-  const meses = ["ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC"];
-  return `${parseInt(d, 10)} ${meses[parseInt(m, 10) - 1]} ${y}`;
-}
 
 export default function AsesoresPage() {
   const router = useRouter();
@@ -187,7 +182,7 @@ export default function AsesoresPage() {
                   <TableCell className="font-mono text-xs">{asesor.id_asesor ?? asesor.id}</TableCell>
                   <TableCell className="font-medium">{asesor.nombre_asesor}</TableCell>
                   <TableCell className="font-mono text-xs">{asesor.curp ?? "—"}</TableCell>
-                  <TableCell className="text-sm">{asesor.created_at ? formatFecha(asesor.created_at.split("T")[0]) : "—"}</TableCell>
+                  <TableCell className="text-sm">{asesor.created_at ? fmtFecha(asesor.created_at.split("T")[0]) : "—"}</TableCell>
                   <TableCell className="text-right">
                     <Button
                       variant="ghost"

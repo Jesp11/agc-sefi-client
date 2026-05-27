@@ -41,8 +41,15 @@ export function CustomCreditForm({ onSuccess, onClose }: CustomCreditFormProps) 
   const [formData, setFormData] = useState({
     monto_solicitado: 3000,
     origen: "nuevo",
-    dias_pago: "Lunes",
+    fecha_otorgacion: new Date().toISOString().split('T')[0],
+    fecha_primer_pago: "",
   });
+
+  const getDiaPago = (dateStr: string): string => {
+    if (!dateStr) return "";
+    const [y, m, d] = dateStr.split('-').map(Number);
+    return ["Domingo","Lunes","Martes","Miércoles","Jueves","Viernes","Sábado"][new Date(y, m - 1, d).getDay()];
+  };
 
   // Fetch clients on mount
   useEffect(() => {
@@ -81,6 +88,8 @@ export function CustomCreditForm({ onSuccess, onClose }: CustomCreditFormProps) 
 
   const handleSimulate = async () => {
     if (!selectedClient) return;
+    if (!formData.fecha_otorgacion) { toast.error("Indica la fecha de desembolso"); return; }
+    if (!formData.fecha_primer_pago) { toast.error("Indica la fecha de primer pago"); return; }
     
     setSimulating(true);
     setSimResult(null);
@@ -124,13 +133,14 @@ export function CustomCreditForm({ onSuccess, onClose }: CustomCreditFormProps) 
         method: "POST",
         body: JSON.stringify({
           id_cliente: selectedClient.id_cliente,
-          fecha_otorgacion: new Date().toISOString().split('T')[0],
+          fecha_otorgacion: formData.fecha_otorgacion,
+          fecha_primer_pago: formData.fecha_primer_pago,
           monto_otorgado: formData.monto_solicitado,
           interes: selectedOption.interes_total,
           total: selectedOption.total_a_pagar,
           plazos: selectedOption.plazo_semanas,
           valor_ficha: selectedOption.pago_semanal,
-          dias_pago: formData.dias_pago
+          dias_pago: getDiaPago(formData.fecha_primer_pago),
         }),
       });
       
@@ -150,9 +160,9 @@ export function CustomCreditForm({ onSuccess, onClose }: CustomCreditFormProps) 
   };
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col flex-1 overflow-hidden min-h-0 gap-4">
       {/* Stepper Header */}
-      <div className="flex justify-center items-center mb-4 gap-1">
+      <div className="flex justify-center items-center gap-1">
         {[1, 2, 3].map((s) => (
           <div key={s} className="flex items-center">
             <div className={cn(
@@ -166,7 +176,7 @@ export function CustomCreditForm({ onSuccess, onClose }: CustomCreditFormProps) 
         ))}
       </div>
 
-      <div className="">
+      <div className="flex-1 overflow-y-auto min-h-0 pr-1">
         {/* Step 1: Client Selection */}
         {step === 1 && (
           <div className="grid gap-2">
@@ -249,16 +259,16 @@ export function CustomCreditForm({ onSuccess, onClose }: CustomCreditFormProps) 
             <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">
                 <Label>Monto a Solicitar ($)</Label>
-                <Input 
-                  type="number" 
-                  value={formData.monto_solicitado} 
+                <Input
+                  type="number"
+                  value={formData.monto_solicitado}
                   onChange={(e) => setFormData({...formData, monto_solicitado: parseFloat(e.target.value)})}
                 />
               </div>
-              
+
               <div className="grid gap-2">
                 <Label>Origen</Label>
-                <select 
+                <select
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                   value={formData.origen}
                   onChange={(e) => setFormData({...formData, origen: e.target.value})}
@@ -270,20 +280,30 @@ export function CustomCreditForm({ onSuccess, onClose }: CustomCreditFormProps) 
               </div>
 
               <div className="grid gap-2">
-                <Label>Día de Pago</Label>
-                <select 
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  value={formData.dias_pago}
-                  onChange={(e) => setFormData({...formData, dias_pago: e.target.value})}
-                >
-                  <option value="Lunes">Lunes</option>
-                  <option value="Martes">Martes</option>
-                  <option value="Miércoles">Miércoles</option>
-                  <option value="Jueves">Jueves</option>
-                  <option value="Viernes">Viernes</option>
-                </select>
+                <Label>Fecha de Desembolso</Label>
+                <Input
+                  type="date"
+                  value={formData.fecha_otorgacion}
+                  onChange={(e) => setFormData({...formData, fecha_otorgacion: e.target.value})}
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <Label>Fecha de Primer Pago</Label>
+                <Input
+                  type="date"
+                  value={formData.fecha_primer_pago}
+                  onChange={(e) => setFormData({...formData, fecha_primer_pago: e.target.value})}
+                />
               </div>
             </div>
+
+            {formData.fecha_primer_pago && (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/40 rounded-md px-3 py-2">
+                <span>Día de pago:</span>
+                <Badge variant="secondary" className="font-semibold">{getDiaPago(formData.fecha_primer_pago)}</Badge>
+              </div>
+            )}
           </div>
         )}
 
@@ -349,7 +369,7 @@ export function CustomCreditForm({ onSuccess, onClose }: CustomCreditFormProps) 
       </div>
 
       {/* Navigation Footer */}
-      <div className="flex justify-between mt-2">
+      <div className="flex justify-between pt-2 border-t">
         <Button variant="ghost" onClick={step === 1 ? onClose : () => setStep(step - 1)} disabled={loading}>
           {step === 1 ? "Cancelar" : <><ChevronLeft className="mr-2 h-4 w-4" /> Anterior</>}
         </Button>
