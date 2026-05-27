@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowLeft, User, Phone, MapPin, Briefcase, ShieldCheck, ClipboardList, CreditCard, PlusCircle, Edit, Component } from "lucide-react";
+import { ArrowLeft, User, Phone, MapPin, Briefcase, ShieldCheck, ClipboardList, CreditCard, PlusCircle, Edit, Component, Cake } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { CreditForm } from "@/components/credit-form";
@@ -83,283 +83,300 @@ export default function ClienteDetallePage() {
         </div>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-3">
-        {/* Información General */}
-        <Card className="md:col-span-1">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <User className="h-5 w-5 text-primary" />
-              Información General
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-4 text-sm">
-            <div className="flex flex-col gap-1">
-              <span className="text-muted-foreground font-medium">Grupo</span>
-              {cliente.grupos && cliente.grupos.length > 0 ? (
-                <div className="flex items-center gap-2">
-                  <Component className="h-3 w-3 text-primary" />
-                  <span className="font-bold text-primary">{cliente.grupos[0].nombre_grupo}</span>
+      <Tabs defaultValue="personal" className="w-full">
+        <TabsList className="grid w-full grid-cols-7">
+          <TabsTrigger value="personal">Personal</TabsTrigger>
+          <TabsTrigger value="domicilio">Domicilio</TabsTrigger>
+          <TabsTrigger value="laboral">Laboral</TabsTrigger>
+          <TabsTrigger value="creditos">Créditos</TabsTrigger>
+          <TabsTrigger value="avales">Avales</TabsTrigger>
+          <TabsTrigger value="referencias">Referencias</TabsTrigger>
+          <TabsTrigger value="asesor">Asesor</TabsTrigger>
+        </TabsList>
+
+        {/* Personal */}
+        <TabsContent value="personal" className="mt-4">
+          <Card>
+            <CardContent className="pt-6 grid grid-cols-2 gap-6 text-sm">
+              <div className="flex flex-col gap-1">
+                <span className="text-xs text-muted-foreground font-medium">Grupo</span>
+                {cliente.grupos && cliente.grupos.length > 0 ? (
+                  <span className="font-bold text-primary flex items-center gap-1">
+                    <Component className="h-3 w-3" /> {cliente.grupos[0].nombre_grupo}
+                  </span>
+                ) : (
+                  <Badge variant="outline" className="w-fit">Individual</Badge>
+                )}
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-xs text-muted-foreground font-medium">Teléfono</span>
+                <span className="flex items-center gap-2"><Phone className="h-3 w-3" /> {cliente.telefono}</span>
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-xs text-muted-foreground font-medium">CURP</span>
+                <span className="font-mono">{cliente.curp}</span>
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-xs text-muted-foreground font-medium">Clave de Elector</span>
+                <span className="font-mono">{cliente.clave_elector}</span>
+              </div>
+              {cliente.fecha_nacimiento && (
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs text-muted-foreground font-medium">Fecha de Nacimiento</span>
+                  <span className="flex items-center gap-2">
+                    <Cake className="h-3 w-3" />
+                    {new Date(cliente.fecha_nacimiento).toLocaleDateString("es-MX", { day: "2-digit", month: "long", year: "numeric" })}
+                  </span>
                 </div>
-              ) : (
-                <Badge variant="outline" className="w-fit">Individual</Badge>
               )}
-            </div>
-            <div className="flex flex-col gap-1">
-              <span className="text-muted-foreground font-medium">CURP</span>
-              <span>{cliente.curp}</span>
-            </div>
-            <div className="flex flex-col gap-1">
-              <span className="text-muted-foreground font-medium">Clave Elector</span>
-              <span className="flex items-center gap-2">
-                {cliente.clave_elector}
-              </span>
-            </div>
-            <div className="flex flex-col gap-1">
-              <span className="text-muted-foreground font-medium">Teléfono</span>
-              <span className="flex items-center gap-2">
-                <Phone className="h-3 w-3" /> {cliente.telefono}
-              </span>
-            </div>
-            <div className="flex flex-col gap-1">
-              <span className="text-muted-foreground font-medium">Dirección</span>
-              <span className="flex items-center gap-2">
-                <MapPin className="h-3 w-3" /> {cliente.direccion}
-              </span>
-            </div>
-            <div className="flex flex-col gap-1">
-              <span className="text-muted-foreground font-medium">Entre Calle y Calle</span>
-              <span className="flex items-center gap-2">
-                <MapPin className="h-3 w-3" /> {cliente.entre_calles}
-              </span>
-            </div>
-            <div className="flex flex-col gap-1">
-              <span className="text-muted-foreground font-medium">Ocupación</span>
-              <span className="flex items-center gap-2">
-                <Briefcase className="h-3 w-3" /> {cliente.ocupacion}
-              </span>
-            </div>
-            <div className="flex flex-col gap-1">
-              <span className="text-muted-foreground font-medium">Dirección de Trabajo</span>
-              <span className="flex items-center gap-2">
-                <MapPin className="h-3 w-3" /> {cliente.direccion_trabajo}
-              </span>
-            </div>
-            <div className="flex flex-col gap-1">
-              <span className="text-muted-foreground font-medium">Teléfono de Trabajo</span>
-              <span className="flex items-center gap-2">
-                <Phone className="h-3 w-3" /> {cliente.telefono_trabajo}
-              </span>
-            </div>
-          </CardContent>
-        </Card>
+              {cliente.created_at && (
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs text-muted-foreground font-medium">Cliente desde</span>
+                  <span>{new Date(cliente.created_at).toLocaleDateString("es-MX", { day: "2-digit", month: "long", year: "numeric" })}</span>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-        {/* Tabs de Información Relacionada */}
-        <div className="md:col-span-2">
-          <Tabs defaultValue="creditos" className="w-full">
-            <TabsList className="grid w-full grid-cols-4">
-              <TabsTrigger value="creditos">Créditos</TabsTrigger>
-              <TabsTrigger value="avales">Avales</TabsTrigger>
-              <TabsTrigger value="referencias">Referencias</TabsTrigger>
-              <TabsTrigger value="asesor">Asesor</TabsTrigger>
-            </TabsList>
+        {/* Domicilio */}
+        <TabsContent value="domicilio" className="mt-4">
+          <Card>
+            <CardContent className="pt-6 grid grid-cols-1 gap-6 text-sm">
+              <div className="flex flex-col gap-1">
+                <span className="text-xs text-muted-foreground font-medium">Dirección</span>
+                <span className="flex items-center gap-2"><MapPin className="h-3 w-3" /> {cliente.direccion}</span>
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-xs text-muted-foreground font-medium">Entre Calle y Calle</span>
+                <span className="flex items-center gap-2"><MapPin className="h-3 w-3" /> {cliente.entre_calles}</span>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-            <TabsContent value="creditos" className="mt-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-lg">
-                    <CreditCard className="h-5 w-5" /> Historial de Créditos
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Ciclo</TableHead>
-                        <TableHead>Dia Pago</TableHead>
-                        <TableHead>Asesor</TableHead>
-                        <TableHead>Valor Ficha</TableHead>
-                        <TableHead>Plazos</TableHead>
-                        <TableHead>Monto Otorgado</TableHead>
-                        <TableHead>Interes</TableHead>
-                        <TableHead>Total</TableHead>
-                        <TableHead className="text-right">Acciones</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {cliente.creditos && cliente.creditos.length > 0 ? (
-                        cliente.creditos.map((c: any, index: number) => (
-                          <TableRow key={c.id_credito || c.id || index}>
-                            <TableCell>{c.ciclo}</TableCell>
-                            <TableCell>{c.dias_pago}</TableCell>
-                            <TableCell>{c.asesor?.nombre_asesor || "N/A"}</TableCell>
-                            <TableCell className="font-bold">${c.valor_ficha}</TableCell>
-                            <TableCell>{c.plazos} sem</TableCell>
-                            <TableCell>${c.monto_otorgado}</TableCell>
-                            <TableCell>${c.interes}</TableCell>
-                            <TableCell>${c.total}</TableCell>
-                            <TableCell className="text-right">
-                              <Dialog>
-                                <DialogTrigger render={
-                                  <Button variant="outline" size="sm">
-                                    Ver Tabla
-                                  </Button>
-                                } />
-                                <DialogContent className="sm:max-w-[600px]">
-                                  <DialogHeader>
-                                    <DialogTitle>Tabla de Amortización - Ciclo {c.ciclo}</DialogTitle>
-                                    <DialogDescription>
-                                      Monto: ${c.monto_otorgado} | Total a pagar: ${c.total}
-                                    </DialogDescription>
-                                  </DialogHeader>
-                                  <div className="max-h-[400px] overflow-y-auto border rounded-md">
-                                    <Table>
-                                      <TableHeader>
-                                        <TableRow>
-                                          <TableHead className="w-[80px]">Pago #</TableHead>
-                                          <TableHead>Fecha Sugerida</TableHead>
-                                          <TableHead className="text-right">Monto</TableHead>
-                                          <TableHead className="text-right">Saldo Restante</TableHead>
+        {/* Laboral */}
+        <TabsContent value="laboral" className="mt-4">
+          <Card>
+            <CardContent className="pt-6 grid grid-cols-2 gap-6 text-sm">
+              <div className="flex flex-col gap-1">
+                <span className="text-xs text-muted-foreground font-medium">Ocupación</span>
+                <span className="flex items-center gap-2"><Briefcase className="h-3 w-3" /> {cliente.ocupacion}</span>
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-xs text-muted-foreground font-medium">Teléfono de Trabajo</span>
+                <span className="flex items-center gap-2"><Phone className="h-3 w-3" /> {cliente.telefono_trabajo}</span>
+              </div>
+              <div className="flex flex-col gap-1 col-span-2">
+                <span className="text-xs text-muted-foreground font-medium">Dirección de Trabajo</span>
+                <span className="flex items-center gap-2"><MapPin className="h-3 w-3" /> {cliente.direccion_trabajo}</span>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Créditos */}
+        <TabsContent value="creditos" className="mt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <CreditCard className="h-5 w-5" /> Historial de Créditos
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Ciclo</TableHead>
+                    <TableHead>Dia Pago</TableHead>
+                    <TableHead>Asesor</TableHead>
+                    <TableHead>Valor Ficha</TableHead>
+                    <TableHead>Plazos</TableHead>
+                    <TableHead>Monto Otorgado</TableHead>
+                    <TableHead>Interés</TableHead>
+                    <TableHead>Total</TableHead>
+                    <TableHead className="text-right">Acciones</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {cliente.creditos && cliente.creditos.length > 0 ? (
+                    cliente.creditos.map((c: any, index: number) => (
+                      <TableRow key={c.id_credito || c.id || index}>
+                        <TableCell>{c.ciclo}</TableCell>
+                        <TableCell>{c.dias_pago}</TableCell>
+                        <TableCell>{c.asesor?.nombre_asesor || "N/A"}</TableCell>
+                        <TableCell className="font-bold">${c.valor_ficha}</TableCell>
+                        <TableCell>{c.plazos} sem</TableCell>
+                        <TableCell>${c.monto_otorgado}</TableCell>
+                        <TableCell>${c.interes}</TableCell>
+                        <TableCell>${c.total}</TableCell>
+                        <TableCell className="text-right">
+                          <Dialog>
+                            <DialogTrigger render={<Button variant="outline" size="sm">Ver Tabla</Button>} />
+                            <DialogContent className="sm:max-w-[600px]">
+                              <DialogHeader>
+                                <DialogTitle>Tabla de Amortización - Ciclo {c.ciclo}</DialogTitle>
+                                <DialogDescription>Monto: ${c.monto_otorgado} | Total a pagar: ${c.total}</DialogDescription>
+                              </DialogHeader>
+                              <div className="max-h-[400px] overflow-y-auto border rounded-md">
+                                <Table>
+                                  <TableHeader>
+                                    <TableRow>
+                                      <TableHead className="w-[80px]">Pago #</TableHead>
+                                      <TableHead>Fecha Sugerida</TableHead>
+                                      <TableHead className="text-right">Monto</TableHead>
+                                      <TableHead className="text-right">Saldo Restante</TableHead>
+                                    </TableRow>
+                                  </TableHeader>
+                                  <TableBody>
+                                    {c.tabla_amortizacion ? (
+                                      (typeof c.tabla_amortizacion === 'string' ? JSON.parse(c.tabla_amortizacion) : c.tabla_amortizacion).map((p: any) => (
+                                        <TableRow key={p.pago_numero}>
+                                          <TableCell className="font-medium">#{p.pago_numero}</TableCell>
+                                          <TableCell className="text-xs">{p.fecha_sugerida}</TableCell>
+                                          <TableCell className="text-right font-bold">${p.monto_pago}</TableCell>
+                                          <TableCell className="text-right text-muted-foreground text-xs">${p.saldo_restante}</TableCell>
                                         </TableRow>
-                                      </TableHeader>
-                                      <TableBody>
-                                        {c.tabla_amortizacion ? (
-                                          (typeof c.tabla_amortizacion === 'string' 
-                                            ? JSON.parse(c.tabla_amortizacion) 
-                                            : c.tabla_amortizacion).map((p: any) => (
-                                            <TableRow key={p.pago_numero}>
-                                              <TableCell className="font-medium">#{p.pago_numero}</TableCell>
-                                              <TableCell className="text-xs">{p.fecha_sugerida}</TableCell>
-                                              <TableCell className="text-right font-bold">${p.monto_pago}</TableCell>
-                                              <TableCell className="text-right text-muted-foreground text-xs">${p.saldo_restante}</TableCell>
-                                            </TableRow>
-                                          ))
-                                        ) : (
-                                          <TableRow>
-                                            <TableCell colSpan={4} className="text-center p-4">No hay tabla disponible</TableCell>
-                                          </TableRow>
-                                        )}
-                                      </TableBody>
-                                    </Table>
-                                  </div>
-                                </DialogContent>
-                              </Dialog>
-                            </TableCell>
-                          </TableRow>
-                        ))
-                      ) : (
-                        <TableRow key="empty-creditos">
-                          <TableCell colSpan={9} className="text-center">Sin créditos registrados</TableCell>
-                        </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            <TabsContent value="avales" className="mt-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-lg">
-                    <ShieldCheck className="h-5 w-5" /> Avales
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                   <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Nombre</TableHead>
-                        <TableHead>Dirección</TableHead>
-                        <TableHead>Teléfono</TableHead>
-                        <TableHead>Parentesco</TableHead>
+                                      ))
+                                    ) : (
+                                      <TableRow><TableCell colSpan={4} className="text-center p-4">No hay tabla disponible</TableCell></TableRow>
+                                    )}
+                                  </TableBody>
+                                </Table>
+                              </div>
+                            </DialogContent>
+                          </Dialog>
+                        </TableCell>
                       </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {cliente.avales && cliente.avales.length > 0 ? (
-                        cliente.avales.map((a: any, index: number) => (
-                          <TableRow key={a.id_aval || a.id || index}>
-                            <TableCell className="font-medium">{a.nombre}</TableCell>
-                            <TableCell className="text-xs">{a.direccion}</TableCell>
-                            <TableCell>{a.telefono}</TableCell>
-                            <TableCell>{a.parentesco}</TableCell>
-                          </TableRow>
-                        ))
-                      ) : (
-                        <TableRow key="empty-avales">
-                          <TableCell colSpan={4} className="text-center">Sin avales registrados</TableCell>
-                        </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
-            </TabsContent>
+                    ))
+                  ) : (
+                    <TableRow key="empty-creditos">
+                      <TableCell colSpan={9} className="text-center">Sin créditos registrados</TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-            <TabsContent value="referencias" className="mt-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-lg">
-                    <ClipboardList className="h-5 w-5" /> Referencias
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                   <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Nombre</TableHead>
-                        <TableHead>Parentesco</TableHead>
-                        <TableHead>Dirección</TableHead>
-                        <TableHead>Teléfono</TableHead>
-                        <TableHead> Tiempo de conocerse </TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {cliente.referencias && cliente.referencias.length > 0 ? (
-                        cliente.referencias.map((r: any, index: number) => (
-                          <TableRow key={r.id_referencia || r.id || index}>
-                            <TableCell className="font-medium">{r.nombre}</TableCell>
-                            <TableCell>{r.parentesco}</TableCell>
-                            <TableCell>{r.direccion}</TableCell>
-                            <TableCell>{r.telefono}</TableCell>
-                            <TableCell>{r.años_amistad}</TableCell>
-                          </TableRow>
-                        ))
-                      ) : (
-                        <TableRow key="empty-referencias">
-                          <TableCell colSpan={5} className="text-center">Sin referencias registradas</TableCell>
-                        </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            <TabsContent value="asesor" className="mt-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Asesor Asignado</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {cliente.asesor ? (
-                    <div className="flex items-center gap-4">
-                      <div className="bg-primary/10 p-3 rounded-full">
-                        <User className="h-6 w-6 text-primary" />
+        {/* Avales */}
+        <TabsContent value="avales" className="mt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <ShieldCheck className="h-5 w-5" /> Avales
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {cliente.avales && cliente.avales.length > 0 ? (
+                  cliente.avales.map((a: any, index: number) => (
+                    <div key={a.id_aval || a.id || index} className="border rounded-lg p-4 grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+                      <div className="col-span-2 font-semibold text-base">{a.nombre}</div>
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-xs text-muted-foreground">Parentesco</span>
+                        <span>{a.parentesco || "—"}</span>
                       </div>
-                      <div>
-                        <p className="font-bold text-lg">{cliente.asesor.nombre_asesor}</p>
-                        <p className="text-muted-foreground">ID Asesor: {cliente.asesor.id_asesor ?? cliente.asesor.id}</p>
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-xs text-muted-foreground">Teléfono</span>
+                        <span>{a.telefono || "—"}</span>
+                      </div>
+                      <div className="flex flex-col gap-0.5 col-span-2">
+                        <span className="text-xs text-muted-foreground">Dirección</span>
+                        <span>{a.direccion || "—"}</span>
+                      </div>
+                      {(a.ocupacion_laboral || a.empresa || a.tiempo_conocer) && (
+                        <>
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-xs text-muted-foreground">Ocupación Laboral</span>
+                            <span>{a.ocupacion_laboral || "—"}</span>
+                          </div>
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-xs text-muted-foreground">Empresa / Negocio</span>
+                            <span>{a.empresa || "—"}</span>
+                          </div>
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-xs text-muted-foreground">Tiempo de conocerse</span>
+                            <span>{a.tiempo_conocer || "—"}</span>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-center text-muted-foreground py-4 text-sm">Sin avales registrados</p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Referencias */}
+        <TabsContent value="referencias" className="mt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <ClipboardList className="h-5 w-5" /> Referencias
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {cliente.referencias && cliente.referencias.length > 0 ? (
+                  cliente.referencias.map((r: any, index: number) => (
+                    <div key={r.id_referencia || r.id || index} className="border rounded-lg p-4 grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+                      <div className="col-span-2 font-semibold text-base">{r.nombre}</div>
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-xs text-muted-foreground">Parentesco</span>
+                        <span>{r.parentesco || "—"}</span>
+                      </div>
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-xs text-muted-foreground">Teléfono</span>
+                        <span>{r.telefono || "—"}</span>
+                      </div>
+                      <div className="flex flex-col gap-0.5 col-span-2">
+                        <span className="text-xs text-muted-foreground">Dirección</span>
+                        <span>{r.direccion || "—"}</span>
+                      </div>
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-xs text-muted-foreground">Tipo</span>
+                        <span>{r.tipo_referencia || "—"}</span>
+                      </div>
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-xs text-muted-foreground">Tiempo de conocerse</span>
+                        <span>{r.años_amistad ? `${r.años_amistad} año(s)` : "—"}</span>
                       </div>
                     </div>
-                  ) : (
-                    <p>No tiene asesor asignado directamente.</p>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
-        </div>
-      </div>
+                  ))
+                ) : (
+                  <p className="text-center text-muted-foreground py-4 text-sm">Sin referencias registradas</p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Asesor */}
+        <TabsContent value="asesor" className="mt-4">
+          <Card>
+            <CardContent className="pt-6">
+              {cliente.asesor ? (
+                <div className="flex items-center gap-4">
+                  <div className="bg-primary/10 p-3 rounded-full">
+                    <User className="h-6 w-6 text-primary" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-lg">{cliente.asesor.nombre_asesor}</p>
+                    <p className="text-muted-foreground text-sm">ID: {cliente.asesor.id_asesor ?? cliente.asesor.id}</p>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-muted-foreground text-sm">No tiene asesor asignado.</p>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

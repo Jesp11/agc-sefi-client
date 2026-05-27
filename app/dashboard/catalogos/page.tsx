@@ -36,17 +36,17 @@ export default function CatalogosPage() {
 
   const getRateInfo = (key: string) => {
     const info: any = {
-      'TCIN21': { name: 'Tasa Normal', annual: 21 },
-      'TCIP18': { name: 'Tasa Preferencial', annual: 18 },
-      'TCIPE14': { name: 'Tasa Preferencial Especial', annual: 14 },
-      'TCIPV10': { name: 'Tasa VIP', annual: 10 },
-      'TCGN10': { name: 'Grupo Normal', annual: 10 },
-      'TCGP07': { name: 'Grupo Preferencial', annual: 7 },
-      'TCGPE04': { name: 'Grupo Especial', annual: 4 },
-      'TCGPEV01': { name: 'Grupo VIP', annual: 1 },
-      'TCGEC00': { name: 'Grupo Exclusivo (Cero)', annual: 0 },
+      'TCIN21': { name: 'Tasa Normal' },
+      'TCIP18': { name: 'Tasa Preferencial' },
+      'TCIPE14': { name: 'Tasa Preferencial Especial' },
+      'TCIPV10': { name: 'Tasa VIP' },
+      'TCGN10': { name: 'Grupo Normal' },
+      'TCGP07': { name: 'Grupo Preferencial' },
+      'TCGPE04': { name: 'Grupo Especial' },
+      'TCGPEV01': { name: 'Grupo VIP' },
+      'TCGEC00': { name: 'Grupo Exclusivo (Cero)' },
     };
-    return info[key] || { name: key, annual: 0 };
+    return info[key] || { name: key };
   };
 
   if (loading) return <div className="p-8 text-center text-muted-foreground">Cargando catálogos oficiales...</div>;
@@ -116,7 +116,6 @@ export default function CatalogosPage() {
                   <TableRow>
                     <TableHead>Identificador</TableHead>
                     <TableHead>Descripción</TableHead>
-                    <TableHead className="text-center">Tasa Anual</TableHead>
                     <TableHead className="text-right">Factor 12 sem</TableHead>
                     <TableHead className="text-right">Factor 14 sem</TableHead>
                     <TableHead className="text-right">Factor 16 sem</TableHead>
@@ -127,7 +126,6 @@ export default function CatalogosPage() {
                     <TableRow key={key}>
                       <TableCell className="font-mono text-xs font-bold">{key}</TableCell>
                       <TableCell className="text-xs">{getRateInfo(key).name}</TableCell>
-                      <TableCell className="text-center font-bold text-primary">{getRateInfo(key).annual}%</TableCell>
                       <TableCell className="text-right">${val[12] || "-"}</TableCell>
                       <TableCell className="text-right">${val[14] || "-"}</TableCell>
                       <TableCell className="text-right">${val[16] || "-"}</TableCell>
@@ -183,7 +181,6 @@ export default function CatalogosPage() {
                   <TableRow>
                     <TableHead>ID Tasa</TableHead>
                     <TableHead>Nivel</TableHead>
-                    <TableHead className="text-center">Tasa Anual</TableHead>
                     <TableHead className="text-right">Factor 14 sem</TableHead>
                     <TableHead className="text-right">Factor 16 sem</TableHead>
                     <TableHead className="text-right">Factor 18 sem</TableHead>
@@ -194,7 +191,6 @@ export default function CatalogosPage() {
                     <TableRow key={key}>
                       <TableCell className="font-mono text-xs font-bold">{key}</TableCell>
                       <TableCell className="text-xs uppercase">{getRateInfo(key).name}</TableCell>
-                      <TableCell className="text-center font-bold text-primary">{getRateInfo(key).annual}%</TableCell>
                       <TableCell className="text-right">${val[14] || "-"}</TableCell>
                       <TableCell className="text-right">${val[16] || "-"}</TableCell>
                       <TableCell className="text-right">${val[18] || "-"}</TableCell>

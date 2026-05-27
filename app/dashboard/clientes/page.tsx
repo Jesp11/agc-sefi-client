@@ -18,7 +18,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { PlusCircle, Edit } from "lucide-react";
+import { PlusCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { toast } from "sonner";
@@ -73,7 +73,7 @@ export default function ClientesPage() {
               </Button>
             }
           />
-          <DialogContent className="sm:max-w-[600px]">
+          <DialogContent className="sm:max-w-[600px] h-[520px] flex flex-col">
             <DialogHeader>
               <DialogTitle>Registro de Nuevo Cliente</DialogTitle>
             </DialogHeader>
@@ -149,9 +149,6 @@ export default function ClientesPage() {
                         onClick={() => router.push(`/dashboard/clientes/${cliente.id_cliente || cliente.id}`)}
                       >
                         Ver Perfil
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8">
-                        <Edit className="h-4 w-4" />
                       </Button>
                     </TableCell>
                   </TableRow>
