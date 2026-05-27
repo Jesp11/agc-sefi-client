@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -23,11 +24,20 @@ import { PlusCircle } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { toast } from "sonner";
 
+function formatFecha(fecha: string) {
+  if (!fecha) return "—";
+  const [y, m, d] = fecha.split("-");
+  const meses = ["ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC"];
+  return `${parseInt(d, 10)} ${meses[parseInt(m, 10) - 1]} ${y}`;
+}
+
 export default function AsesoresPage() {
+  const router = useRouter();
   const [asesores, setAsesores] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isOpen, setIsOpen] = useState(false);
   const [nombreAsesor, setNombreAsesor] = useState("");
+  const [curp, setCurp] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const fetchAsesores = async () => {
@@ -38,7 +48,7 @@ export default function AsesoresPage() {
       if (res.ok) {
         setAsesores(data.data || data);
       }
-    } catch (error) {
+    } catch {
       toast.error("Error al cargar asesores");
     } finally {
       setLoading(false);
@@ -55,24 +65,29 @@ export default function AsesoresPage() {
       toast.error("El nombre es requerido");
       return;
     }
+    if (curp.trim().length !== 18) {
+      toast.error("La CURP debe tener exactamente 18 caracteres");
+      return;
+    }
 
     setIsSubmitting(true);
     try {
       const res = await apiFetch("/asesores", {
         method: "POST",
-        body: JSON.stringify({ nombre_asesor: nombreAsesor }),
+        body: JSON.stringify({ nombre_asesor: nombreAsesor, curp: curp.toUpperCase() }),
       });
 
       if (res.ok) {
         toast.success("Asesor creado exitosamente");
         setNombreAsesor("");
+        setCurp("");
         setIsOpen(false);
         fetchAsesores();
       } else {
         const errorData = await res.json();
         toast.error(errorData.message || "Error al crear asesor");
       }
-    } catch (error) {
+    } catch {
       toast.error("Error de conexión");
     } finally {
       setIsSubmitting(false);
@@ -109,13 +124,28 @@ export default function AsesoresPage() {
             <form onSubmit={handleSubmit} className="grid gap-4 py-4">
               <div className="grid gap-2">
                 <label htmlFor="nombre" className="text-sm font-medium">Nombre Completo</label>
-                <Input 
-                  id="nombre" 
-                  placeholder="Ej. Carlos López" 
+                <Input
+                  id="nombre"
+                  placeholder="Ej. Carlos López"
                   value={nombreAsesor}
                   onChange={(e) => setNombreAsesor(e.target.value)}
                   disabled={isSubmitting}
                 />
+              </div>
+              <div className="grid gap-2">
+                <label htmlFor="curp" className="text-sm font-medium">CURP</label>
+                <Input
+                  id="curp"
+                  placeholder="18 caracteres"
+                  value={curp}
+                  onChange={(e) => setCurp(e.target.value.toUpperCase())}
+                  maxLength={18}
+                  disabled={isSubmitting}
+                  className="font-mono uppercase"
+                />
+                <p className="text-xs text-muted-foreground">
+                  {curp.length}/18 — El cumpleaños se extrae automáticamente.
+                </p>
               </div>
               <div className="flex justify-end">
                 <Button type="submit" disabled={isSubmitting}>
@@ -127,36 +157,45 @@ export default function AsesoresPage() {
         </Dialog>
       </div>
 
-
       <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>ID</TableHead>
+              <TableHead>ID Asesor</TableHead>
               <TableHead>Nombre</TableHead>
+              <TableHead>CURP</TableHead>
+              <TableHead>Dado de alta</TableHead>
               <TableHead className="text-right">Acciones</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading ? (
               <TableRow key="loading">
-                <TableCell colSpan={3} className="h-24 text-center">
+                <TableCell colSpan={5} className="h-24 text-center">
                   Cargando asesores...
                 </TableCell>
               </TableRow>
             ) : asesores.length === 0 ? (
               <TableRow key="empty">
-                <TableCell colSpan={3} className="h-24 text-center">
+                <TableCell colSpan={5} className="h-24 text-center">
                   No hay asesores registrados.
                 </TableCell>
               </TableRow>
             ) : (
               asesores.map((asesor: any) => (
                 <TableRow key={asesor.id}>
-                  <TableCell className="font-mono text-xs">{asesor.id}</TableCell>
+                  <TableCell className="font-mono text-xs">{asesor.id_asesor ?? asesor.id}</TableCell>
                   <TableCell className="font-medium">{asesor.nombre_asesor}</TableCell>
+                  <TableCell className="font-mono text-xs">{asesor.curp ?? "—"}</TableCell>
+                  <TableCell className="text-sm">{asesor.created_at ? formatFecha(asesor.created_at.split("T")[0]) : "—"}</TableCell>
                   <TableCell className="text-right">
-                    <Button variant="ghost" size="sm">Editar</Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => router.push(`/dashboard/asesores/${asesor.id}`)}
+                    >
+                      Ver perfil
+                    </Button>
                   </TableCell>
                 </TableRow>
               ))

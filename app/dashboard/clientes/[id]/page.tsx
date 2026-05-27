@@ -348,7 +348,7 @@ export default function ClienteDetallePage() {
                       </div>
                       <div>
                         <p className="font-bold text-lg">{cliente.asesor.nombre_asesor}</p>
-                        <p className="text-muted-foreground">ID Asesor: {cliente.asesor.id}</p>
+                        <p className="text-muted-foreground">ID Asesor: {cliente.asesor.id_asesor ?? cliente.asesor.id}</p>
                       </div>
                     </div>
                   ) : (
