@@ -107,7 +107,7 @@ export function CreditForm({ client, onSuccess }: CreditFormProps) {
 
   const handleSubmit = async () => {
     if (!selectedOption) {
-      toast.error("Debe seleccionar una opción de crédito");
+      toast.error("Debe seleccionar una opción de préstamo");
       return;
     }
 
@@ -128,10 +128,10 @@ export function CreditForm({ client, onSuccess }: CreditFormProps) {
       });
       const data = await res.json();
       if (res.ok) {
-        toast.success("Crédito otorgado exitosamente");
+        toast.success("Préstamo otorgado exitosamente");
         onSuccess();
       } else {
-        toast.error(data.message || "Error al crear crédito");
+        toast.error(data.message || "Error al crear préstamo");
       }
     } catch (error) {
       toast.error("Error al procesar la solicitud");
@@ -249,7 +249,7 @@ export function CreditForm({ client, onSuccess }: CreditFormProps) {
         <Button variant="ghost" onClick={() => onSuccess()} disabled={loading}>Cancelar</Button>
         <Button onClick={handleSubmit} disabled={loading || !selectedOption}>
           <Save className="mr-2 h-4 w-4" />
-          {loading ? "Otorgando..." : "Otorgar Crédito Seleccionado"}
+          {loading ? "Otorgando..." : "Otorgar Préstamo Seleccionado"}
         </Button>
       </div>
     </div>

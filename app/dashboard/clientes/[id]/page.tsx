@@ -64,13 +64,13 @@ export default function ClienteDetallePage() {
               render={
                 <Button>
                   <PlusCircle className="mr-2 h-4 w-4" />
-                  Nuevo Crédito
+                  Nuevo Préstamo
                 </Button>
               }
             />
             <DialogContent className="sm:max-w-[500px]">
               <DialogHeader>
-                <DialogTitle>Otorgar Crédito Individual</DialogTitle>
+                <DialogTitle>Otorgar Préstamo Individual</DialogTitle>
               </DialogHeader>
               <CreditForm 
                 client={cliente} 
@@ -176,12 +176,12 @@ export default function ClienteDetallePage() {
           </Card>
         </TabsContent>
 
-        {/* Créditos */}
+        {/* Préstamos */}
         <TabsContent value="creditos" className="mt-4">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
-                <CreditCard className="h-5 w-5" /> Historial de Créditos
+                <CreditCard className="h-5 w-5" /> Historial de Préstamos
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -252,7 +252,7 @@ export default function ClienteDetallePage() {
                     ))
                   ) : (
                     <TableRow key="empty-creditos">
-                      <TableCell colSpan={9} className="text-center">Sin créditos registrados</TableCell>
+                      <TableCell colSpan={9} className="text-center">Sin préstamos registrados</TableCell>
                     </TableRow>
                   )}
                 </TableBody>

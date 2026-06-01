@@ -235,13 +235,13 @@ export default function GrupoDetallePage() {
               render={
                 <Button size="sm" className="h-10 px-4 font-bold">
                   <PlusCircle className="mr-2 h-4 w-4" />
-                  Nuevo Crédito
+                  Nuevo Préstamo
                 </Button>
               }
             />
             <DialogContent className="sm:max-w-[600px]">
               <DialogHeader>
-                <DialogTitle>Otorgar Crédito Grupal</DialogTitle>
+                <DialogTitle>Otorgar Préstamo Grupal</DialogTitle>
               </DialogHeader>
               <GroupCreditForm
                 group={grupo}
@@ -326,9 +326,9 @@ export default function GrupoDetallePage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
-                <CreditCard className="h-5 w-5" /> Historial de Créditos Grupales
+                <CreditCard className="h-5 w-5" /> Historial de Préstamos Grupales
               </CardTitle>
-              <CardDescription>Ciclos de crédito otorgados a la sociedad del grupo.</CardDescription>
+              <CardDescription>Ciclos de préstamo otorgados a la sociedad del grupo.</CardDescription>
             </CardHeader>
             <CardContent>
               <Table>
@@ -365,7 +365,7 @@ export default function GrupoDetallePage() {
                   ) : (
                     <TableRow>
                       <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
-                        Sin historial de créditos.
+                        Sin historial de préstamos.
                       </TableCell>
                     </TableRow>
                   )}

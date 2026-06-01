@@ -114,7 +114,7 @@ export function GroupCreditForm({ group, onSuccess, onCancel }: GroupCreditFormP
 
   const handleSubmit = async () => {
     if (!selectedOption) {
-      toast.error("Debe seleccionar una opción de crédito");
+      toast.error("Debe seleccionar una opción de préstamo");
       return;
     }
 
@@ -137,10 +137,10 @@ export function GroupCreditForm({ group, onSuccess, onCancel }: GroupCreditFormP
       });
       const data = await res.json();
       if (res.ok) {
-        toast.success("Crédito grupal otorgado exitosamente");
+        toast.success("Préstamo grupal otorgado exitosamente");
         onSuccess();
       } else {
-        toast.error(data.message || "Error al crear crédito");
+        toast.error(data.message || "Error al crear préstamo");
       }
     } catch (error) {
       toast.error("Error al procesar la solicitud");
@@ -291,7 +291,7 @@ export function GroupCreditForm({ group, onSuccess, onCancel }: GroupCreditFormP
           ) : (
             <span className="flex items-center gap-2">
               <Save className="h-4 w-4" />
-              Otorgar Crédito Grupal
+              Otorgar Préstamo Grupal
             </span>
           )}
         </Button>

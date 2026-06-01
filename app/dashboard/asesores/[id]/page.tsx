@@ -108,7 +108,7 @@ export default function AsesorDetallePage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
               <CreditCard className="h-5 w-5 text-primary" />
-              Créditos Asignados
+              Préstamos Asignados
               <Badge variant="secondary" className="ml-auto">
                 {asesor.creditos?.length ?? 0}
               </Badge>
@@ -118,7 +118,7 @@ export default function AsesorDetallePage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>ID Crédito</TableHead>
+                  <TableHead>ID Préstamo</TableHead>
                   <TableHead>Ciclo</TableHead>
                   <TableHead>Monto</TableHead>
                   <TableHead>Total</TableHead>
@@ -143,7 +143,7 @@ export default function AsesorDetallePage() {
                 ) : (
                   <TableRow>
                     <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                      Sin créditos asignados
+                      Sin préstamos asignados
                     </TableCell>
                   </TableRow>
                 )}

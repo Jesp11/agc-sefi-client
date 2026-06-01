@@ -57,7 +57,7 @@ export default function CatalogosPage() {
         <BookOpen className="h-8 w-8 text-primary" />
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Tasas y Plazos</h1>
-          <p className="text-muted-foreground">Configuración de factores y montos del Motor de Crédito.</p>
+          <p className="text-muted-foreground">Configuración de factores y montos del Motor de Préstamo.</p>
         </div>
       </div>
 
@@ -173,7 +173,7 @@ export default function CatalogosPage() {
           <Card>
             <CardHeader>
               <CardTitle>Matriz de Tasas Grupales</CardTitle>
-              <CardDescription>Factores preferenciales para grupos de crédito.</CardDescription>
+              <CardDescription>Factores preferenciales para grupos de préstamo.</CardDescription>
             </CardHeader>
             <CardContent>
               <Table>

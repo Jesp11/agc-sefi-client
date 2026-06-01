@@ -139,12 +139,12 @@ export function CustomGroupCreditForm({ onSuccess, onClose }: CustomGroupCreditF
         }),
       });
       if (res.ok) {
-        toast.success("Crédito grupal creado exitosamente");
+        toast.success("Préstamo grupal creado exitosamente");
         onSuccess();
         onClose();
       } else {
         const data = await res.json();
-        toast.error(data.message || "Error al crear crédito");
+        toast.error(data.message || "Error al crear préstamo");
       }
     } catch {
       toast.error("Error al procesar la solicitud");
@@ -372,7 +372,7 @@ export function CustomGroupCreditForm({ onSuccess, onClose }: CustomGroupCreditF
         </Button>
         {step === 3 ? (
           <Button onClick={handleSubmit} disabled={loading || !selectedOption}>
-            {loading ? "Procesando..." : <><Save className="mr-2 h-4 w-4" /> Finalizar Crédito</>}
+            {loading ? "Procesando..." : <><Save className="mr-2 h-4 w-4" /> Finalizar Préstamo</>}
           </Button>
         ) : step === 2 ? (
           <Button onClick={handleSimulate} disabled={simulating}>

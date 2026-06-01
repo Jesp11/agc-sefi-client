@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { User, PlusCircle, Wrench } from "lucide-react";
+import { User, PlusCircle, SlidersHorizontal } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -65,10 +65,10 @@ export default function CreditosIndividualesPage() {
         </div>
         <div className="flex items-center gap-2">
           <Button onClick={() => setIsModalOpen(true)} size="sm" className="h-10 px-4">
-            <PlusCircle className="mr-2 h-4 w-4" /> Crear Crédito
+            <PlusCircle className="mr-2 h-4 w-4" /> Nuevo Préstamo
           </Button>
           <Button onClick={() => setIsCustomModalOpen(true)} size="sm" variant="outline" className="h-10 px-4">
-            <Wrench className="mr-2 h-4 w-4" /> Personalizado
+            <SlidersHorizontal className="mr-2 h-4 w-4" /> Préstamo Personalizado
           </Button>
         </div>
       </div>
@@ -76,7 +76,7 @@ export default function CreditosIndividualesPage() {
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent className="sm:max-w-[600px] h-[560px] flex flex-col">
           <DialogHeader>
-            <DialogTitle>Nuevo Crédito Individual</DialogTitle>
+            <DialogTitle>Nuevo Préstamo Individual</DialogTitle>
           </DialogHeader>
           <CustomCreditForm
             onSuccess={() => { fetchCreditos(); setIsModalOpen(false); }}
@@ -155,7 +155,7 @@ export default function CreditosIndividualesPage() {
                       className="h-8 text-xs font-medium"
                       onClick={() => router.push(`/dashboard/creditos/${c.num_prog}`)}
                     >
-                      Ver Crédito
+                      Ver Préstamo
                     </Button>
                   </TableCell>
                 </TableRow>

@@ -76,7 +76,7 @@ export function CreateGroupForm({ onSuccess, onClose }: CreateGroupFormProps) {
           <Users className="h-5 w-5 text-primary" />
         </div>
         <div>
-          <p className="text-sm font-bold">Nuevo Grupo de Crédito</p>
+          <p className="text-sm font-bold">Nuevo Grupo de Préstamo</p>
           <p className="text-xs text-muted-foreground">Los clientes se pueden agregar después de crear el grupo.</p>
         </div>
       </div>

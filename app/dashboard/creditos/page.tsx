@@ -85,10 +85,10 @@ export default function CreditosPage() {
             size="sm" 
             className="h-10 px-4 border-primary/30 text-primary hover:bg-primary/5 transition-all"
           >
-            <Sparkles className="mr-2 h-4 w-4" /> Crédito Personalizado
+            <Sparkles className="mr-2 h-4 w-4" /> Préstamo Personalizado
           </Button>
           <Button onClick={() => router.push("/dashboard/clientes")} size="sm" className="h-10 px-4 shadow-lg shadow-primary/20">
-            <PlusCircle className="mr-2 h-4 w-4" /> Nuevo Crédito
+            <PlusCircle className="mr-2 h-4 w-4" /> Nuevo Préstamo
           </Button>
         </div>
       </div>
@@ -96,7 +96,7 @@ export default function CreditosPage() {
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
-            <DialogTitle>Nuevo Crédito Personalizado</DialogTitle>
+            <DialogTitle>Nuevo Préstamo Personalizado</DialogTitle>
           </DialogHeader>
           <CustomCreditForm 
             onSuccess={() => {
@@ -194,7 +194,7 @@ export default function CreditosPage() {
                         className="h-8 text-xs font-medium transition-colors"
                         onClick={() => router.push(`/dashboard/creditos/${c.num_prog}`)}
                       >
-                        Ver Crédito
+                        Ver Préstamo
                       </Button>
                       <Button 
                         variant="ghost" 

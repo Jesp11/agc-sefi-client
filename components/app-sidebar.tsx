@@ -30,8 +30,8 @@ const groups = [
   {
     label: "Contabilidad",
     items: [
-      { title: "Crédito Individual", url: "/dashboard/creditos-individuales", icon: User },
-      { title: "Crédito Grupal", url: "/dashboard/creditos-grupales", icon: Component },
+      { title: "Préstamo Individual", url: "/dashboard/creditos-individuales", icon: User },
+      { title: "Préstamo Grupal", url: "/dashboard/creditos-grupales", icon: Component },
     ],
   },
   {

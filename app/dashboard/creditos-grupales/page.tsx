@@ -17,7 +17,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Users, CreditCard, Wrench } from "lucide-react";
+import { Users, CreditCard, SlidersHorizontal } from "lucide-react";
 import { CustomGroupCreditForm } from "@/components/custom-group-credit-form";
 import { CustomLoanForm } from "@/components/custom-loan-form";
 import { apiFetch } from "@/lib/api";
@@ -53,7 +53,7 @@ export default function CreditosGrupalesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight text-foreground/90">Crédito Grupal</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-foreground/90">Préstamo Grupal</h1>
         <p className="text-muted-foreground">Gestión de grupos y sus créditos correspondientes.</p>
       </div>
 
@@ -67,11 +67,11 @@ export default function CreditosGrupalesPage() {
         <div className="flex items-center gap-2">
           <Button size="sm" className="h-10 px-4" onClick={() => setIsCreditModalOpen(true)}>
             <CreditCard className="mr-2 h-4 w-4" />
-            Crear Crédito
+            Nuevo Préstamo
           </Button>
           <Button size="sm" variant="outline" className="h-10 px-4" onClick={() => setIsCustomModalOpen(true)}>
-            <Wrench className="mr-2 h-4 w-4" />
-            Personalizado
+            <SlidersHorizontal className="mr-2 h-4 w-4" />
+            Préstamo Personalizado
           </Button>
         </div>
       </div>
@@ -79,7 +79,7 @@ export default function CreditosGrupalesPage() {
       <Dialog open={isCreditModalOpen} onOpenChange={setIsCreditModalOpen}>
         <DialogContent className="sm:max-w-[600px] h-[560px] flex flex-col">
           <DialogHeader>
-            <DialogTitle>Nuevo Crédito Grupal</DialogTitle>
+            <DialogTitle>Nuevo Préstamo Grupal</DialogTitle>
           </DialogHeader>
           <CustomGroupCreditForm
             onSuccess={() => { fetchGrupos(); setIsCreditModalOpen(false); }}

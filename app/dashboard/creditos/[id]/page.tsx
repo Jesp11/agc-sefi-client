@@ -18,7 +18,7 @@ import {
   Clock,
   Table as TableIcon,
   History,
-  Wrench,
+  SlidersHorizontal,
   CalendarCheck,
   CalendarX,
   CreditCard,
@@ -127,13 +127,13 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
           </Button>
           <div>
             <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-2xl font-bold tracking-tight text-foreground/90">Detalle del Crédito</h1>
+              <h1 className="text-2xl font-bold tracking-tight text-foreground/90">Detalle del Préstamo</h1>
               <Badge className={estadoStyles[credito.estado] ?? "bg-muted text-muted-foreground"}>
                 {credito.estado}
               </Badge>
               {credito.es_personalizado && (
                 <Badge variant="outline" className="border-amber-300 text-amber-700 bg-amber-50 gap-1">
-                  <Wrench className="h-3 w-3" /> Personalizado
+                  <SlidersHorizontal className="h-3 w-3" /> Personalizado
                 </Badge>
               )}
             </div>
@@ -222,7 +222,7 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
                   </div>
                 ) : (
                   <div className="flex items-center gap-2 text-sm font-semibold text-amber-600">
-                    <Wrench className="h-4 w-4" />
+                    <SlidersHorizontal className="h-4 w-4" />
                     Personalizado
                   </div>
                 )}

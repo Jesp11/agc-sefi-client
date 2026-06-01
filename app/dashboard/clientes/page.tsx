@@ -54,7 +54,7 @@ export default function ClientesPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight text-foreground/90">Clientes</h1>
-        <p className="text-muted-foreground">Gestión de cartera de clientes y sus perfiles de crédito.</p>
+        <p className="text-muted-foreground">Gestión de cartera de clientes y sus perfiles de préstamo.</p>
       </div>
 
       <div className="flex items-center justify-between gap-3">

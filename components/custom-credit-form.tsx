@@ -145,12 +145,12 @@ export function CustomCreditForm({ onSuccess, onClose }: CustomCreditFormProps) 
       });
       
       if (res.ok) {
-        toast.success("Crédito creado exitosamente");
+        toast.success("Préstamo creado exitosamente");
         onSuccess();
         onClose();
       } else {
         const data = await res.json();
-        toast.error(data.message || "Error al crear crédito");
+        toast.error(data.message || "Error al crear préstamo");
       }
     } catch (error) {
       toast.error("Error al procesar la solicitud");
@@ -379,7 +379,7 @@ export function CustomCreditForm({ onSuccess, onClose }: CustomCreditFormProps) 
             onClick={handleSubmit} 
             disabled={loading || !selectedOption}
           >
-            {loading ? "Procesando..." : <><Save className="mr-2 h-4 w-4" /> Finalizar Crédito</>}
+            {loading ? "Procesando..." : <><Save className="mr-2 h-4 w-4" /> Finalizar Préstamo</>}
           </Button>
         ) : step === 2 ? (
           <Button onClick={handleSimulate} disabled={simulating}>

@@ -93,7 +93,7 @@ export default function AsesoresPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight text-foreground/90">Asesores</h1>
-        <p className="text-muted-foreground">Gestión de asesores de crédito registrados en el sistema.</p>
+        <p className="text-muted-foreground">Gestión de asesores de préstamo registrados en el sistema.</p>
       </div>
 
       <div className="flex items-center justify-between gap-3">
