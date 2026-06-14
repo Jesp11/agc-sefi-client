@@ -17,8 +17,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Users, CreditCard, SlidersHorizontal } from "lucide-react";
-import { CustomGroupCreditForm } from "@/components/custom-group-credit-form";
+import { Users, PlusCircle } from "lucide-react";
 import { CustomLoanForm } from "@/components/custom-loan-form";
 import { apiFetch } from "@/lib/api";
 import { toast } from "sonner";
@@ -30,7 +29,6 @@ export default function CreditosGrupalesPage() {
   const router = useRouter();
   const [grupos, setGrupos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isCreditModalOpen, setIsCreditModalOpen] = useState(false);
   const [isCustomModalOpen, setIsCustomModalOpen] = useState(false);
 
   const fetchGrupos = async () => {
@@ -64,34 +62,16 @@ export default function CreditosGrupalesPage() {
             className="bg-background border-muted-foreground/20 focus-visible:ring-primary/30 h-10"
           />
         </div>
-        <div className="flex items-center gap-2">
-          <Button size="sm" className="h-10 px-4" onClick={() => setIsCreditModalOpen(true)}>
-            <CreditCard className="mr-2 h-4 w-4" />
-            Nuevo Préstamo
-          </Button>
-          <Button size="sm" variant="outline" className="h-10 px-4" onClick={() => setIsCustomModalOpen(true)}>
-            <SlidersHorizontal className="mr-2 h-4 w-4" />
-            Préstamo Personalizado
-          </Button>
-        </div>
+        <Button size="sm" className="h-10 px-4" onClick={() => setIsCustomModalOpen(true)}>
+          <PlusCircle className="mr-2 h-4 w-4" />
+          Crear Préstamo
+        </Button>
       </div>
-
-      <Dialog open={isCreditModalOpen} onOpenChange={setIsCreditModalOpen}>
-        <DialogContent className="sm:max-w-[600px] h-[560px] flex flex-col">
-          <DialogHeader>
-            <DialogTitle>Nuevo Préstamo Grupal</DialogTitle>
-          </DialogHeader>
-          <CustomGroupCreditForm
-            onSuccess={() => { fetchGrupos(); setIsCreditModalOpen(false); }}
-            onClose={() => setIsCreditModalOpen(false)}
-          />
-        </DialogContent>
-      </Dialog>
 
       <Dialog open={isCustomModalOpen} onOpenChange={setIsCustomModalOpen}>
         <DialogContent className="sm:max-w-[600px] h-[560px] flex flex-col">
           <DialogHeader>
-            <DialogTitle>Préstamo Grupal Personalizado</DialogTitle>
+            <DialogTitle>Crear Préstamo Grupal</DialogTitle>
           </DialogHeader>
           <CustomLoanForm
             type="grupal"
@@ -159,13 +139,24 @@ export default function CreditosGrupalesPage() {
                     <TableCell className="text-xs text-muted-foreground">{lastCredito ? `$${lastCredito.interes}` : "—"}</TableCell>
                     <TableCell className="text-xs font-bold text-primary">{lastCredito ? `$${lastCredito.total}` : "—"}</TableCell>
                     <TableCell className="text-right">
-                      <Button
-                        size="sm"
-                        className="h-8 text-xs font-medium"
-                        onClick={() => router.push(`/dashboard/grupos/${grupo.id_grupo || grupo.id}`)}
-                      >
-                        Ver Grupo
-                      </Button>
+                      {lastCredito ? (
+                        <Button
+                          size="sm"
+                          className="h-8 text-xs font-medium"
+                          onClick={() => router.push(`/dashboard/creditos/${lastCredito.num_prog}`)}
+                        >
+                          Ver Préstamo
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 text-xs font-medium"
+                          onClick={() => router.push(`/dashboard/grupos/${grupo.id_grupo || grupo.id}`)}
+                        >
+                          Ver Grupo
+                        </Button>
+                      )}
                     </TableCell>
                   </TableRow>
                 );

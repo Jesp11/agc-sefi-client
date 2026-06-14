@@ -5,12 +5,11 @@ import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { User, PlusCircle, SlidersHorizontal } from "lucide-react";
+import { User, PlusCircle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { CustomCreditForm } from "@/components/custom-credit-form";
 import { CustomLoanForm } from "@/components/custom-loan-form";
 import { fmtFecha } from "@/lib/utils";
 
@@ -19,7 +18,6 @@ export default function CreditosIndividualesPage() {
   const [creditos, setCreditos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const [isModalOpen, setIsModalOpen] = useState(false);
   const [isCustomModalOpen, setIsCustomModalOpen] = useState(false);
 
   const fetchCreditos = async () => {
@@ -63,32 +61,15 @@ export default function CreditosIndividualesPage() {
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
-        <div className="flex items-center gap-2">
-          <Button onClick={() => setIsModalOpen(true)} size="sm" className="h-10 px-4">
-            <PlusCircle className="mr-2 h-4 w-4" /> Nuevo Préstamo
-          </Button>
-          <Button onClick={() => setIsCustomModalOpen(true)} size="sm" variant="outline" className="h-10 px-4">
-            <SlidersHorizontal className="mr-2 h-4 w-4" /> Préstamo Personalizado
-          </Button>
-        </div>
+        <Button onClick={() => setIsCustomModalOpen(true)} size="sm" className="h-10 px-4">
+          <PlusCircle className="mr-2 h-4 w-4" /> Crear Préstamo
+        </Button>
       </div>
-
-      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="sm:max-w-[600px] h-[560px] flex flex-col">
-          <DialogHeader>
-            <DialogTitle>Nuevo Préstamo Individual</DialogTitle>
-          </DialogHeader>
-          <CustomCreditForm
-            onSuccess={() => { fetchCreditos(); setIsModalOpen(false); }}
-            onClose={() => setIsModalOpen(false)}
-          />
-        </DialogContent>
-      </Dialog>
 
       <Dialog open={isCustomModalOpen} onOpenChange={setIsCustomModalOpen}>
         <DialogContent className="sm:max-w-[600px] h-[560px] flex flex-col">
           <DialogHeader>
-            <DialogTitle>Préstamo Individual Personalizado</DialogTitle>
+            <DialogTitle>Crear Préstamo Individual</DialogTitle>
           </DialogHeader>
           <CustomLoanForm
             type="individual"

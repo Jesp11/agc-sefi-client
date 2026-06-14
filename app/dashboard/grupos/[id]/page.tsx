@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, User, Users, CreditCard, Component, PlusCircle, UserMinus, UserPlus, Search } from "lucide-react";
+import { ArrowLeft, User, Users, CreditCard, Component, UserMinus, UserPlus, Search } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { fmtFecha } from "@/lib/utils";
@@ -19,14 +19,11 @@ import {
   DialogTitle,
   DialogTrigger
 } from "@/components/ui/dialog";
-import { GroupCreditForm } from "@/components/group-credit-form";
-
 export default function GrupoDetallePage() {
   const { id } = useParams();
   const router = useRouter();
   const [grupo, setGrupo] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [isCreditDialogOpen, setIsCreditDialogOpen] = useState(false);
   const [isAddClientDialogOpen, setIsAddClientDialogOpen] = useState(false);
   const [clienteActionLoading, setClienteActionLoading] = useState(false);
 
@@ -230,26 +227,6 @@ export default function GrupoDetallePage() {
             </DialogContent>
           </Dialog>
 
-          <Dialog open={isCreditDialogOpen} onOpenChange={setIsCreditDialogOpen}>
-            <DialogTrigger
-              render={
-                <Button size="sm" className="h-10 px-4 font-bold">
-                  <PlusCircle className="mr-2 h-4 w-4" />
-                  Nuevo Préstamo
-                </Button>
-              }
-            />
-            <DialogContent className="sm:max-w-[600px]">
-              <DialogHeader>
-                <DialogTitle>Otorgar Préstamo Grupal</DialogTitle>
-              </DialogHeader>
-              <GroupCreditForm
-                group={grupo}
-                onSuccess={() => { setIsCreditDialogOpen(false); fetchGrupo(); }}
-                onCancel={() => setIsCreditDialogOpen(false)}
-              />
-            </DialogContent>
-          </Dialog>
         </div>
       </div>
 
@@ -342,12 +319,13 @@ export default function GrupoDetallePage() {
                     <TableHead>Interés</TableHead>
                     <TableHead>Total</TableHead>
                     <TableHead>Estado</TableHead>
+                    <TableHead className="text-right">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {grupo.creditos && grupo.creditos.length > 0 ? (
                     grupo.creditos.map((credito: any) => (
-                      <TableRow key={credito.id}>
+                      <TableRow key={credito.num_prog}>
                         <TableCell className="font-bold">Ciclo {credito.ciclo}</TableCell>
                         <TableCell className="text-xs">{fmtFecha(credito.fecha_otorgacion)}</TableCell>
                         <TableCell>{credito.dias_pago}</TableCell>
@@ -360,11 +338,20 @@ export default function GrupoDetallePage() {
                             {credito.estado}
                           </Badge>
                         </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => router.push(`/dashboard/creditos/${credito.num_prog}`)}
+                          >
+                            Ver Detalle
+                          </Button>
+                        </TableCell>
                       </TableRow>
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                         Sin historial de préstamos.
                       </TableCell>
                     </TableRow>

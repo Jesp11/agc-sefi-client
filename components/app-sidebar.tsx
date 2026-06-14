@@ -15,14 +15,14 @@ import {
   SidebarHeader,
 } from "@/components/ui/sidebar";
 import type React from "react";
-import { Users, UserCircle, User, Component, ClipboardList } from "lucide-react";
+import { Users, UserCircle, User, Component, ClipboardList, LayoutList, AlertTriangle, UserX } from "lucide-react";
 
 const groups = [
   {
     label: "Catálogos",
     items: [
-      { title: "Clientes", url: "/dashboard/clientes", icon: Users },
-      { title: "Grupos", url: "/dashboard/grupos", icon: Component },
+      { title: "Alta Cliente", url: "/dashboard/clientes", icon: Users },
+      { title: "Alta Grupo", url: "/dashboard/grupos", icon: Component },
       { title: "Asesores", url: "/dashboard/asesores", icon: UserCircle },
       { title: "Tasas y Plazos", url: "/dashboard/catalogos", icon: ClipboardList },
     ],
@@ -30,8 +30,11 @@ const groups = [
   {
     label: "Contabilidad",
     items: [
-      { title: "Préstamo Individual", url: "/dashboard/creditos-individuales", icon: User },
-      { title: "Préstamo Grupal", url: "/dashboard/creditos-grupales", icon: Component },
+      { title: "Cartera General", url: "/dashboard/cartera-general", icon: LayoutList },
+      { title: "Cartera Individual", url: "/dashboard/creditos-individuales", icon: User },
+      { title: "Cartera Grupal", url: "/dashboard/creditos-grupales", icon: Component },
+      { title: "Cartera en Mora", url: "/dashboard/cartera-mora", icon: AlertTriangle },
+      { title: "Cartera Clientes Cerrados", url: "/dashboard/cartera-cerrados", icon: UserX },
     ],
   },
   {

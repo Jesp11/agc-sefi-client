@@ -24,12 +24,15 @@ import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 
+const PAGE_SIZE = 5;
+
 export default function GruposPage() {
   const router = useRouter();
   const [grupos, setGrupos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [isNewGroupModalOpen, setIsNewGroupModalOpen] = useState(false);
+  const [page, setPage] = useState(1);
 
   const fetchGrupos = async () => {
     setLoading(true);
@@ -51,6 +54,7 @@ export default function GruposPage() {
   const filtered = grupos.filter((g) =>
     g.nombre_grupo?.toLowerCase().includes(search.toLowerCase())
   );
+  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
     <div className="space-y-6">
@@ -64,7 +68,7 @@ export default function GruposPage() {
           <Input
             placeholder="Buscar por nombre de grupo..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             className="bg-background border-muted-foreground/20 focus-visible:ring-primary/30 h-10"
           />
         </div>
@@ -114,7 +118,7 @@ export default function GruposPage() {
                 </TableCell>
               </TableRow>
             ) : (
-              filtered.map((grupo: any) => (
+              paginated.map((grupo: any) => (
                 <TableRow key={grupo.id_grupo || grupo.id} className="hover:bg-muted/30 transition-colors">
                   <TableCell className="font-mono text-xs font-semibold text-primary/80">
                     #{grupo.id_grupo || grupo.id}
@@ -147,6 +151,22 @@ export default function GruposPage() {
           </TableBody>
         </Table>
       </div>
+
+      {!loading && filtered.length > PAGE_SIZE && (
+        <div className="flex items-center justify-between text-sm text-muted-foreground">
+          <span>
+            Mostrando {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} de {filtered.length} grupos
+          </span>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => setPage(p => p - 1)} disabled={page === 1}>
+              Anterior
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setPage(p => p + 1)} disabled={page * PAGE_SIZE >= filtered.length}>
+              Siguiente
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

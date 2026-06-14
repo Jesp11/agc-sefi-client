@@ -20,7 +20,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { PlusCircle } from "lucide-react";
+import { PlusCircle, Upload } from "lucide-react";
 
 import { apiFetch } from "@/lib/api";
 import { toast } from "sonner";
@@ -33,6 +33,8 @@ export default function AsesoresPage() {
   const [isOpen, setIsOpen] = useState(false);
   const [nombreAsesor, setNombreAsesor] = useState("");
   const [curp, setCurp] = useState("");
+  const [telefono, setTelefono] = useState("");
+  const [ineFile, setIneFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const fetchAsesores = async () => {
@@ -67,15 +69,28 @@ export default function AsesoresPage() {
 
     setIsSubmitting(true);
     try {
-      const res = await apiFetch("/asesores", {
+      const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
+      const formData = new FormData();
+      formData.append("nombre_asesor", nombreAsesor);
+      formData.append("curp", curp.toUpperCase());
+      if (telefono.trim()) formData.append("telefono", telefono.trim());
+      if (ineFile) formData.append("ine", ineFile);
+
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api"}/asesores`, {
         method: "POST",
-        body: JSON.stringify({ nombre_asesor: nombreAsesor, curp: curp.toUpperCase() }),
+        headers: {
+          Accept: "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: formData,
       });
 
       if (res.ok) {
         toast.success("Asesor creado exitosamente");
         setNombreAsesor("");
         setCurp("");
+        setTelefono("");
+        setIneFile(null);
         setIsOpen(false);
         fetchAsesores();
       } else {
@@ -141,6 +156,38 @@ export default function AsesoresPage() {
                 <p className="text-xs text-muted-foreground">
                   {curp.length}/18 — El cumpleaños se extrae automáticamente.
                 </p>
+              </div>
+              <div className="grid gap-2">
+                <label htmlFor="telefono" className="text-sm font-medium">Teléfono <span className="text-muted-foreground font-normal">(opcional)</span></label>
+                <Input
+                  id="telefono"
+                  type="tel"
+                  placeholder="Ej. 5512345678"
+                  value={telefono}
+                  onChange={(e) => setTelefono(e.target.value)}
+                  maxLength={20}
+                  disabled={isSubmitting}
+                />
+              </div>
+              <div className="grid gap-2">
+                <label htmlFor="ine" className="text-sm font-medium">INE <span className="text-muted-foreground font-normal">(opcional — JPG, PNG o PDF, máx. 5 MB)</span></label>
+                <label
+                  htmlFor="ine"
+                  className={`flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-4 cursor-pointer transition-colors ${isSubmitting ? "opacity-50 pointer-events-none" : "hover:border-primary/60 hover:bg-muted/30"} ${ineFile ? "border-primary/40 bg-primary/5" : "border-muted-foreground/30"}`}
+                >
+                  <Upload className="h-5 w-5 text-muted-foreground" />
+                  <span className="text-xs text-muted-foreground text-center">
+                    {ineFile ? ineFile.name : "Haz clic o arrastra el archivo aquí"}
+                  </span>
+                  <input
+                    id="ine"
+                    type="file"
+                    accept=".jpg,.jpeg,.png,.pdf"
+                    className="hidden"
+                    disabled={isSubmitting}
+                    onChange={(e) => setIneFile(e.target.files?.[0] ?? null)}
+                  />
+                </label>
               </div>
               <div className="flex justify-end">
                 <Button type="submit" disabled={isSubmitting}>

@@ -25,10 +25,13 @@ import { toast } from "sonner";
 
 import { ClientFormWizard } from "@/components/cliente-form-wizard";
 
+const PAGE_SIZE = 5;
+
 export default function ClientesPage() {
   const [clientes, setClientes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [page, setPage] = useState(1);
   const router = useRouter();
 
   const fetchClientes = async () => {
@@ -115,12 +118,12 @@ export default function ClientesPage() {
                 </TableCell>
               </TableRow>
             ) : (
-              clientes.map((cliente: any, index: number) => {
-                const ultimoCredito = cliente.creditos && cliente.creditos.length > 0 
-                  ? cliente.creditos[cliente.creditos.length - 1] 
+              clientes.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((cliente: any, index: number) => {
+                const ultimoCredito = cliente.creditos && cliente.creditos.length > 0
+                  ? cliente.creditos[cliente.creditos.length - 1]
                   : null;
                 const grupo = cliente.grupos && cliente.grupos.length > 0 ? cliente.grupos[0] : null;
-                
+
                 return (
                   <TableRow key={cliente.id_cliente || cliente.id || index}>
                     <TableCell className="font-mono text-xs">{cliente.id_cliente || cliente.id}</TableCell>
@@ -158,6 +161,22 @@ export default function ClientesPage() {
           </TableBody>
         </Table>
       </div>
+
+      {!loading && clientes.length > PAGE_SIZE && (
+        <div className="flex items-center justify-between text-sm text-muted-foreground">
+          <span>
+            Mostrando {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, clientes.length)} de {clientes.length} clientes
+          </span>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => setPage(p => p - 1)} disabled={page === 1}>
+              Anterior
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setPage(p => p + 1)} disabled={page * PAGE_SIZE >= clientes.length}>
+              Siguiente
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

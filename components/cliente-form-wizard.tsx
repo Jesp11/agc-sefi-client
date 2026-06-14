@@ -283,11 +283,19 @@ export function ClientFormWizard({ onSuccess, onClose }: ClientFormWizardProps) 
                   </div>
                   <div className="grid gap-1">
                     <Label className="text-xs">Amistad (años)</Label>
-                    <Input type="number" value={ref.años_amistad} onChange={(e) => {
-                      const newRefs = [...referencias];
-                      newRefs[i].años_amistad = parseInt(e.target.value) || 0;
-                      setReferencias(newRefs);
-                    }} className="h-8 text-sm" />
+                    <Input
+                      type="number"
+                      min={0}
+                      value={ref.años_amistad}
+                      onFocus={(e) => e.target.select()}
+                      onChange={(e) => {
+                        const newRefs = [...referencias];
+                        const parsed = parseInt(e.target.value);
+                        newRefs[i].años_amistad = isNaN(parsed) ? 0 : Math.max(0, parsed);
+                        setReferencias(newRefs);
+                      }}
+                      className="h-8 text-sm"
+                    />
                   </div>
                   <div className="grid gap-1 col-span-2">
                     <Label className="text-xs">Dirección</Label>

@@ -14,7 +14,6 @@ import {
   User,
   Users,
   Save,
-  AlertTriangle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -24,6 +23,18 @@ interface CustomLoanFormProps {
   onClose: () => void;
 }
 
+const TASA_LABELS: Record<string, string> = {
+  TCIN21: "Normal",
+  TCIP18: "Preferencial",
+  TCIPE14: "Pref. Especial",
+  TCIPV10: "VIP",
+  TCGN10: "Normal",
+  TCGP07: "Preferencial",
+  TCGPE04: "Especial",
+  TCGPEV01: "VIP",
+  TCGEC00: "Exclusivo",
+};
+
 export function CustomLoanForm({ type, onSuccess, onClose }: CustomLoanFormProps) {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -31,6 +42,9 @@ export function CustomLoanForm({ type, onSuccess, onClose }: CustomLoanFormProps
   const [items, setItems] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [selected, setSelected] = useState<any>(null);
+
+  const [catalogo, setCatalogo] = useState<any>(null);
+  const [selectedOption, setSelectedOption] = useState<{ tasaKey: string; plazo: number; factor: number } | null>(null);
 
   const [formData, setFormData] = useState({
     monto_otorgado: "",
@@ -51,7 +65,20 @@ export function CustomLoanForm({ type, onSuccess, onClose }: CustomLoanFormProps
         toast.error(`Error al cargar ${type === "individual" ? "clientes" : "grupos"}`);
       }
     };
+
+    const fetchCatalogo = async () => {
+      try {
+        const url = type === "individual" ? "/simular/catalogo/individual" : "/simular/catalogo/grupal";
+        const res = await apiFetch(url);
+        const data = await res.json();
+        if (res.ok) setCatalogo(data);
+      } catch {
+        // catálogo es opcional
+      }
+    };
+
     fetchItems();
+    fetchCatalogo();
   }, [type]);
 
   const filtered = items.filter((item) => {
@@ -62,7 +89,7 @@ export function CustomLoanForm({ type, onSuccess, onClose }: CustomLoanFormProps
   const getDiaPago = (dateStr: string): string => {
     if (!dateStr) return "";
     const [y, m, d] = dateStr.split("-").map(Number);
-    return ["Domingo","Lunes","Martes","Miércoles","Jueves","Viernes","Sábado"][new Date(y, m - 1, d).getDay()];
+    return ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"][new Date(y, m - 1, d).getDay()];
   };
 
   const calcPlazos = (first: string, last: string): number => {
@@ -70,8 +97,54 @@ export function CustomLoanForm({ type, onSuccess, onClose }: CustomLoanFormProps
     const [fy, fm, fd] = first.split("-").map(Number);
     const [ly, lm, ld] = last.split("-").map(Number);
     const diffMs = new Date(ly, lm - 1, ld).getTime() - new Date(fy, fm - 1, fd).getTime();
-    const weeks = Math.round(diffMs / (7 * 24 * 60 * 60 * 1000));
-    return weeks + 1;
+    return Math.round(diffMs / (7 * 24 * 60 * 60 * 1000)) + 1;
+  };
+
+  const addWeeks = (dateStr: string, weeks: number): string => {
+    if (!dateStr) return "";
+    const [y, m, d] = dateStr.split("-").map(Number);
+    const date = new Date(y, m - 1, d);
+    date.setDate(date.getDate() + (weeks - 1) * 7);
+    return date.toISOString().split("T")[0];
+  };
+
+  // factor = pago semanal por cada $1,000
+  const calcInteres = (factor: number, monto: number, plazo: number): number =>
+    parseFloat((factor * (monto / 1000) * plazo - monto).toFixed(2));
+
+  const handleSelectOption = (tasaKey: string, plazo: number, factor: number) => {
+    const isSame = selectedOption?.tasaKey === tasaKey && selectedOption?.plazo === plazo;
+    if (isSame) {
+      setSelectedOption(null);
+      return;
+    }
+    setSelectedOption({ tasaKey, plazo, factor });
+
+    const monto = parseFloat(formData.monto_otorgado) || 0;
+    setFormData((prev) => ({
+      ...prev,
+      ...(formData.fecha_primer_pago && { fecha_ultimo_pago: addWeeks(formData.fecha_primer_pago, plazo) }),
+      ...(monto > 0 && { interes: String(calcInteres(factor, monto, plazo)) }),
+    }));
+  };
+
+  const handleMontoChange = (value: string) => {
+    const monto = parseFloat(value) || 0;
+    setFormData((prev) => ({
+      ...prev,
+      monto_otorgado: value,
+      ...(selectedOption && monto > 0 && {
+        interes: String(calcInteres(selectedOption.factor, monto, selectedOption.plazo)),
+      }),
+    }));
+  };
+
+  const handleFechaPrimerPagoChange = (value: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      fecha_primer_pago: value,
+      ...(selectedOption && value && { fecha_ultimo_pago: addWeeks(value, selectedOption.plazo) }),
+    }));
   };
 
   const monto = parseFloat(formData.monto_otorgado) || 0;
@@ -83,12 +156,7 @@ export function CustomLoanForm({ type, onSuccess, onClose }: CustomLoanFormProps
   const porcentajeInteres = monto > 0 ? parseFloat(((interes / monto) * 100).toFixed(2)) : 0;
 
   const canSubmit =
-    selected &&
-    monto > 0 &&
-    formData.fecha_otorgacion &&
-    formData.fecha_primer_pago &&
-    formData.fecha_ultimo_pago &&
-    plazos > 0;
+    selected && monto > 0 && formData.fecha_otorgacion && formData.fecha_primer_pago && formData.fecha_ultimo_pago && plazos > 0;
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
@@ -105,17 +173,14 @@ export function CustomLoanForm({ type, onSuccess, onClose }: CustomLoanFormProps
         dias_pago: diaPago,
         porcentaje_interes: porcentajeInteres,
         es_personalizado: true,
+        ...(selectedOption && { tasa_asignada: selectedOption.tasaKey }),
       };
-
-      if (type === "individual") {
-        body.id_cliente = selected.id_cliente;
-      } else {
-        body.id_grupo = selected.id;
-      }
+      if (type === "individual") body.id_cliente = selected.id_cliente;
+      else body.id_grupo = selected.id;
 
       const res = await apiFetch("/creditos", { method: "POST", body: JSON.stringify(body) });
       if (res.ok) {
-        toast.success("Préstamo personalizado creado exitosamente");
+        toast.success("Préstamo creado exitosamente");
         onSuccess();
         onClose();
       } else {
@@ -128,6 +193,12 @@ export function CustomLoanForm({ type, onSuccess, onClose }: CustomLoanFormProps
       setLoading(false);
     }
   };
+
+  const plazosDisponibles: number[] = catalogo?.tasas
+    ? [...new Set<number>(
+        Object.values(catalogo.tasas).flatMap((v: any) => Object.keys(v).map(Number))
+      )].sort((a, b) => a - b)
+    : [];
 
   return (
     <div className="flex flex-col flex-1 overflow-hidden min-h-0 gap-4">
@@ -147,17 +218,12 @@ export function CustomLoanForm({ type, onSuccess, onClose }: CustomLoanFormProps
       </div>
 
       <div className="flex-1 overflow-y-auto min-h-0 pr-1">
-        {/* Step 1: Select client or group */}
+        {/* Step 1 */}
         {step === 1 && (
           <div className="grid gap-3">
             <div className="flex items-center gap-2 text-sm font-bold">
               {type === "individual" ? <User className="h-4 w-4" /> : <Users className="h-4 w-4" />}
               Seleccionar {type === "individual" ? "Cliente" : "Grupo"}
-            </div>
-
-            <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg flex gap-2 text-xs text-amber-700">
-              <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-              <span>Préstamo personalizado — omite las reglas de negocio estándar. Úsalo solo para excepciones autorizadas.</span>
             </div>
 
             <div className="relative">
@@ -186,7 +252,9 @@ export function CustomLoanForm({ type, onSuccess, onClose }: CustomLoanFormProps
                       filtered.map((item) => {
                         const id = type === "individual" ? item.id_cliente : item.id;
                         const name = type === "individual" ? item.nombre_completo : item.nombre_grupo;
-                        const sub = type === "individual" ? (item.curp || "S/CURP") : `${item.clientes?.length || 0} integrantes`;
+                        const sub = type === "individual"
+                          ? (item.curp || "S/CURP")
+                          : `${item.clientes?.length || 0} integrantes`;
                         return (
                           <tr
                             key={id}
@@ -224,21 +292,80 @@ export function CustomLoanForm({ type, onSuccess, onClose }: CustomLoanFormProps
           </div>
         )}
 
-        {/* Step 2: Loan details */}
+        {/* Step 2 */}
         {step === 2 && selected && (
           <div className="grid gap-4">
             <div className="bg-primary/5 p-3 rounded-lg border border-primary/20 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 {type === "individual" ? <User className="h-4 w-4 text-primary" /> : <Users className="h-4 w-4 text-primary" />}
-                <div>
-                  <p className="text-sm font-bold">
-                    {type === "individual" ? selected.nombre_completo : selected.nombre_grupo}
-                  </p>
-                  <p className="text-xs text-muted-foreground">Préstamo personalizado</p>
-                </div>
+                <p className="text-sm font-bold">
+                  {type === "individual" ? selected.nombre_completo : selected.nombre_grupo}
+                </p>
+                <Badge variant="secondary" className="text-[10px] font-bold">
+                  Ciclo {selected.creditos?.slice(-1)[0]?.ciclo ?? 0}
+                </Badge>
               </div>
               <Button variant="ghost" size="sm" onClick={() => setStep(1)} className="text-xs">Cambiar</Button>
             </div>
+
+            {/* Catalog selector */}
+            {catalogo?.tasas && plazosDisponibles.length > 0 && (
+              <div className="grid gap-1.5">
+                <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  Tasa y Plazo{" "}
+                  <span className="normal-case font-normal text-muted-foreground/70">
+                    — seleccionar precalcula el interés y la fecha de último pago
+                  </span>
+                </Label>
+                <div className="border rounded-lg overflow-hidden">
+                  <table className="w-full text-xs">
+                    <thead className="bg-muted/50">
+                      <tr>
+                        <th className="px-3 py-2 text-left font-medium text-muted-foreground">Tasa</th>
+                        {plazosDisponibles.map((p) => (
+                          <th key={p} className="px-3 py-2 text-center font-medium text-muted-foreground">
+                            {p} sem
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {Object.entries(catalogo.tasas).map(([key, val]: [string, any]) => (
+                        <tr key={key} className="hover:bg-muted/20">
+                          <td className="px-3 py-1.5 font-medium whitespace-nowrap">
+                            {TASA_LABELS[key] || key}
+                          </td>
+                          {plazosDisponibles.map((p) => {
+                            const factor = val[p] ?? val[String(p)];
+                            const isSelected = selectedOption?.tasaKey === key && selectedOption?.plazo === p;
+                            return (
+                              <td key={p} className="px-2 py-1.5 text-center">
+                                {factor != null ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSelectOption(key, p, Number(factor))}
+                                    className={cn(
+                                      "w-full px-2 py-1 rounded text-xs font-mono transition-colors border",
+                                      isSelected
+                                        ? "bg-primary text-primary-foreground border-primary font-bold"
+                                        : "bg-background hover:bg-primary/10 border-border text-muted-foreground hover:text-foreground hover:border-primary/40"
+                                    )}
+                                  >
+                                    ${factor}
+                                  </button>
+                                ) : (
+                                  <span className="text-muted-foreground/30">—</span>
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-3">
               <div className="grid gap-2">
@@ -248,7 +375,7 @@ export function CustomLoanForm({ type, onSuccess, onClose }: CustomLoanFormProps
                   min="0"
                   placeholder="0.00"
                   value={formData.monto_otorgado}
-                  onChange={(e) => setFormData({ ...formData, monto_otorgado: e.target.value })}
+                  onChange={(e) => handleMontoChange(e.target.value)}
                 />
               </div>
               <div className="grid gap-2">
@@ -274,7 +401,7 @@ export function CustomLoanForm({ type, onSuccess, onClose }: CustomLoanFormProps
                 <Input
                   type="date"
                   value={formData.fecha_primer_pago}
-                  onChange={(e) => setFormData({ ...formData, fecha_primer_pago: e.target.value })}
+                  onChange={(e) => handleFechaPrimerPagoChange(e.target.value)}
                 />
               </div>
               <div className="grid gap-2 col-span-2">
@@ -287,7 +414,7 @@ export function CustomLoanForm({ type, onSuccess, onClose }: CustomLoanFormProps
               </div>
             </div>
 
-            {/* Calculated summary */}
+            {/* Summary */}
             {monto > 0 && plazos > 0 && (
               <div className="rounded-lg border bg-muted/30 divide-y text-xs">
                 <div className="flex justify-between px-3 py-2">

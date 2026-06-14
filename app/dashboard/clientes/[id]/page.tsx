@@ -7,10 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowLeft, User, Phone, MapPin, Briefcase, ShieldCheck, ClipboardList, CreditCard, PlusCircle, Edit, Component, Cake } from "lucide-react";
+import { ArrowLeft, User, Phone, MapPin, Briefcase, ShieldCheck, ClipboardList, CreditCard, Edit, Component, Cake } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { CreditForm } from "@/components/credit-form";
 import { Badge } from "../../../../components/ui/badge";
 import { fmtFecha } from "@/lib/utils";
 
@@ -19,7 +18,6 @@ export default function ClienteDetallePage() {
   const router = useRouter();
   const [cliente, setCliente] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [isCreditDialogOpen, setIsCreditDialogOpen] = useState(false);
 
   const fetchCliente = async () => {
     setLoading(true);
@@ -57,30 +55,6 @@ export default function ClienteDetallePage() {
             <h1 className="text-3xl font-bold tracking-tight">{cliente.nombre_completo}</h1>
             <p className="text-muted-foreground font-mono text-sm">{cliente.id_cliente}</p>
           </div>
-        </div>
-        <div className="flex gap-2">
-          <Dialog open={isCreditDialogOpen} onOpenChange={setIsCreditDialogOpen}>
-            <DialogTrigger
-              render={
-                <Button>
-                  <PlusCircle className="mr-2 h-4 w-4" />
-                  Nuevo Préstamo
-                </Button>
-              }
-            />
-            <DialogContent className="sm:max-w-[500px]">
-              <DialogHeader>
-                <DialogTitle>Otorgar Préstamo Individual</DialogTitle>
-              </DialogHeader>
-              <CreditForm 
-                client={cliente} 
-                onSuccess={() => {
-                  setIsCreditDialogOpen(false);
-                  fetchCliente();
-                }} 
-              />
-            </DialogContent>
-          </Dialog>
         </div>
       </div>
 
