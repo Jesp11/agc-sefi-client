@@ -10,20 +10,34 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Input } from "@/components/ui/input";
-import { PlusCircle, Search } from "lucide-react";
+import { PlusCircle } from "lucide-react";
+import { toast } from "sonner";
+import { TablePagination, TableSearch } from "@/components/table-controls";
+import { PAGE_SIZE, filterBySearch, paginateItems, useTableControls } from "@/hooks/use-paginated-list";
+import { avalSearchFields, fetchAllPages } from "@/lib/table-utils";
 
 export default function AvalesPage() {
-  const [avales, setAvales] = useState([]);
+  const [avales, setAvales] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const { search, handleSearch, page, setPage } = useTableControls();
 
   useEffect(() => {
-    setTimeout(() => {
-      setAvales([
-      ]);
-      setLoading(false);
-    }, 1000);
+    const fetchAvales = async () => {
+      setLoading(true);
+      try {
+        const rows = await fetchAllPages("/avales");
+        setAvales(rows);
+      } catch {
+        toast.error("Error al cargar avales");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchAvales();
   }, []);
+
+  const filtered = filterBySearch(avales, search, avalSearchFields);
+  const paginated = paginateItems(filtered, page);
 
   return (
     <div className="flex flex-col gap-6">
@@ -35,10 +49,7 @@ export default function AvalesPage() {
         </Button>
       </div>
 
-      <div className="flex items-center gap-2">
-        <Search className="h-4 w-4 text-muted-foreground" />
-        <Input placeholder="Buscar avales..." className="max-w-sm" />
-      </div>
+      <TableSearch placeholder="Buscar avales..." value={search} onChange={handleSearch} className="max-w-sm" />
 
       <div className="rounded-md border">
         <Table>
@@ -59,20 +70,20 @@ export default function AvalesPage() {
                   Cargando avales...
                 </TableCell>
               </TableRow>
-            ) : avales.length === 0 ? (
+            ) : filtered.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={6} className="h-24 text-center">
-                  No hay avales registrados.
+                  {search ? "No se encontraron avales con ese criterio." : "No hay avales registrados."}
                 </TableCell>
               </TableRow>
             ) : (
-              avales.map((aval: any) => (
+              paginated.map((aval: any) => (
                 <TableRow key={aval.id}>
                   <TableCell>{aval.id}</TableCell>
-                  <TableCell>{aval.cliente}</TableCell>
+                  <TableCell>{aval.cliente?.nombre_completo ?? aval.id_cliente}</TableCell>
                   <TableCell className="font-medium">{aval.nombre}</TableCell>
-                  <TableCell>{aval.rfc}</TableCell>
-                  <TableCell>{aval.ingresos}</TableCell>
+                  <TableCell>{aval.rfc ?? "—"}</TableCell>
+                  <TableCell>{aval.ingresos ?? aval.ocupacion_laboral ?? "—"}</TableCell>
                   <TableCell className="text-right">
                     <Button variant="outline" size="sm">Editar</Button>
                   </TableCell>
@@ -82,6 +93,16 @@ export default function AvalesPage() {
           </TableBody>
         </Table>
       </div>
+
+      {!loading && (
+        <TablePagination
+          page={page}
+          totalItems={filtered.length}
+          pageSize={PAGE_SIZE}
+          onPageChange={setPage}
+          label="avales"
+        />
+      )}
     </div>
   );
 }

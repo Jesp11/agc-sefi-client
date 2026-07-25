@@ -3,21 +3,50 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
+import { useAuth } from "@/context/auth-context";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowLeft, User, Phone, MapPin, Briefcase, ShieldCheck, ClipboardList, CreditCard, Edit, Component, Cake } from "lucide-react";
+import { ArrowLeft, User, Phone, MapPin, Briefcase, ShieldCheck, ClipboardList, CreditCard, Component, Cake, FileUp, Upload, Trash2, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "../../../../components/ui/badge";
 import { fmtFecha } from "@/lib/utils";
+import { HistorialUnificadoModal } from "@/components/historial-unificado-modal";
+import { apiUpload } from "@/lib/api";
+import { EXPEDIENTE_ACCEPT, EXPEDIENTE_DOCUMENTOS, type ExpedienteTipo } from "@/lib/expediente-documentos";
+import { TablePagination, TableSearch } from "@/components/table-controls";
+import { PAGE_SIZE, filterBySearch, paginateItems, useTableControls } from "@/hooks/use-paginated-list";
+import {
+  creditoSearchFields,
+  fetchAllPages,
+  marcarEstadoCuotas,
+  parseTablaAmortizacionCalendario,
+} from "@/lib/table-utils";
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
+const STORAGE_BASE = API_BASE.replace("/api", "") + "/storage";
 
 export default function ClienteDetallePage() {
   const { id } = useParams();
   const router = useRouter();
+  const { user } = useAuth();
+  const isAdmin = user?.role?.nombre === "admin";
   const [cliente, setCliente] = useState<any>(null);
+  const [documentos, setDocumentos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [uploadingTipo, setUploadingTipo] = useState<ExpedienteTipo | null>(null);
+  const [asesores, setAsesores] = useState<any[]>([]);
+  const [asesorSeleccionado, setAsesorSeleccionado] = useState("");
+  const [guardandoAsesor, setGuardandoAsesor] = useState(false);
+  const creditosControls = useTableControls();
+
+  const fetchDocumentos = async () => {
+    const res = await apiFetch(`/clientes/${id}/documentos`);
+    if (res.ok) setDocumentos(await res.json());
+  };
 
   const fetchCliente = async () => {
     setLoading(true);
@@ -26,6 +55,8 @@ export default function ClienteDetallePage() {
       const data = await res.json();
       if (res.ok) {
         setCliente(data);
+        setAsesorSeleccionado(String(data.id_asesor ?? data.asesor?.id ?? ""));
+        fetchDocumentos();
       } else {
         toast.error("No se encontró el cliente");
         router.push("/dashboard/clientes");
@@ -41,8 +72,104 @@ export default function ClienteDetallePage() {
     fetchCliente();
   }, [id, router]);
 
+  useEffect(() => {
+    if (!isAdmin) return;
+    fetchAllPages("/asesores")
+      .then((rows) => setAsesores(rows.filter((a: any) => a.activo !== false)))
+      .catch(() => toast.error("Error al cargar asesores"));
+  }, [isAdmin]);
+
+  const handleCambiarAsesor = async () => {
+    if (!asesorSeleccionado) {
+      toast.error("Selecciona un asesor");
+      return;
+    }
+    if (String(cliente.id_asesor ?? cliente.asesor?.id ?? "") === asesorSeleccionado) {
+      toast.message("El cliente ya tiene ese asesor asignado");
+      return;
+    }
+
+    setGuardandoAsesor(true);
+    try {
+      const res = await apiFetch(`/clientes/${id}`, {
+        method: "PUT",
+        body: JSON.stringify({ id_asesor: Number(asesorSeleccionado) }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        toast.success(data.message || "Asesor actualizado");
+        if (data.data) {
+          setCliente(data.data);
+          setAsesorSeleccionado(String(data.data.id_asesor ?? data.data.asesor?.id ?? ""));
+        } else {
+          fetchCliente();
+        }
+      } else {
+        toast.error(data.message || "Error al cambiar asesor");
+      }
+    } catch {
+      toast.error("Error de conexión");
+    } finally {
+      setGuardandoAsesor(false);
+    }
+  };
+
+  const getDocumentoPorTipo = (tipo: ExpedienteTipo) =>
+    documentos.find((d) => d.tipo === tipo);
+
+  const handleUploadDocumento = async (tipo: ExpedienteTipo, file: File) => {
+    setUploadingTipo(tipo);
+    try {
+      const existente = getDocumentoPorTipo(tipo);
+      if (existente) {
+        const delRes = await apiFetch(`/clientes/${id}/documentos/${existente.id}`, { method: "DELETE" });
+        if (!delRes.ok) {
+          toast.error("Error al reemplazar documento");
+          return;
+        }
+      }
+      const fd = new FormData();
+      fd.append("tipo", tipo);
+      fd.append("archivo", file);
+      const res = await apiUpload(`/clientes/${id}/documentos`, fd);
+      if (res.ok) {
+        toast.success("Documento cargado correctamente");
+        fetchDocumentos();
+      } else {
+        toast.error("Error al subir documento");
+      }
+    } catch {
+      toast.error("Error de conexión");
+    } finally {
+      setUploadingTipo(null);
+    }
+  };
+
+  const handleDeleteDocumento = async (tipo: ExpedienteTipo) => {
+    const doc = getDocumentoPorTipo(tipo);
+    if (!doc) return;
+    setUploadingTipo(tipo);
+    try {
+      const res = await apiFetch(`/clientes/${id}/documentos/${doc.id}`, { method: "DELETE" });
+      if (res.ok) {
+        toast.success("Documento eliminado");
+        fetchDocumentos();
+      } else {
+        toast.error("Error al eliminar documento");
+      }
+    } catch {
+      toast.error("Error de conexión");
+    } finally {
+      setUploadingTipo(null);
+    }
+  };
+
   if (loading) return <div className="p-8 text-center">Cargando detalles del cliente...</div>;
   if (!cliente) return null;
+
+  const creditosList = cliente.creditos || [];
+  const creditosFiltered = filterBySearch(creditosList, creditosControls.search, creditoSearchFields);
+  const creditosPaginated = paginateItems(creditosFiltered, creditosControls.page);
 
   return (
     <div className="flex flex-col gap-6">
@@ -56,14 +183,18 @@ export default function ClienteDetallePage() {
             <p className="text-muted-foreground font-mono text-sm">{cliente.id_cliente}</p>
           </div>
         </div>
+        <div className="flex items-center gap-2">
+          <HistorialUnificadoModal tipo="cliente" id={id as string} />
+        </div>
       </div>
 
       <Tabs defaultValue="personal" className="w-full">
-        <TabsList className="grid w-full grid-cols-7">
+        <TabsList className="grid w-full grid-cols-8">
           <TabsTrigger value="personal">Personal</TabsTrigger>
           <TabsTrigger value="domicilio">Domicilio</TabsTrigger>
           <TabsTrigger value="laboral">Laboral</TabsTrigger>
           <TabsTrigger value="creditos">Créditos</TabsTrigger>
+          <TabsTrigger value="documentos">Documentos</TabsTrigger>
           <TabsTrigger value="avales">Avales</TabsTrigger>
           <TabsTrigger value="referencias">Referencias</TabsTrigger>
           <TabsTrigger value="asesor">Asesor</TabsTrigger>
@@ -158,7 +289,8 @@ export default function ClienteDetallePage() {
                 <CreditCard className="h-5 w-5" /> Historial de Préstamos
               </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
+              <TableSearch placeholder="Buscar préstamos..." value={creditosControls.search} onChange={creditosControls.handleSearch} />
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -174,8 +306,8 @@ export default function ClienteDetallePage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {cliente.creditos && cliente.creditos.length > 0 ? (
-                    cliente.creditos.map((c: any, index: number) => (
+                  {creditosFiltered.length > 0 ? (
+                    creditosPaginated.map((c: any, index: number) => (
                       <TableRow key={c.id_credito || c.id || index}>
                         <TableCell>{c.ciclo}</TableCell>
                         <TableCell>{c.dias_pago}</TableCell>
@@ -201,21 +333,44 @@ export default function ClienteDetallePage() {
                                       <TableHead>Fecha Sugerida</TableHead>
                                       <TableHead className="text-right">Monto</TableHead>
                                       <TableHead className="text-right">Saldo Restante</TableHead>
+                                      <TableHead className="text-center">Estado</TableHead>
                                     </TableRow>
                                   </TableHeader>
                                   <TableBody>
-                                    {c.tabla_amortizacion ? (
-                                      (typeof c.tabla_amortizacion === 'string' ? JSON.parse(c.tabla_amortizacion) : c.tabla_amortizacion).map((p: any) => (
+                                    {(() => {
+                                      const calendario = parseTablaAmortizacionCalendario(c.tabla_amortizacion);
+                                      if (calendario.length === 0) {
+                                        return (
+                                          <TableRow key="no-tabla">
+                                            <TableCell colSpan={5} className="text-center p-4">No hay tabla disponible</TableCell>
+                                          </TableRow>
+                                        );
+                                      }
+                                      const abonado = Math.max(
+                                        0,
+                                        Number(c.total || 0) - Number(c.saldo_pendiente ?? c.total ?? 0),
+                                      );
+                                      return marcarEstadoCuotas(calendario, abonado).map((p) => (
                                         <TableRow key={p.pago_numero}>
                                           <TableCell className="font-medium">#{p.pago_numero}</TableCell>
-                                          <TableCell className="text-xs">{p.fecha_sugerida}</TableCell>
+                                          <TableCell className="text-xs">{fmtFecha(p.fecha_sugerida)}</TableCell>
                                           <TableCell className="text-right font-bold">${p.monto_pago}</TableCell>
                                           <TableCell className="text-right text-muted-foreground text-xs">${p.saldo_restante}</TableCell>
+                                          <TableCell className="text-center">
+                                            <Badge
+                                              variant={p.estado_pago === "Pagado" ? "default" : "secondary"}
+                                              className={
+                                                p.estado_pago === "Pagado"
+                                                  ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-50"
+                                                  : "bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-50"
+                                              }
+                                            >
+                                              {p.estado_pago}
+                                            </Badge>
+                                          </TableCell>
                                         </TableRow>
-                                      ))
-                                    ) : (
-                                      <TableRow><TableCell colSpan={4} className="text-center p-4">No hay tabla disponible</TableCell></TableRow>
-                                    )}
+                                      ));
+                                    })()}
                                   </TableBody>
                                 </Table>
                               </div>
@@ -226,11 +381,120 @@ export default function ClienteDetallePage() {
                     ))
                   ) : (
                     <TableRow key="empty-creditos">
-                      <TableCell colSpan={9} className="text-center">Sin préstamos registrados</TableCell>
+                      <TableCell colSpan={9} className="text-center">{creditosControls.search ? "No se encontraron préstamos." : "Sin préstamos registrados"}</TableCell>
                     </TableRow>
                   )}
                 </TableBody>
               </Table>
+              {creditosFiltered.length > 0 && (
+                <TablePagination page={creditosControls.page} totalItems={creditosFiltered.length} pageSize={PAGE_SIZE} onPageChange={creditosControls.setPage} label="préstamos" />
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Documentos KYC */}
+        <TabsContent value="documentos" className="mt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <FileUp className="h-5 w-5" /> Expediente Digital
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Carga el expediente del cliente. Todos los documentos son opcionales.
+              </p>
+              {EXPEDIENTE_DOCUMENTOS.map(({ tipo, label }) => {
+                const doc = getDocumentoPorTipo(tipo);
+                const busy = uploadingTipo === tipo;
+                const inputId = `doc-${tipo}`;
+                return (
+                  <div key={tipo} className="grid gap-1">
+                    <label htmlFor={inputId} className="text-sm font-medium">{label}</label>
+                    {doc ? (
+                      <div className="flex items-center gap-2 rounded-lg border bg-muted/20 px-3 py-2">
+                        <FileText className="h-4 w-4 text-primary shrink-0" />
+                        <a
+                          href={`${STORAGE_BASE}/${doc.ruta}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm text-primary underline underline-offset-2 hover:opacity-80 truncate flex-1"
+                        >
+                          {doc.nombre_archivo}
+                        </a>
+                        <span className="text-xs text-muted-foreground shrink-0">
+                          {doc.created_at ? fmtFecha(doc.created_at.slice(0, 10)) : ""}
+                        </span>
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7 text-destructive hover:text-destructive/80 shrink-0"
+                          onClick={() => handleDeleteDocumento(tipo)}
+                          disabled={busy || uploadingTipo !== null}
+                          title={`Eliminar ${label.toLowerCase()}`}
+                        >
+                          {busy ? (
+                            <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                          ) : (
+                            <Trash2 className="h-3.5 w-3.5" />
+                          )}
+                        </Button>
+                      </div>
+                    ) : (
+                      <label
+                        htmlFor={inputId}
+                        className={`flex items-center justify-center gap-2 rounded-lg border-2 border-dashed border-muted-foreground/30 p-3 text-sm text-muted-foreground transition-colors ${busy || uploadingTipo !== null ? "opacity-50 pointer-events-none" : "cursor-pointer hover:border-primary/60 hover:bg-muted/30 hover:text-foreground"}`}
+                      >
+                        {busy ? (
+                          <>
+                            <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                            Subiendo...
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="h-4 w-4" />
+                            Cargar {label.toLowerCase()}
+                          </>
+                        )}
+                        <input
+                          id={inputId}
+                          type="file"
+                          accept={EXPEDIENTE_ACCEPT}
+                          className="hidden"
+                          disabled={busy || uploadingTipo !== null}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) handleUploadDocumento(tipo, file);
+                            e.target.value = "";
+                          }}
+                        />
+                      </label>
+                    )}
+                    {doc && (
+                      <label
+                        htmlFor={`${inputId}-replace`}
+                        className={`inline-flex items-center gap-1.5 text-xs text-primary underline underline-offset-2 w-fit ${busy || uploadingTipo !== null ? "opacity-50 pointer-events-none" : "cursor-pointer hover:opacity-80"}`}
+                      >
+                        Reemplazar archivo
+                        <input
+                          id={`${inputId}-replace`}
+                          type="file"
+                          accept={EXPEDIENTE_ACCEPT}
+                          className="hidden"
+                          disabled={busy || uploadingTipo !== null}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) handleUploadDocumento(tipo, file);
+                            e.target.value = "";
+                          }}
+                        />
+                      </label>
+                    )}
+                  </div>
+                );
+              })}
             </CardContent>
           </Card>
         </TabsContent>
@@ -334,7 +598,7 @@ export default function ClienteDetallePage() {
         {/* Asesor */}
         <TabsContent value="asesor" className="mt-4">
           <Card>
-            <CardContent className="pt-6">
+            <CardContent className="pt-6 space-y-4">
               {cliente.asesor ? (
                 <div className="flex items-center gap-4">
                   <div className="bg-primary/10 p-3 rounded-full">
@@ -347,6 +611,36 @@ export default function ClienteDetallePage() {
                 </div>
               ) : (
                 <p className="text-muted-foreground text-sm">No tiene asesor asignado.</p>
+              )}
+
+              {isAdmin && (
+                <div className="grid gap-3 border-t pt-4 max-w-md">
+                  <div className="grid gap-2">
+                    <Label>Cambiar asesor</Label>
+                    <select
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                      value={asesorSeleccionado}
+                      onChange={(e) => setAsesorSeleccionado(e.target.value)}
+                    >
+                      <option value="">Seleccionar asesor...</option>
+                      {asesores.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.nombre_asesor}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-muted-foreground">
+                      Los créditos activos o en mora del cliente también se reasignarán al nuevo asesor.
+                    </p>
+                  </div>
+                  <Button
+                    onClick={handleCambiarAsesor}
+                    disabled={guardandoAsesor || !asesorSeleccionado}
+                    className="w-fit"
+                  >
+                    {guardandoAsesor ? "Guardando..." : "Guardar asesor"}
+                  </Button>
+                </div>
               )}
             </CardContent>
           </Card>

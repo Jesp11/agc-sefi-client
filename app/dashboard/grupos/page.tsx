@@ -10,7 +10,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -19,27 +18,25 @@ import {
 } from "@/components/ui/dialog";
 import { PlusCircle, Users } from "lucide-react";
 import { CreateGroupForm } from "@/components/create-group-form";
-import { apiFetch } from "@/lib/api";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
-
-const PAGE_SIZE = 5;
+import { TablePagination, TableSearch } from "@/components/table-controls";
+import { PAGE_SIZE, filterBySearch, paginateItems, useTableControls } from "@/hooks/use-paginated-list";
+import { fetchAllPages, grupoSearchFields } from "@/lib/table-utils";
 
 export default function GruposPage() {
   const router = useRouter();
   const [grupos, setGrupos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
+  const { search, handleSearch, page, setPage } = useTableControls();
   const [isNewGroupModalOpen, setIsNewGroupModalOpen] = useState(false);
-  const [page, setPage] = useState(1);
 
   const fetchGrupos = async () => {
     setLoading(true);
     try {
-      const res = await apiFetch("/grupos");
-      const data = await res.json();
-      if (res.ok) setGrupos(data.data || data);
+      const rows = await fetchAllPages("/grupos");
+      setGrupos(rows);
     } catch {
       toast.error("Error al cargar grupos");
     } finally {
@@ -51,10 +48,8 @@ export default function GruposPage() {
     fetchGrupos();
   }, []);
 
-  const filtered = grupos.filter((g) =>
-    g.nombre_grupo?.toLowerCase().includes(search.toLowerCase())
-  );
-  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const filtered = filterBySearch(grupos, search, grupoSearchFields);
+  const paginated = paginateItems(filtered, page);
 
   return (
     <div className="space-y-6">
@@ -64,14 +59,12 @@ export default function GruposPage() {
       </div>
 
       <div className="flex items-center justify-between gap-3">
-        <div className="flex-1 max-w-md">
-          <Input
-            placeholder="Buscar por nombre de grupo..."
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-            className="bg-background border-muted-foreground/20 focus-visible:ring-primary/30 h-10"
-          />
-        </div>
+        <TableSearch
+          placeholder="Buscar por nombre de grupo..."
+          value={search}
+          onChange={handleSearch}
+          className="flex-1 max-w-md"
+        />
         <Button size="sm" className="h-10 px-4" onClick={() => setIsNewGroupModalOpen(true)}>
           <PlusCircle className="mr-2 h-4 w-4" />
           Nuevo Grupo
@@ -152,20 +145,14 @@ export default function GruposPage() {
         </Table>
       </div>
 
-      {!loading && filtered.length > PAGE_SIZE && (
-        <div className="flex items-center justify-between text-sm text-muted-foreground">
-          <span>
-            Mostrando {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} de {filtered.length} grupos
-          </span>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => setPage(p => p - 1)} disabled={page === 1}>
-              Anterior
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => setPage(p => p + 1)} disabled={page * PAGE_SIZE >= filtered.length}>
-              Siguiente
-            </Button>
-          </div>
-        </div>
+      {!loading && (
+        <TablePagination
+          page={page}
+          totalItems={filtered.length}
+          pageSize={PAGE_SIZE}
+          onPageChange={setPage}
+          label="grupos"
+        />
       )}
     </div>
   );

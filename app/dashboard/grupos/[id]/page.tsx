@@ -7,11 +7,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Input } from "@/components/ui/input";
-import { ArrowLeft, User, Users, CreditCard, Component, UserMinus, UserPlus, Search } from "lucide-react";
+import { ArrowLeft, User, Users, CreditCard, Component, UserMinus, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { fmtFecha } from "@/lib/utils";
+import { HistorialUnificadoModal } from "@/components/historial-unificado-modal";
+import { TablePagination, TableSearch } from "@/components/table-controls";
+import { PAGE_SIZE, filterBySearch, paginateItems, useTableControls } from "@/hooks/use-paginated-list";
+import { clienteSearchFields, creditoSearchFields, fetchAllPages } from "@/lib/table-utils";
 import {
   Dialog,
   DialogContent,
@@ -29,7 +32,9 @@ export default function GrupoDetallePage() {
 
   const [todosClientes, setTodosClientes] = useState<any[]>([]);
   const [loadingClientes, setLoadingClientes] = useState(false);
-  const [clienteSearch, setClienteSearch] = useState("");
+  const dialogControls = useTableControls();
+  const integrantesControls = useTableControls();
+  const creditosControls = useTableControls();
 
   const fetchGrupo = async () => {
     setLoading(true);
@@ -52,9 +57,8 @@ export default function GrupoDetallePage() {
   const fetchClientesDisponibles = async () => {
     setLoadingClientes(true);
     try {
-      const res = await apiFetch("/clientes");
-      const data = await res.json();
-      if (res.ok) setTodosClientes(data.data || data);
+      const rows = await fetchAllPages("/clientes");
+      setTodosClientes(rows);
     } catch {
       toast.error("Error al cargar clientes");
     } finally {
@@ -73,7 +77,8 @@ export default function GrupoDetallePage() {
       if (res.ok) {
         toast.success("Cliente agregado al grupo");
         setIsAddClientDialogOpen(false);
-        setClienteSearch("");
+        dialogControls.setSearch("");
+        dialogControls.setPage(1);
         fetchGrupo();
       } else {
         toast.error(data.message || "Error al agregar cliente");
@@ -115,12 +120,21 @@ export default function GrupoDetallePage() {
   const clientesFiltrados = todosClientes
     .filter((c) => !idsEnGrupo.has(c.id_cliente))
     .filter((c) => {
-      const q = clienteSearch.toLowerCase();
+      const q = dialogControls.search.toLowerCase();
       return (
         c.nombre_completo?.toLowerCase().includes(q) ||
         c.id_cliente?.toLowerCase().includes(q)
       );
     });
+  const clientesDialogPaginated = paginateItems(clientesFiltrados, dialogControls.page);
+
+  const integrantesList = grupo?.clientes || [];
+  const integrantesFiltered = filterBySearch(integrantesList, integrantesControls.search, clienteSearchFields);
+  const integrantesPaginated = paginateItems(integrantesFiltered, integrantesControls.page);
+
+  const creditosList = grupo?.creditos || [];
+  const creditosFiltered = filterBySearch(creditosList, creditosControls.search, creditoSearchFields);
+  const creditosPaginated = paginateItems(creditosFiltered, creditosControls.page);
 
   if (loading) return <div className="p-8 text-center">Cargando detalles del grupo...</div>;
   if (!grupo) return null;
@@ -141,6 +155,7 @@ export default function GrupoDetallePage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <HistorialUnificadoModal tipo="grupo" id={id as string} />
           <Badge variant="outline" className="text-lg px-4 py-1 border-primary/20 bg-primary/5">
             {grupo.clientes?.length || 0} Integrantes
           </Badge>
@@ -149,7 +164,7 @@ export default function GrupoDetallePage() {
             open={isAddClientDialogOpen}
             onOpenChange={(open) => {
               setIsAddClientDialogOpen(open);
-              if (open) { setClienteSearch(""); fetchClientesDisponibles(); }
+              if (open) { dialogControls.setSearch(""); dialogControls.setPage(1); fetchClientesDisponibles(); }
             }}
           >
             <DialogTrigger
@@ -165,15 +180,12 @@ export default function GrupoDetallePage() {
                 <DialogTitle>Agregar Cliente al Grupo</DialogTitle>
               </DialogHeader>
               <div className="flex flex-col gap-4 pt-1">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Buscar por nombre o ID..."
-                    value={clienteSearch}
-                    onChange={(e) => setClienteSearch(e.target.value)}
-                    className="pl-9"
-                  />
-                </div>
+                <TableSearch
+                  placeholder="Buscar por nombre o ID..."
+                  value={dialogControls.search}
+                  onChange={dialogControls.handleSearch}
+                  className="pl-9"
+                />
                 <div className="rounded-lg border overflow-hidden max-h-[360px] overflow-y-auto">
                   <Table>
                     <TableHeader className="bg-muted/50 sticky top-0">
@@ -194,13 +206,13 @@ export default function GrupoDetallePage() {
                       ) : clientesFiltrados.length === 0 ? (
                         <TableRow>
                           <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
-                            {clienteSearch
+                            {dialogControls.search
                               ? "No se encontraron clientes con ese criterio."
                               : "Todos los clientes ya pertenecen al grupo."}
                           </TableCell>
                         </TableRow>
                       ) : (
-                        clientesFiltrados.map((cliente) => (
+                        clientesDialogPaginated.map((cliente) => (
                           <TableRow key={cliente.id_cliente} className="hover:bg-muted/30">
                             <TableCell className="font-mono text-xs">{cliente.id_cliente}</TableCell>
                             <TableCell className="font-medium">{cliente.nombre_completo}</TableCell>
@@ -220,6 +232,9 @@ export default function GrupoDetallePage() {
                     </TableBody>
                   </Table>
                 </div>
+                {!loadingClientes && clientesFiltrados.length > 0 && (
+                  <TablePagination page={dialogControls.page} totalItems={clientesFiltrados.length} pageSize={PAGE_SIZE} onPageChange={dialogControls.setPage} label="clientes" />
+                )}
                 <p className="text-xs text-muted-foreground">
                   El cliente heredará el asesor y días de pago del grupo.
                 </p>
@@ -245,7 +260,8 @@ export default function GrupoDetallePage() {
               </CardTitle>
               <CardDescription>Lista de clientes que conforman este grupo de confianza.</CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
+              <TableSearch placeholder="Buscar integrantes..." value={integrantesControls.search} onChange={integrantesControls.handleSearch} />
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -257,8 +273,8 @@ export default function GrupoDetallePage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {grupo.clientes && grupo.clientes.length > 0 ? (
-                    grupo.clientes.map((cliente: any) => (
+                  {integrantesFiltered.length > 0 ? (
+                    integrantesPaginated.map((cliente: any) => (
                       <TableRow key={cliente.id_cliente}>
                         <TableCell className="font-mono text-xs">{cliente.id_cliente}</TableCell>
                         <TableCell className="font-medium">{cliente.nombre_completo}</TableCell>
@@ -289,12 +305,15 @@ export default function GrupoDetallePage() {
                   ) : (
                     <TableRow>
                       <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                        No hay integrantes en este grupo.
+                        {integrantesControls.search ? "No se encontraron integrantes." : "No hay integrantes en este grupo."}
                       </TableCell>
                     </TableRow>
                   )}
                 </TableBody>
               </Table>
+              {integrantesFiltered.length > 0 && (
+                <TablePagination page={integrantesControls.page} totalItems={integrantesFiltered.length} pageSize={PAGE_SIZE} onPageChange={integrantesControls.setPage} label="integrantes" />
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -307,7 +326,8 @@ export default function GrupoDetallePage() {
               </CardTitle>
               <CardDescription>Ciclos de préstamo otorgados a la sociedad del grupo.</CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
+              <TableSearch placeholder="Buscar préstamos..." value={creditosControls.search} onChange={creditosControls.handleSearch} />
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -323,8 +343,8 @@ export default function GrupoDetallePage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {grupo.creditos && grupo.creditos.length > 0 ? (
-                    grupo.creditos.map((credito: any) => (
+                  {creditosFiltered.length > 0 ? (
+                    creditosPaginated.map((credito: any) => (
                       <TableRow key={credito.num_prog}>
                         <TableCell className="font-bold">Ciclo {credito.ciclo}</TableCell>
                         <TableCell className="text-xs">{fmtFecha(credito.fecha_otorgacion)}</TableCell>
@@ -352,12 +372,15 @@ export default function GrupoDetallePage() {
                   ) : (
                     <TableRow>
                       <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
-                        Sin historial de préstamos.
+                        {creditosControls.search ? "No se encontraron préstamos." : "Sin historial de préstamos."}
                       </TableCell>
                     </TableRow>
                   )}
                 </TableBody>
               </Table>
+              {creditosFiltered.length > 0 && (
+                <TablePagination page={creditosControls.page} totalItems={creditosFiltered.length} pageSize={PAGE_SIZE} onPageChange={creditosControls.setPage} label="préstamos" />
+              )}
             </CardContent>
           </Card>
         </TabsContent>

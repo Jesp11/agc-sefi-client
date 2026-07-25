@@ -11,9 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Input } from "@/components/ui/input";
 import { PlusCircle, User, Users, Sparkles } from "lucide-react";
-import { apiFetch } from "@/lib/api";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { fmtFecha } from "@/lib/utils";
@@ -24,23 +22,23 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { CustomCreditForm } from "@/components/custom-credit-form";
+import { TablePagination, TableSearch } from "@/components/table-controls";
+import { PAGE_SIZE, filterBySearch, paginateItems, useTableControls } from "@/hooks/use-paginated-list";
+import { creditoSearchFields, fetchAllPages } from "@/lib/table-utils";
 
 export default function CreditosPage() {
   const router = useRouter();
-  const [creditos, setCreditos] = useState([]);
+  const [creditos, setCreditos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState("");
+  const { search: searchTerm, handleSearch, page, setPage } = useTableControls();
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const fetchCreditos = async () => {
     setLoading(true);
     try {
-      const res = await apiFetch("/creditos?per_page=100");
-      const data = await res.json();
-      if (res.ok) {
-        setCreditos(data.data || data);
-      }
-    } catch (error) {
+      const rows = await fetchAllPages("/creditos");
+      setCreditos(rows);
+    } catch {
       toast.error("Error al cargar créditos");
     } finally {
       setLoading(false);
@@ -51,16 +49,8 @@ export default function CreditosPage() {
     fetchCreditos();
   }, []);
 
-  const filtered = (Array.isArray(creditos) ? creditos : []).filter((c: any) => {
-    const searchLower = searchTerm.toLowerCase();
-    const clienteNombre = c.cliente?.nombre_completo?.toLowerCase() || "";
-    const grupoNombre = c.grupo?.nombre_grupo?.toLowerCase() || "";
-    const folio = c.num_prog?.toString() || "";
-    
-    return clienteNombre.includes(searchLower) || 
-           grupoNombre.includes(searchLower) || 
-           folio.includes(searchLower);
-  });
+  const filtered = filterBySearch(Array.isArray(creditos) ? creditos : [], searchTerm, creditoSearchFields);
+  const paginated = paginateItems(filtered, page);
 
   return (
     <div className="space-y-6">
@@ -70,14 +60,12 @@ export default function CreditosPage() {
       </div>
 
       <div className="flex items-center justify-between gap-3">
-        <div className="flex-1 max-w-md">
-          <Input
-            placeholder="Buscar por cliente, grupo o folio..."
-            className="bg-background border-muted-foreground/20 focus-visible:ring-primary/30 h-10"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
+        <TableSearch
+          placeholder="Buscar por cliente, grupo o folio..."
+          value={searchTerm}
+          onChange={handleSearch}
+          className="flex-1 max-w-md"
+        />
         <div className="flex items-center gap-2">
           <Button 
             onClick={() => setIsModalOpen(true)} 
@@ -141,7 +129,7 @@ export default function CreditosPage() {
                 </TableCell>
               </TableRow>
             ) : (
-              filtered.map((c: any) => (
+              paginated.map((c: any) => (
                 <TableRow key={c.num_prog} className="hover:bg-muted/30 transition-colors">
                   <TableCell className="font-mono text-xs font-semibold text-primary/80">
                     #{c.num_prog}
@@ -218,6 +206,16 @@ export default function CreditosPage() {
           </TableBody>
         </Table>
       </div>
+
+      {!loading && (
+        <TablePagination
+          page={page}
+          totalItems={filtered.length}
+          pageSize={PAGE_SIZE}
+          onPageChange={setPage}
+          label="créditos"
+        />
+      )}
     </div>
   );
 }

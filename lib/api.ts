@@ -3,22 +3,26 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/a
 export async function apiFetch(endpoint: string, options: RequestInit = {}) {
   const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
 
-  const headers = {
-    "Content-Type": "application/json",
+  const headers: Record<string, string> = {
     "Accept": "application/json",
     ...(token ? { "Authorization": `Bearer ${token}` } : {}),
-    ...(options.headers || {}),
   };
+
+  if (!(options.body instanceof FormData)) {
+    headers["Content-Type"] = "application/json";
+  }
 
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
     ...options,
-    headers,
+    headers: {
+      ...headers,
+      ...(options.headers as Record<string, string> || {}),
+    },
   });
 
   if (response.status === 401) {
     if (typeof window !== "undefined") {
       localStorage.removeItem("auth_token");
-      // Opcional: Redirigir a login si no estamos en la página de login
       if (!window.location.pathname.startsWith("/login")) {
         window.location.href = "/login";
       }
@@ -26,4 +30,8 @@ export async function apiFetch(endpoint: string, options: RequestInit = {}) {
   }
 
   return response;
+}
+
+export async function apiUpload(endpoint: string, formData: FormData) {
+  return apiFetch(endpoint, { method: "POST", body: formData });
 }

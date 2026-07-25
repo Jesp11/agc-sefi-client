@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,31 +20,44 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { PlusCircle, Upload } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { PlusCircle, Upload, Download, FileSpreadsheet, ChevronDown, FileDown } from "lucide-react";
+import * as XLSX from "xlsx";
 
 import { apiFetch } from "@/lib/api";
 import { toast } from "sonner";
-
+import { Badge } from "@/components/ui/badge";
+import { TablePagination, TableSearch } from "@/components/table-controls";
+import { PAGE_SIZE, filterBySearch, paginateItems, useTableControls } from "@/hooks/use-paginated-list";
+import { asesorSearchFields, fetchAllPages } from "@/lib/table-utils";
 
 export default function AsesoresPage() {
   const router = useRouter();
-  const [asesores, setAsesores] = useState([]);
+  const [asesores, setAsesores] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const { search, handleSearch, page, setPage } = useTableControls();
   const [isOpen, setIsOpen] = useState(false);
   const [nombreAsesor, setNombreAsesor] = useState("");
   const [curp, setCurp] = useState("");
   const [telefono, setTelefono] = useState("");
   const [ineFile, setIneFile] = useState<File | null>(null);
+  const [ineFile2, setIneFile2] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const importInputRef = useRef<HTMLInputElement>(null);
 
   const fetchAsesores = async () => {
     setLoading(true);
     try {
-      const res = await apiFetch("/asesores");
-      const data = await res.json();
-      if (res.ok) {
-        setAsesores(data.data || data);
-      }
+      const rows = await fetchAllPages("/asesores");
+      setAsesores(rows);
     } catch {
       toast.error("Error al cargar asesores");
     } finally {
@@ -55,6 +68,9 @@ export default function AsesoresPage() {
   useEffect(() => {
     fetchAsesores();
   }, []);
+
+  const filtered = filterBySearch(Array.isArray(asesores) ? asesores : [], search, asesorSearchFields);
+  const paginated = paginateItems(filtered, page);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,6 +91,7 @@ export default function AsesoresPage() {
       formData.append("curp", curp.toUpperCase());
       if (telefono.trim()) formData.append("telefono", telefono.trim());
       if (ineFile) formData.append("ine", ineFile);
+      if (ineFile2) formData.append("ine_2", ineFile2);
 
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api"}/asesores`, {
         method: "POST",
@@ -91,6 +108,7 @@ export default function AsesoresPage() {
         setCurp("");
         setTelefono("");
         setIneFile(null);
+        setIneFile2(null);
         setIsOpen(false);
         fetchAsesores();
       } else {
@@ -104,6 +122,121 @@ export default function AsesoresPage() {
     }
   };
 
+  const handleExportTemplate = () => {
+    const ws = XLSX.utils.aoa_to_sheet([
+      ["Nombre", "CURP", "Teléfono"],
+      ["Ej. Carlos López", "LOCC850101HDFRRL09", "5512345678"],
+    ]);
+    ws["!cols"] = [{ wch: 30 }, { wch: 20 }, { wch: 15 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Plantilla");
+    XLSX.writeFile(wb, "plantilla_asesores.xlsx");
+    toast.success("Plantilla descargada");
+  };
+
+  const handleExport = async () => {
+    setIsExporting(true);
+    try {
+      const res = await apiFetch("/asesores/export");
+      const json = await res.json();
+      if (!res.ok) {
+        toast.error("Error al exportar asesores");
+        return;
+      }
+
+      const rows = (json.data || []).map((a: any) => ({
+        "ID Asesor": a.id_asesor ?? "",
+        "Nombre": a.nombre_asesor ?? "",
+        "CURP": a.curp ?? "",
+        "Teléfono": a.telefono ?? "",
+        "Cumpleaños": a.cumpleanos ? fmtFecha(a.cumpleanos) : "",
+        "Fecha de alta": a.created_at ? fmtFecha(a.created_at.split("T")[0]) : "",
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Asesores");
+      XLSX.writeFile(wb, `asesores_${new Date().toISOString().slice(0, 10)}.xlsx`);
+      toast.success(`${rows.length} asesor(es) exportado(s)`);
+    } catch {
+      toast.error("Error al exportar asesores");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const normalizeHeader = (header: string) =>
+    header
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .trim();
+
+  const mapImportRow = (row: Record<string, unknown>) => {
+    const mapped: Record<string, string> = {};
+    for (const [key, value] of Object.entries(row)) {
+      const h = normalizeHeader(key);
+      const val = String(value ?? "").trim();
+      if (!val) continue;
+      if (h === "nombre" || h === "nombre_asesor" || h === "nombre completo") {
+        mapped.nombre_asesor = val;
+      } else if (h === "curp") {
+        mapped.curp = val.toUpperCase();
+      } else if (h === "telefono" || h === "tel") {
+        mapped.telefono = val;
+      }
+    }
+    return mapped;
+  };
+
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+
+    setIsImporting(true);
+    try {
+      const buffer = await file.arrayBuffer();
+      const workbook = XLSX.read(buffer, { type: "array" });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rawRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet);
+
+      const asesores = rawRows
+        .map(mapImportRow)
+        .filter((row) => row.nombre_asesor || row.curp);
+
+      if (asesores.length === 0) {
+        toast.error("El archivo no contiene filas válidas. Use columnas: Nombre, CURP, Teléfono.");
+        return;
+      }
+
+      const res = await apiFetch("/asesores/import", {
+        method: "POST",
+        body: JSON.stringify({ asesores }),
+      });
+      const data = await res.json();
+
+      if ((data.created ?? 0) > 0 || (data.updated ?? 0) > 0) {
+        toast.success(data.message || "Importación completada");
+        fetchAsesores();
+      }
+
+      if (data.errors?.length) {
+        const detalle = data.errors
+          .slice(0, 3)
+          .map((err: { fila: number; mensajes: string[] }) => `Fila ${err.fila}: ${err.mensajes.join(", ")}`)
+          .join(" · ");
+        toast.error(`${data.errors.length} fila(s) con error. ${detalle}`);
+      } else if (!res.ok && !data.created && !data.updated) {
+        toast.error(data.message || "Error al importar asesores");
+      }
+    } catch {
+      toast.error("Error al leer el archivo Excel");
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -112,13 +245,49 @@ export default function AsesoresPage() {
       </div>
 
       <div className="flex items-center justify-between gap-3">
-        <div className="flex-1 max-w-md">
-          <Input
-            placeholder="Buscar asesores..."
-            className="bg-background border-muted-foreground/20 focus-visible:ring-primary/30 h-10"
+        <TableSearch
+          placeholder="Buscar asesores..."
+          value={search}
+          onChange={handleSearch}
+          className="flex-1 max-w-md"
+        />
+        <div className="flex items-center gap-2">
+          <input
+            ref={importInputRef}
+            type="file"
+            accept=".xlsx,.xls,.csv"
+            className="hidden"
+            onChange={handleImportFile}
           />
-        </div>
-        <Dialog open={isOpen} onOpenChange={setIsOpen}>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button variant="outline" size="sm" className="h-10 px-4" disabled={isImporting || isExporting}>
+                  Acciones
+                  <ChevronDown className="ml-2 h-4 w-4" />
+                </Button>
+              }
+            />
+            <DropdownMenuContent align="end" className="min-w-52">
+              <DropdownMenuItem onClick={handleExportTemplate} disabled={isImporting || isExporting}>
+                <FileDown className="mr-2 h-4 w-4" />
+                Exportar plantilla
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleExport} disabled={isImporting || isExporting}>
+                <Download className="mr-2 h-4 w-4" />
+                {isExporting ? "Exportando..." : "Exportar asesores"}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => importInputRef.current?.click()}
+                disabled={isImporting || isExporting}
+              >
+                <FileSpreadsheet className="mr-2 h-4 w-4" />
+                {isImporting ? "Importando..." : "Importar asesores"}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Dialog open={isOpen} onOpenChange={setIsOpen}>
           <DialogTrigger
             render={
               <Button size="sm" className="h-10 px-4">
@@ -170,24 +339,37 @@ export default function AsesoresPage() {
                 />
               </div>
               <div className="grid gap-2">
-                <label htmlFor="ine" className="text-sm font-medium">INE <span className="text-muted-foreground font-normal">(opcional — JPG, PNG o PDF, máx. 5 MB)</span></label>
-                <label
-                  htmlFor="ine"
-                  className={`flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-4 cursor-pointer transition-colors ${isSubmitting ? "opacity-50 pointer-events-none" : "hover:border-primary/60 hover:bg-muted/30"} ${ineFile ? "border-primary/40 bg-primary/5" : "border-muted-foreground/30"}`}
-                >
-                  <Upload className="h-5 w-5 text-muted-foreground" />
-                  <span className="text-xs text-muted-foreground text-center">
-                    {ineFile ? ineFile.name : "Haz clic o arrastra el archivo aquí"}
-                  </span>
-                  <input
-                    id="ine"
-                    type="file"
-                    accept=".jpg,.jpeg,.png,.pdf"
-                    className="hidden"
-                    disabled={isSubmitting}
-                    onChange={(e) => setIneFile(e.target.files?.[0] ?? null)}
-                  />
-                </label>
+                <span className="text-sm font-medium">
+                  INE <span className="text-muted-foreground font-normal">(opcional — JPG, PNG o PDF, máx. 5 MB)</span>
+                </span>
+                {(["Frontal", "Reverso"] as const).map((label, idx) => {
+                  const isFrontal = idx === 0;
+                  const file = isFrontal ? ineFile : ineFile2;
+                  const inputId = isFrontal ? "ine" : "ine_2";
+                  const setFile = isFrontal ? setIneFile : setIneFile2;
+                  return (
+                    <div key={label} className="grid gap-1">
+                      <label htmlFor={inputId} className="text-xs text-muted-foreground">{label}</label>
+                      <label
+                        htmlFor={inputId}
+                        className={`flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-3 cursor-pointer transition-colors ${isSubmitting ? "opacity-50 pointer-events-none" : "hover:border-primary/60 hover:bg-muted/30"} ${file ? "border-primary/40 bg-primary/5" : "border-muted-foreground/30"}`}
+                      >
+                        <Upload className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-xs text-muted-foreground text-center">
+                          {file ? file.name : `Cargar ${label.toLowerCase()}`}
+                        </span>
+                        <input
+                          id={inputId}
+                          type="file"
+                          accept=".jpg,.jpeg,.png,.pdf"
+                          className="hidden"
+                          disabled={isSubmitting}
+                          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                        />
+                      </label>
+                    </div>
+                  );
+                })}
               </div>
               <div className="flex justify-end">
                 <Button type="submit" disabled={isSubmitting}>
@@ -197,6 +379,7 @@ export default function AsesoresPage() {
             </form>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
@@ -206,6 +389,7 @@ export default function AsesoresPage() {
               <TableHead>ID Asesor</TableHead>
               <TableHead>Nombre</TableHead>
               <TableHead>CURP</TableHead>
+              <TableHead>Acceso</TableHead>
               <TableHead>Dado de alta</TableHead>
               <TableHead className="text-right">Acciones</TableHead>
             </TableRow>
@@ -213,22 +397,31 @@ export default function AsesoresPage() {
           <TableBody>
             {loading ? (
               <TableRow key="loading">
-                <TableCell colSpan={5} className="h-24 text-center">
+                <TableCell colSpan={6} className="h-24 text-center">
                   Cargando asesores...
                 </TableCell>
               </TableRow>
-            ) : asesores.length === 0 ? (
+            ) : filtered.length === 0 ? (
               <TableRow key="empty">
-                <TableCell colSpan={5} className="h-24 text-center">
-                  No hay asesores registrados.
+                <TableCell colSpan={6} className="h-24 text-center">
+                  {search ? "No se encontraron asesores con ese criterio." : "No hay asesores registrados."}
                 </TableCell>
               </TableRow>
             ) : (
-              asesores.map((asesor: any) => (
+              paginated.map((asesor: any) => (
                 <TableRow key={asesor.id}>
                   <TableCell className="font-mono text-xs">{asesor.id_asesor ?? asesor.id}</TableCell>
                   <TableCell className="font-medium">{asesor.nombre_asesor}</TableCell>
                   <TableCell className="font-mono text-xs">{asesor.curp ?? "—"}</TableCell>
+                  <TableCell>
+                    {asesor.user?.email ? (
+                      <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 font-normal">
+                        {asesor.user.email}
+                      </Badge>
+                    ) : (
+                      <Badge variant="secondary" className="font-normal">Sin acceso</Badge>
+                    )}
+                  </TableCell>
                   <TableCell className="text-sm">{asesor.created_at ? fmtFecha(asesor.created_at.split("T")[0]) : "—"}</TableCell>
                   <TableCell className="text-right">
                     <Button
@@ -245,6 +438,16 @@ export default function AsesoresPage() {
           </TableBody>
         </Table>
       </div>
+
+      {!loading && (
+        <TablePagination
+          page={page}
+          totalItems={filtered.length}
+          pageSize={PAGE_SIZE}
+          onPageChange={setPage}
+          label="asesores"
+        />
+      )}
     </div>
   );
 }

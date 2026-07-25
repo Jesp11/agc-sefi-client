@@ -4,11 +4,12 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, apiUpload } from "@/lib/api";
 import { toast } from "sonner";
-import { Check, ChevronRight, ChevronLeft, UserPlus, Users, ShieldCheck, UserCheck, Briefcase, Pencil, Trash2 } from "lucide-react";
+import { Check, ChevronRight, ChevronLeft, UserPlus, Users, ShieldCheck, UserCheck, Briefcase, Pencil, Trash2, FileUp, Upload } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
+import { EXPEDIENTE_ACCEPT, EXPEDIENTE_DOCUMENTOS, type ExpedienteTipo } from "@/lib/expediente-documentos";
 
 interface ClientFormWizardProps {
   onSuccess: () => void;
@@ -40,6 +41,7 @@ export function ClientFormWizard({ onSuccess, onClose }: ClientFormWizardProps) 
   const [avales, setAvales] = useState([{ nombre: "", parentesco: "", telefono: "", direccion: "", tiempo_conocer: "", ocupacion_laboral: "", empresa: "" }]);
   const [expandedRef, setExpandedRef] = useState(0);
   const [expandedAval, setExpandedAval] = useState(0);
+  const [expedienteFiles, setExpedienteFiles] = useState<Partial<Record<ExpedienteTipo, File>>>({});
 
   useEffect(() => {
     const fetchAsesores = async () => {
@@ -104,7 +106,21 @@ export function ClientFormWizard({ onSuccess, onClose }: ClientFormWizardProps) 
         }
       }
 
-      toast.success("Cliente creado exitosamente con sus referencias y avales");
+      // 4. Upload expediente documents (optional)
+      for (const { tipo } of EXPEDIENTE_DOCUMENTOS) {
+        const file = expedienteFiles[tipo];
+        if (!file) continue;
+        const fd = new FormData();
+        fd.append("tipo", tipo);
+        fd.append("archivo", file);
+        const docRes = await apiUpload(`/clientes/${idCliente}/documentos`, fd);
+        if (!docRes.ok) {
+          const errorData = await docRes.json();
+          throw new Error(errorData.message || `Error al subir ${tipo}`);
+        }
+      }
+
+      toast.success("Cliente creado exitosamente");
       onSuccess();
       onClose();
       router.push(`/dashboard/clientes/${idCliente}`);
@@ -119,7 +135,7 @@ export function ClientFormWizard({ onSuccess, onClose }: ClientFormWizardProps) 
     <div className="flex flex-col flex-1 gap-4 overflow-hidden min-h-0">
       {/* Stepper Header */}
       <div className="flex justify-center items-center mb-4 gap-1">
-        {[1, 2, 3, 4, 5].map((s) => (
+        {[1, 2, 3, 4, 5, 6].map((s) => (
           <div key={s} className="flex items-center">
             <div className={cn(
               "w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-colors",
@@ -127,7 +143,7 @@ export function ClientFormWizard({ onSuccess, onClose }: ClientFormWizardProps) 
             )}>
               {step > s ? <Check className="h-4 w-4" /> : s}
             </div>
-            {s < 5 && <div className={cn("w-8 h-1 bg-muted mx-1", step > s && "bg-primary")} />}
+            {s < 6 && <div className={cn("w-6 h-1 bg-muted mx-1", step > s && "bg-primary")} />}
           </div>
         ))}
       </div>
@@ -450,7 +466,77 @@ export function ClientFormWizard({ onSuccess, onClose }: ClientFormWizardProps) 
               </select>
             </div>
             <div className="mt-8 p-4 bg-muted/50 rounded-lg text-sm text-muted-foreground">
-              <p>Revisa que toda la información sea correcta antes de guardar el cliente final.</p>
+              <p>Revisa que toda la información sea correcta antes de continuar al expediente KYC.</p>
+            </div>
+          </div>
+        )}
+
+        {/* Step 6: Expediente Documents */}
+        {step === 6 && (
+          <div className="grid gap-4">
+            <div className="flex items-center gap-2 text-lg font-bold">
+              <FileUp className="h-5 w-5" /> Expediente Digital
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Puedes cargar el expediente ahora o completarlo después desde el detalle del cliente. Todos los documentos son opcionales.
+            </p>
+            <div className="grid gap-3">
+              {EXPEDIENTE_DOCUMENTOS.map(({ tipo, label }) => {
+                const file = expedienteFiles[tipo];
+                const inputId = `expediente-${tipo}`;
+                return (
+                  <div key={tipo} className="grid gap-1">
+                    <label htmlFor={inputId} className="text-sm font-medium">{label}</label>
+                    <div className="flex items-center gap-2">
+                      <label
+                        htmlFor={inputId}
+                        className={cn(
+                          "flex-1 flex flex-col items-center justify-center gap-1.5 rounded-lg border-2 border-dashed p-3 cursor-pointer transition-colors",
+                          loading ? "opacity-50 pointer-events-none" : "hover:border-primary/60 hover:bg-muted/30",
+                          file ? "border-primary/40 bg-primary/5" : "border-muted-foreground/30"
+                        )}
+                      >
+                        <Upload className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-xs text-muted-foreground text-center">
+                          {file ? file.name : "Seleccionar archivo (JPG, PNG o PDF)"}
+                        </span>
+                        <input
+                          id={inputId}
+                          type="file"
+                          accept={EXPEDIENTE_ACCEPT}
+                          className="hidden"
+                          disabled={loading}
+                          onChange={(e) => {
+                            const selected = e.target.files?.[0];
+                            setExpedienteFiles((prev) => {
+                              const next = { ...prev };
+                              if (selected) next[tipo] = selected;
+                              else delete next[tipo];
+                              return next;
+                            });
+                          }}
+                        />
+                      </label>
+                      {file && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="shrink-0 text-destructive hover:text-destructive"
+                          disabled={loading}
+                          onClick={() => setExpedienteFiles((prev) => {
+                            const next = { ...prev };
+                            delete next[tipo];
+                            return next;
+                          })}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
@@ -461,8 +547,8 @@ export function ClientFormWizard({ onSuccess, onClose }: ClientFormWizardProps) 
         <Button variant="ghost" onClick={step === 1 ? onClose : handleBack} disabled={loading}>
           {step === 1 ? "Cancelar" : <><ChevronLeft className="mr-2 h-4 w-4" /> Anterior</>}
         </Button>
-        
-        {step < 5 ? (
+
+        {step < 6 ? (
           <Button onClick={handleNext}>
             Siguiente <ChevronRight className="ml-2 h-4 w-4" />
           </Button>

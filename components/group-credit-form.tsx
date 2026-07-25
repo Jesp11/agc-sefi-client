@@ -66,7 +66,27 @@ export function GroupCreditForm({ group, onSuccess, onCancel }: GroupCreditFormP
         const simData = await simRes.json();
         if (simRes.ok) {
           setSimResult(simData);
-          if (simData.opciones?.length > 0) setSelectedOption(simData.opciones[0]);
+          const first = simData.opciones_amortizacion?.[0] ?? simData.opciones?.[0];
+          if (first) {
+            const monto = currentMonto;
+            const pagoBase = Number(first.pago_semanal_grupo ?? first.pago_semanal) || 0;
+            const plazos = Number(first.plazo_semanas) || 1;
+            const factor = monto > 0 ? pagoBase / (monto / 1000) : 0;
+            const pago_semanal_grupo = parseFloat((factor * (monto / 1000)).toFixed(2));
+            const total_a_pagar_grupo = parseFloat((pago_semanal_grupo * plazos).toFixed(2));
+            const interes_total = parseFloat((total_a_pagar_grupo - monto).toFixed(2));
+            setSelectedOption({
+              ...first,
+              factor,
+              plazoCatalogo: plazos,
+              _pagoBase: pagoBase,
+              plazo_semanas: plazos,
+              pago_semanal_grupo,
+              total_a_pagar_grupo,
+              interes_total,
+              porcentaje_interes: monto > 0 ? parseFloat(((interes_total / monto) * 100).toFixed(2)) : 0,
+            });
+          }
         }
       } catch (error) {
         toast.error("Error al conectar con el motor de recomendaciones");
@@ -100,7 +120,8 @@ export function GroupCreditForm({ group, onSuccess, onCancel }: GroupCreditFormP
       const data = await res.json();
       if (res.ok) {
         setSimResult(data);
-        if (data.opciones?.length > 0) setSelectedOption(data.opciones[0]);
+        const first = data.opciones_amortizacion?.[0] ?? data.opciones?.[0];
+        if (first) setSelectedOption(applyOptionPlazos(first, Number(first.plazo_semanas) || 1));
         toast.success("Simulación actualizada");
       } else {
         toast.error(data.message || "Error en simulación");
@@ -110,6 +131,39 @@ export function GroupCreditForm({ group, onSuccess, onCancel }: GroupCreditFormP
     } finally {
       setSimulating(false);
     }
+  };
+
+  const applyOptionPlazos = (op: any, plazos: number) => {
+    const monto = Number(formData.monto_total_grupo) || 0;
+    const pagoBase = Number(op.pago_semanal_grupo ?? op.pago_semanal ?? op._pagoBase) || 0;
+    const plazoBase = Number(op.plazoCatalogo ?? op.plazo_semanas) || 1;
+    const factor = Number(op.factor) || (monto > 0 ? pagoBase / (monto / 1000) : 0);
+    const pago_semanal_grupo = parseFloat((factor * (monto / 1000)).toFixed(2));
+    const total_a_pagar_grupo = parseFloat((pago_semanal_grupo * plazos).toFixed(2));
+    const interes_total = parseFloat((total_a_pagar_grupo - monto).toFixed(2));
+    const porcentaje_interes = monto > 0 ? parseFloat(((interes_total / monto) * 100).toFixed(2)) : 0;
+    return {
+      ...op,
+      factor,
+      plazoCatalogo: plazoBase,
+      _pagoBase: pagoBase,
+      plazo_semanas: plazos,
+      pago_semanal_grupo,
+      total_a_pagar_grupo,
+      interes_total,
+      porcentaje_interes,
+    };
+  };
+
+  const handleSelectOption = (op: any) => {
+    setSelectedOption(applyOptionPlazos(op, Number(op.plazo_semanas) || 1));
+  };
+
+  const handlePlazosChange = (value: string) => {
+    if (!selectedOption) return;
+    const plazos = parseInt(value, 10) || 0;
+    if (plazos < 1) return;
+    setSelectedOption(applyOptionPlazos(selectedOption, plazos));
   };
 
   const handleSubmit = async () => {
@@ -226,13 +280,17 @@ export function GroupCreditForm({ group, onSuccess, onCancel }: GroupCreditFormP
         <div className="space-y-3">
           <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Opciones de Amortización</p>
           <div className="grid gap-2">
-            {simResult.opciones_amortizacion.map((op: any, i: number) => (
+            {simResult.opciones_amortizacion.map((op: any, i: number) => {
+              const isSelected = selectedOption?.plazoCatalogo === op.plazo_semanas
+                && Number(selectedOption?._pagoBase ?? selectedOption?.pago_semanal_grupo) === Number(op.pago_semanal_grupo);
+              return (
               <button 
-                key={i} 
-                onClick={() => setSelectedOption(op)}
+                key={i}
+                type="button"
+                onClick={() => handleSelectOption(op)}
                 className={cn(
                   "p-4 border rounded-xl grid grid-cols-4 gap-4 text-center items-center transition-all duration-200",
-                  selectedOption === op 
+                  isSelected
                     ? "border-primary bg-primary/5 ring-1 ring-primary shadow-sm shadow-primary/20" 
                     : "bg-background hover:border-muted-foreground/30 hover:bg-muted/10 border-muted"
                 )}
@@ -250,7 +308,7 @@ export function GroupCreditForm({ group, onSuccess, onCancel }: GroupCreditFormP
                   <p className="text-sm font-bold text-foreground">${op.total_a_pagar_grupo}</p>
                 </div>
                 <div className="flex justify-end">
-                  {selectedOption === op ? (
+                  {isSelected ? (
                     <div className="bg-primary text-primary-foreground p-1 rounded-full">
                       <Check className="h-4 w-4" />
                     </div>
@@ -261,7 +319,27 @@ export function GroupCreditForm({ group, onSuccess, onCancel }: GroupCreditFormP
                   )}
                 </div>
               </button>
-            ))}
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {selectedOption && (
+        <div className="grid grid-cols-2 gap-3 rounded-xl border p-4">
+          <div className="grid gap-2">
+            <Label>Semanas</Label>
+            <Input
+              type="number"
+              min={1}
+              max={104}
+              value={selectedOption.plazo_semanas}
+              onChange={(e) => handlePlazosChange(e.target.value)}
+            />
+          </div>
+          <div className="text-right text-xs space-y-1 self-end">
+            <p className="text-muted-foreground">Pago semanal <span className="font-semibold text-foreground">${Number(selectedOption.pago_semanal_grupo).toLocaleString()}</span></p>
+            <p className="text-muted-foreground">Total <span className="font-semibold text-foreground">${Number(selectedOption.total_a_pagar_grupo).toLocaleString()}</span></p>
           </div>
         </div>
       )}

@@ -1,0 +1,319 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { apiFetch } from "@/lib/api";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { toast } from "sonner";
+import { fmtFecha } from "@/lib/utils";
+import { TablePagination, TableSearch } from "@/components/table-controls";
+import { PAGE_SIZE, filterBySearch, paginateItems, useTableControls } from "@/hooks/use-paginated-list";
+import { fetchAllPages, gastoSearchFields } from "@/lib/table-utils";
+import { BookOpen } from "lucide-react";
+
+type CatalogoGasto = {
+  id: number;
+  concepto: string;
+  categoria?: string | null;
+  monto_sugerido?: number | string | null;
+  activo: boolean;
+};
+
+const emptyForm = () => ({
+  catalogo_gasto_id: "",
+  concepto: "",
+  monto: "",
+  fecha: new Date().toISOString().split("T")[0],
+  categoria: "",
+});
+
+const emptyCatalogoForm = () => ({
+  concepto: "",
+  categoria: "",
+  monto_sugerido: "",
+});
+
+export default function GastosPage() {
+  const [items, setItems] = useState<any[]>([]);
+  const [catalogo, setCatalogo] = useState<CatalogoGasto[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { search, handleSearch, page, setPage } = useTableControls();
+  const [form, setForm] = useState(emptyForm);
+  const [catalogoForm, setCatalogoForm] = useState(emptyCatalogoForm);
+  const [gastoOpen, setGastoOpen] = useState(false);
+  const [catalogoOpen, setCatalogoOpen] = useState(false);
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const rows = await fetchAllPages("/gastos");
+      setItems(rows);
+    } catch {
+      toast.error("Error al cargar gastos");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchCatalogo = async () => {
+    try {
+      const rows = await fetchAllPages("/catalogo-gastos");
+      setCatalogo(rows);
+    } catch {
+      toast.error("Error al cargar catálogo de gastos");
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+    fetchCatalogo();
+  }, []);
+
+  const activos = catalogo.filter((c) => c.activo);
+
+  const applyCatalogo = (id: string) => {
+    if (!id) {
+      setForm((prev) => ({ ...prev, catalogo_gasto_id: "", concepto: "", categoria: "", monto: "" }));
+      return;
+    }
+    const item = catalogo.find((c) => String(c.id) === id);
+    if (!item) return;
+    setForm((prev) => ({
+      ...prev,
+      catalogo_gasto_id: id,
+      concepto: item.concepto,
+      categoria: item.categoria ?? "",
+      monto: item.monto_sugerido != null ? String(item.monto_sugerido) : prev.monto,
+    }));
+  };
+
+  const handleCreate = async () => {
+    const payload: Record<string, unknown> = {
+      monto: parseFloat(form.monto),
+      fecha: form.fecha,
+    };
+    if (form.catalogo_gasto_id) {
+      payload.catalogo_gasto_id = Number(form.catalogo_gasto_id);
+    } else {
+      payload.concepto = form.concepto;
+      payload.categoria = form.categoria || null;
+    }
+
+    const res = await apiFetch("/gastos", { method: "POST", body: JSON.stringify(payload) });
+    if (res.ok) {
+      toast.success("Gasto registrado");
+      setForm(emptyForm());
+      setGastoOpen(false);
+      fetchData();
+    } else {
+      const err = await res.json().catch(() => null);
+      toast.error(err?.message || "Error al registrar gasto");
+    }
+  };
+
+  const handleCreateCatalogo = async () => {
+    const payload = {
+      concepto: catalogoForm.concepto,
+      categoria: catalogoForm.categoria || null,
+      monto_sugerido: catalogoForm.monto_sugerido ? parseFloat(catalogoForm.monto_sugerido) : null,
+    };
+    const res = await apiFetch("/catalogo-gastos", { method: "POST", body: JSON.stringify(payload) });
+    if (res.ok) {
+      toast.success("Gasto agregado al catálogo");
+      setCatalogoForm(emptyCatalogoForm());
+      fetchCatalogo();
+    } else {
+      toast.error("Error al guardar en catálogo");
+    }
+  };
+
+  const toggleCatalogoActivo = async (item: CatalogoGasto) => {
+    const res = await apiFetch(`/catalogo-gastos/${item.id}`, {
+      method: "PUT",
+      body: JSON.stringify({ activo: !item.activo }),
+    });
+    if (res.ok) {
+      toast.success(item.activo ? "Gasto desactivado" : "Gasto activado");
+      fetchCatalogo();
+    } else {
+      toast.error("Error al actualizar catálogo");
+    }
+  };
+
+  const filtered = filterBySearch(items, search, gastoSearchFields);
+  const paginated = paginateItems(filtered, page);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center gap-3 flex-wrap">
+        <h1 className="text-3xl font-bold">Gastos Operativos</h1>
+        <div className="flex items-center gap-2">
+          <Dialog open={catalogoOpen} onOpenChange={setCatalogoOpen}>
+            <DialogTrigger render={<Button variant="outline"><BookOpen className="size-4" />Catálogo</Button>} />
+            <DialogContent className="sm:max-w-2xl">
+              <DialogHeader><DialogTitle>Catálogo de Gastos</DialogTitle></DialogHeader>
+              <div className="grid gap-4">
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="sm:col-span-1">
+                    <Label>Concepto</Label>
+                    <Input
+                      value={catalogoForm.concepto}
+                      onChange={(e) => setCatalogoForm({ ...catalogoForm, concepto: e.target.value })}
+                      placeholder="Ej. Renta oficina"
+                    />
+                  </div>
+                  <div>
+                    <Label>Categoría</Label>
+                    <Input
+                      value={catalogoForm.categoria}
+                      onChange={(e) => setCatalogoForm({ ...catalogoForm, categoria: e.target.value })}
+                      placeholder="Opcional"
+                    />
+                  </div>
+                  <div>
+                    <Label>Monto sugerido</Label>
+                    <Input
+                      type="number"
+                      value={catalogoForm.monto_sugerido}
+                      onChange={(e) => setCatalogoForm({ ...catalogoForm, monto_sugerido: e.target.value })}
+                      placeholder="Opcional"
+                    />
+                  </div>
+                </div>
+                <Button onClick={handleCreateCatalogo} disabled={!catalogoForm.concepto.trim()}>
+                  Agregar al catálogo
+                </Button>
+                <Card>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Concepto</TableHead>
+                        <TableHead>Categoría</TableHead>
+                        <TableHead className="text-right">Monto sug.</TableHead>
+                        <TableHead>Estado</TableHead>
+                        <TableHead />
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {catalogo.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={5} className="h-20 text-center text-muted-foreground">
+                            Sin gastos en el catálogo.
+                          </TableCell>
+                        </TableRow>
+                      ) : catalogo.map((c) => (
+                        <TableRow key={c.id} className={!c.activo ? "opacity-60" : undefined}>
+                          <TableCell className="font-medium">{c.concepto}</TableCell>
+                          <TableCell>{c.categoria || "—"}</TableCell>
+                          <TableCell className="text-right">
+                            {c.monto_sugerido != null ? `$${Number(c.monto_sugerido).toLocaleString()}` : "—"}
+                          </TableCell>
+                          <TableCell>{c.activo ? "Activo" : "Inactivo"}</TableCell>
+                          <TableCell className="text-right">
+                            <Button size="sm" variant="outline" onClick={() => toggleCatalogoActivo(c)}>
+                              {c.activo ? "Desactivar" : "Activar"}
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </Card>
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={gastoOpen} onOpenChange={(open) => {
+            setGastoOpen(open);
+            if (open) setForm(emptyForm());
+          }}>
+            <DialogTrigger render={<Button>Registrar Gasto</Button>} />
+            <DialogContent>
+              <DialogHeader><DialogTitle>Nuevo Gasto</DialogTitle></DialogHeader>
+              <div className="grid gap-3">
+                <div>
+                  <Label>Gasto del catálogo</Label>
+                  <select
+                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
+                    value={form.catalogo_gasto_id}
+                    onChange={(e) => applyCatalogo(e.target.value)}
+                  >
+                    <option value="">Seleccionar...</option>
+                    {activos.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.concepto}{c.categoria ? ` (${c.categoria})` : ""}
+                      </option>
+                    ))}
+                  </select>
+                  {activos.length === 0 && (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      No hay gastos activos en el catálogo. Agrégalos desde Catálogo o captura un concepto manual.
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <Label>Concepto</Label>
+                  <Input
+                    value={form.concepto}
+                    onChange={(e) => setForm({ ...form, concepto: e.target.value, catalogo_gasto_id: "" })}
+                    disabled={!!form.catalogo_gasto_id}
+                    placeholder="O captura un gasto no catalogado"
+                  />
+                </div>
+                <div>
+                  <Label>Monto</Label>
+                  <Input type="number" value={form.monto} onChange={(e) => setForm({ ...form, monto: e.target.value })} />
+                </div>
+                <div>
+                  <Label>Fecha</Label>
+                  <Input type="date" value={form.fecha} onChange={(e) => setForm({ ...form, fecha: e.target.value })} />
+                </div>
+                <div>
+                  <Label>Categoría</Label>
+                  <Input
+                    value={form.categoria}
+                    onChange={(e) => setForm({ ...form, categoria: e.target.value })}
+                    disabled={!!form.catalogo_gasto_id}
+                  />
+                </div>
+                <Button
+                  onClick={handleCreate}
+                  disabled={!form.monto || (!form.catalogo_gasto_id && !form.concepto.trim())}
+                >
+                  Guardar
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
+      </div>
+      <TableSearch placeholder="Buscar gastos..." value={search} onChange={handleSearch} />
+      <Card>
+        <Table>
+          <TableHeader><TableRow><TableHead>Fecha</TableHead><TableHead>Concepto</TableHead><TableHead>Categoría</TableHead><TableHead className="text-right">Monto</TableHead></TableRow></TableHeader>
+          <TableBody>
+            {loading ? (
+              <TableRow><TableCell colSpan={4} className="h-24 text-center text-muted-foreground">Cargando...</TableCell></TableRow>
+            ) : filtered.length === 0 ? (
+              <TableRow><TableCell colSpan={4} className="h-24 text-center text-muted-foreground">{search ? "No se encontraron gastos." : "Sin gastos registrados."}</TableCell></TableRow>
+            ) : paginated.map((g) => (
+              <TableRow key={g.id}>
+                <TableCell>{fmtFecha(g.fecha)}</TableCell>
+                <TableCell>{g.concepto}</TableCell>
+                <TableCell>{g.categoria}</TableCell>
+                <TableCell className="text-right font-semibold">${Number(g.monto).toLocaleString()}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </Card>
+      {!loading && (
+        <TablePagination page={page} totalItems={filtered.length} pageSize={PAGE_SIZE} onPageChange={setPage} label="gastos" />
+      )}
+    </div>
+  );
+}

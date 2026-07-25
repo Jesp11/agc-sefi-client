@@ -1,142 +1,126 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/context/auth-context";
+import { apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { toast } from "sonner";
 import { User, Users } from "lucide-react";
-import { fmtFecha } from "@/lib/utils";
+import { TablePagination, TableSearch } from "@/components/table-controls";
+import { PAGE_SIZE, filterBySearch, paginateItems, useTableControls } from "@/hooks/use-paginated-list";
+import { creditoSearchFields, fetchAllPages } from "@/lib/table-utils";
 
-const PAGE_SIZE = 5;
+function CerradosTable({ tipo }: { tipo: "individual" | "grupal" }) {
+  const router = useRouter();
+  const { user } = useAuth();
+  const isAsesor = user?.role?.nombre === "asesor";
+  const { search, handleSearch, page, setPage } = useTableControls();
+  const [creditos, setCreditos] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [reactivando, setReactivando] = useState<number | null>(null);
 
-export default function CarteraCerradosPage() {
-  const [search, setSearch] = useState("");
-  const [page, setPage] = useState(1);
-
-  const creditos: any[] = []; // TODO: fetch from API filtered by estatus cerrado sin renovación
-
-  const filtered = creditos.filter((c: any) => {
-    const term = search.toLowerCase();
-    return (
-      c.num_prog?.toString().includes(term) ||
-      c.cliente?.nombre_completo?.toLowerCase().includes(term) ||
-      c.grupo?.nombre_grupo?.toLowerCase().includes(term)
-    );
-  });
-
-  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
-  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-
-  const handleSearch = (value: string) => {
-    setSearch(value);
-    setPage(1);
+  const fetchCerrados = async () => {
+    setLoading(true);
+    try {
+      const rows = await fetchAllPages(`/cartera/cerrados?tipo=${tipo}`);
+      setCreditos(rows);
+    } catch {
+      setCreditos([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
+  useEffect(() => {
+    fetchCerrados();
+  }, [tipo]);
+
+  const handleReactivar = async (numProg: number) => {
+    setReactivando(numProg);
+    const res = await apiFetch(`/creditos/${numProg}/reactivar-cartera`, { method: "POST" });
+    if (res.ok) {
+      toast.success("Crédito reactivado en cartera activa");
+      fetchCerrados();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      toast.error(data.message || "Error al reactivar");
+    }
+    setReactivando(null);
+  };
+
+  const filtered = filterBySearch(creditos, search, creditoSearchFields);
+  const paginated = paginateItems(filtered, page);
+
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight text-foreground/90">Clientes Cerrados sin Renovación</h1>
-        <p className="text-muted-foreground">Préstamos liquidados que no generaron un nuevo ciclo.</p>
-      </div>
-
-      <div className="max-w-md">
-        <Input
-          placeholder="Buscar por folio, cliente o grupo..."
-          value={search}
-          onChange={(e) => handleSearch(e.target.value)}
-          className="bg-background border-muted-foreground/20 focus-visible:ring-primary/30 h-10"
-        />
-      </div>
-
+    <div className="space-y-4">
+      <TableSearch
+        placeholder={tipo === "individual" ? "Buscar por folio o cliente..." : "Buscar por folio o grupo..."}
+        value={search}
+        onChange={handleSearch}
+      />
       <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
         <Table>
           <TableHeader className="bg-muted/50">
             <TableRow>
-              <TableHead className="w-[80px]">Folio</TableHead>
-              <TableHead>Cliente / Grupo</TableHead>
-              <TableHead className="text-center">Tipo</TableHead>
-              <TableHead className="text-center">Ciclo</TableHead>
+              <TableHead>Folio</TableHead>
+              <TableHead>{tipo === "individual" ? "Cliente" : "Grupo"}</TableHead>
+              <TableHead>Ciclo</TableHead>
               <TableHead>Asesor</TableHead>
-              <TableHead>Monto</TableHead>
-              <TableHead>Total</TableHead>
-              <TableHead>Último Pago</TableHead>
-              <TableHead className="text-right">Acción</TableHead>
+              <TableHead>Estado</TableHead>
+              <TableHead className="text-right">Acciones</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filtered.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={9} className="h-32 text-center text-muted-foreground">
-                  {search ? "No se encontraron resultados." : "Sin datos disponibles — funcionalidad próximamente."}
+            {loading ? (
+              <TableRow><TableCell colSpan={6} className="h-32 text-center text-muted-foreground">Cargando...</TableCell></TableRow>
+            ) : filtered.length === 0 ? (
+              <TableRow><TableCell colSpan={6} className="h-32 text-center text-muted-foreground">{search ? "No se encontraron resultados." : "Sin créditos cerrados."}</TableCell></TableRow>
+            ) : paginated.map((c) => (
+              <TableRow key={c.num_prog}>
+                <TableCell className="font-mono text-xs">#{c.num_prog}</TableCell>
+                <TableCell>{tipo === "individual" ? c.cliente?.nombre_completo : c.grupo?.nombre_grupo}</TableCell>
+                <TableCell><Badge variant="outline">{c.ciclo}</Badge></TableCell>
+                <TableCell className="text-xs">{c.asesor?.nombre_asesor}</TableCell>
+                <TableCell><Badge variant="secondary">{c.estado}</Badge></TableCell>
+                <TableCell className="text-right space-x-2">
+                  <Button size="sm" variant="outline" onClick={() => router.push(`/dashboard/creditos/${c.num_prog}`)}>Ver</Button>
+                  {!isAsesor && (
+                    <Button size="sm" disabled={reactivando === c.num_prog} onClick={() => handleReactivar(c.num_prog)}>
+                      {reactivando === c.num_prog ? "..." : "Reactivar"}
+                    </Button>
+                  )}
                 </TableCell>
               </TableRow>
-            ) : (
-              paginated.map((c: any) => {
-                const isGrupal = c.tipo_credito === "Grupal";
-                const nombre = isGrupal
-                  ? (c.grupo?.nombre_grupo ?? "Grupo desconocido")
-                  : (c.cliente?.nombre_completo ?? "Cliente desconocido");
-                return (
-                  <TableRow key={c.num_prog} className="hover:bg-muted/30 transition-colors">
-                    <TableCell className="font-mono text-xs font-semibold text-primary/80">#{c.num_prog}</TableCell>
-                    <TableCell className="font-medium whitespace-nowrap">
-                      <div className="flex items-center gap-2">
-                        {isGrupal
-                          ? <Users className="h-4 w-4 text-primary/70" />
-                          : <User className="h-4 w-4 text-primary/70" />}
-                        {nombre}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <Badge variant={isGrupal ? "default" : "secondary"} className="text-xs">
-                        {c.tipo_credito}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <Badge variant="outline" className="font-bold text-xs">{c.ciclo ?? "—"}</Badge>
-                    </TableCell>
-                    <TableCell className="text-xs">{c.asesor?.nombre_asesor ?? "—"}</TableCell>
-                    <TableCell className="text-xs font-semibold">${c.monto_otorgado}</TableCell>
-                    <TableCell className="text-xs font-bold text-primary">${c.total}</TableCell>
-                    <TableCell className="text-xs">
-                      {c.fecha_ultimo_pago ? fmtFecha(c.fecha_ultimo_pago) : "—"}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button size="sm" className="h-8 text-xs font-medium">
-                        Ver Préstamo
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                );
-              })
-            )}
+            ))}
           </TableBody>
         </Table>
       </div>
-
-      {filtered.length > PAGE_SIZE && (
-        <div className="flex items-center justify-between text-sm text-muted-foreground">
-          <span>
-            Mostrando {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} de {filtered.length} préstamos
-          </span>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => setPage((p) => p - 1)} disabled={page === 1}>
-              Anterior
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => setPage((p) => p + 1)} disabled={page >= totalPages}>
-              Siguiente
-            </Button>
-          </div>
-        </div>
+      {!loading && (
+        <TablePagination page={page} totalItems={filtered.length} pageSize={PAGE_SIZE} onPageChange={setPage} label="créditos" />
       )}
+    </div>
+  );
+}
+
+export default function CarteraCerradosPage() {
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold">Clientes Cerrados sin Renovación</h1>
+        <p className="text-muted-foreground">Préstamos cerrados — individuales y grupales.</p>
+      </div>
+      <Tabs defaultValue="individual">
+        <TabsList>
+          <TabsTrigger value="individual"><User className="h-4 w-4 mr-2" />Individual</TabsTrigger>
+          <TabsTrigger value="grupal"><Users className="h-4 w-4 mr-2" />Grupal</TabsTrigger>
+        </TabsList>
+        <TabsContent value="individual"><CerradosTable tipo="individual" /></TabsContent>
+        <TabsContent value="grupal"><CerradosTable tipo="grupal" /></TabsContent>
+      </Tabs>
     </div>
   );
 }

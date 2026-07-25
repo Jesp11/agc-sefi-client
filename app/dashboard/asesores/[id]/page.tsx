@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
+import { useAuth } from "@/context/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,6 +15,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   ArrowLeft,
   User,
@@ -27,22 +35,18 @@ import {
   X,
   Upload,
   Trash2,
+  KeyRound,
+  Copy,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
+import { TablePagination, TableSearch } from "@/components/table-controls";
+import { PAGE_SIZE, filterBySearch, paginateItems, useTableControls } from "@/hooks/use-paginated-list";
+import { creditoSearchFields } from "@/lib/table-utils";
+import { fmtFecha } from "@/lib/utils";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
 const STORAGE_BASE = API_BASE.replace("/api", "") + "/storage";
-
-function formatFecha(fecha: string) {
-  if (!fecha) return "—";
-  const meses = [
-    "enero", "febrero", "marzo", "abril", "mayo", "junio",
-    "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
-  ];
-  const [y, m, d] = fecha.split("-");
-  return `${parseInt(d, 10)} de ${meses[parseInt(m, 10) - 1]} de ${y}`;
-}
 
 async function patchAsesor(id: string | string[], formData: FormData) {
   const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
@@ -60,8 +64,16 @@ async function patchAsesor(id: string | string[], formData: FormData) {
 export default function AsesorDetallePage() {
   const { id } = useParams();
   const router = useRouter();
+  const { isAdmin } = useAuth();
   const [asesor, setAsesor] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const creditosControls = useTableControls();
+
+  const [accesoEmail, setAccesoEmail] = useState("");
+  const [accesoPassword, setAccesoPassword] = useState("");
+  const [accesoSaving, setAccesoSaving] = useState(false);
+  const [passwordTemporal, setPasswordTemporal] = useState<string | null>(null);
+  const [showPasswordDialog, setShowPasswordDialog] = useState(false);
 
   // telefono edit
   const [editingTel, setEditingTel] = useState(false);
@@ -81,6 +93,7 @@ export default function AsesorDetallePage() {
       if (res.ok) {
         setAsesor(data);
         setTelValue(data.telefono ?? "");
+        setAccesoEmail(data.user?.email ?? "");
       } else {
         toast.error("No se encontró el asesor");
         router.push("/dashboard/asesores");
@@ -169,8 +182,91 @@ export default function AsesorDetallePage() {
     }
   };
 
+  const handleCrearAcceso = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!accesoEmail.trim()) {
+      toast.error("Indica un correo electrónico");
+      return;
+    }
+    setAccesoSaving(true);
+    try {
+      const body: Record<string, string> = { email: accesoEmail.trim() };
+      if (accesoPassword.trim()) body.password = accesoPassword.trim();
+      const res = await apiFetch(`/asesores/${id}/acceso`, {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.message || "No se pudo crear el acceso");
+        return;
+      }
+      setAsesor((prev: any) => ({ ...prev, user: data.user }));
+      setAccesoPassword("");
+      if (data.password_temporal) {
+        setPasswordTemporal(data.password_temporal);
+        setShowPasswordDialog(true);
+      }
+      toast.success(data.message || "Acceso creado");
+    } catch {
+      toast.error("Error de conexión");
+    } finally {
+      setAccesoSaving(false);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    setAccesoSaving(true);
+    try {
+      const body: Record<string, unknown> = { regenerar_password: true };
+      if (accesoEmail.trim() && accesoEmail.trim() !== asesor.user?.email) {
+        body.email = accesoEmail.trim();
+      }
+      if (accesoPassword.trim()) {
+        body.password = accesoPassword.trim();
+        body.regenerar_password = false;
+      }
+      const res = await apiFetch(`/asesores/${id}/acceso`, {
+        method: "PUT",
+        body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.message || "No se pudo actualizar el acceso");
+        return;
+      }
+      setAsesor((prev: any) => ({ ...prev, user: data.user }));
+      setAccesoEmail(data.user?.email ?? accesoEmail);
+      setAccesoPassword("");
+      if (data.password_temporal) {
+        setPasswordTemporal(data.password_temporal);
+        setShowPasswordDialog(true);
+      }
+      toast.success(data.message || "Acceso actualizado");
+    } catch {
+      toast.error("Error de conexión");
+    } finally {
+      setAccesoSaving(false);
+    }
+  };
+
+  const copyPassword = async () => {
+    if (!passwordTemporal) return;
+    try {
+      await navigator.clipboard.writeText(passwordTemporal);
+      toast.success("Contraseña copiada");
+    } catch {
+      toast.error("No se pudo copiar");
+    }
+  };
+
   if (loading) return <div className="p-8 text-center">Cargando perfil del asesor...</div>;
   if (!asesor) return null;
+
+  const creditosList = asesor.creditos || [];
+  const creditosFiltered = filterBySearch(creditosList, creditosControls.search, creditoSearchFields);
+  const creditosPaginated = paginateItems(creditosFiltered, creditosControls.page);
+  const tieneAcceso = Boolean(asesor.user?.email);
 
   return (
     <div className="flex flex-col gap-6">
@@ -182,7 +278,103 @@ export default function AsesorDetallePage() {
           <h1 className="text-3xl font-bold tracking-tight">{asesor.nombre_asesor}</h1>
           <p className="text-muted-foreground font-mono text-sm">{asesor.id_asesor ?? `#${asesor.id}`}</p>
         </div>
+        {tieneAcceso ? (
+          <Badge className="ml-auto bg-emerald-50 text-emerald-700 border-emerald-200">Con acceso</Badge>
+        ) : (
+          <Badge variant="secondary" className="ml-auto">Sin acceso</Badge>
+        )}
       </div>
+
+      <Dialog open={showPasswordDialog} onOpenChange={setShowPasswordDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Contraseña temporal</DialogTitle>
+            <DialogDescription>
+              Guárdala ahora: no se volverá a mostrar. Entrégala al asesor para que inicie sesión.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="rounded-lg border bg-muted/40 px-3 py-2 font-mono text-sm break-all">
+              {passwordTemporal}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              Correo: <span className="font-medium text-foreground">{asesor.user?.email ?? accesoEmail}</span>
+            </div>
+            <Button type="button" variant="outline" className="w-full" onClick={copyPassword}>
+              <Copy className="mr-2 h-4 w-4" />
+              Copiar contraseña
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {isAdmin && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <KeyRound className="h-5 w-5 text-primary" />
+              Acceso al sistema
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground mb-4">
+              {tieneAcceso
+                ? "Este asesor ya puede iniciar sesión. Puedes cambiar el correo o generar una contraseña temporal nueva."
+                : "Crea un correo y una contraseña temporal para que el asesor entre al sistema."}
+            </p>
+            <form
+              onSubmit={tieneAcceso ? (e) => { e.preventDefault(); handleResetPassword(); } : handleCrearAcceso}
+              className="grid gap-4 sm:grid-cols-2"
+            >
+              <div className="grid gap-2">
+                <label htmlFor="acceso-email" className="text-sm font-medium">Correo electrónico</label>
+                <Input
+                  id="acceso-email"
+                  type="email"
+                  placeholder="asesor@ejemplo.com"
+                  value={accesoEmail}
+                  onChange={(e) => setAccesoEmail(e.target.value)}
+                  disabled={accesoSaving}
+                  required
+                />
+              </div>
+              <div className="grid gap-2">
+                <label htmlFor="acceso-password" className="text-sm font-medium">
+                  Contraseña temporal{" "}
+                  <span className="text-muted-foreground font-normal">(opcional)</span>
+                </label>
+                <Input
+                  id="acceso-password"
+                  type="text"
+                  placeholder="Se genera automáticamente si se deja vacío"
+                  value={accesoPassword}
+                  onChange={(e) => setAccesoPassword(e.target.value)}
+                  disabled={accesoSaving}
+                  minLength={6}
+                />
+              </div>
+              <div className="sm:col-span-2 flex flex-wrap gap-2">
+                {tieneAcceso ? (
+                  <>
+                    <Button type="submit" disabled={accesoSaving}>
+                      {accesoSaving ? "Guardando..." : "Restablecer contraseña temporal"}
+                    </Button>
+                    {accesoEmail.trim() && accesoEmail.trim() !== asesor.user?.email && (
+                      <p className="text-xs text-muted-foreground self-center">
+                        También se actualizará el correo.
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <Button type="submit" disabled={accesoSaving}>
+                    {accesoSaving ? "Creando..." : "Crear acceso"}
+                  </Button>
+                )}
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid gap-6 md:grid-cols-3">
         {/* Información Personal */}
@@ -211,7 +403,7 @@ export default function AsesorDetallePage() {
               <span className="text-muted-foreground font-medium">Cumpleaños</span>
               <span className="flex items-center gap-2">
                 <Calendar className="h-3 w-3 shrink-0" />
-                {asesor.cumpleanos ? formatFecha(asesor.cumpleanos) : "—"}
+                {asesor.cumpleanos ? fmtFecha(asesor.cumpleanos) : "—"}
               </span>
             </div>
 
@@ -317,7 +509,8 @@ export default function AsesorDetallePage() {
               </Badge>
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
+            <TableSearch placeholder="Buscar préstamos..." value={creditosControls.search} onChange={creditosControls.handleSearch} />
             <Table>
               <TableHeader>
                 <TableRow>
@@ -329,8 +522,8 @@ export default function AsesorDetallePage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {asesor.creditos && asesor.creditos.length > 0 ? (
-                  asesor.creditos.map((c: any, i: number) => (
+                {creditosFiltered.length > 0 ? (
+                  creditosPaginated.map((c: any, i: number) => (
                     <TableRow key={c.id_credito ?? c.id ?? i}>
                       <TableCell className="font-mono text-xs">{c.id_credito ?? c.id}</TableCell>
                       <TableCell>{c.ciclo}</TableCell>
@@ -346,12 +539,15 @@ export default function AsesorDetallePage() {
                 ) : (
                   <TableRow>
                     <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                      Sin préstamos asignados
+                      {creditosControls.search ? "No se encontraron préstamos." : "Sin préstamos asignados"}
                     </TableCell>
                   </TableRow>
                 )}
               </TableBody>
             </Table>
+            {creditosFiltered.length > 0 && (
+              <TablePagination page={creditosControls.page} totalItems={creditosFiltered.length} pageSize={PAGE_SIZE} onPageChange={creditosControls.setPage} label="préstamos" />
+            )}
           </CardContent>
         </Card>
       </div>

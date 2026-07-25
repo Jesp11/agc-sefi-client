@@ -108,7 +108,27 @@ export function CustomGroupCreditForm({ onSuccess, onClose }: CustomGroupCreditF
       const data = await res.json();
       if (res.ok) {
         setSimResult(data);
-        if (data.opciones_amortizacion?.length > 0) setSelectedOption(data.opciones_amortizacion[0]);
+        if (data.opciones_amortizacion?.length > 0) {
+          const first = data.opciones_amortizacion[0];
+          const monto = Number(formData.monto_total_grupo) || 0;
+          const pagoBase = Number(first.pago_semanal_grupo ?? first.pago_semanal) || 0;
+          const plazos = Number(first.plazo_semanas) || 1;
+          const factor = monto > 0 ? pagoBase / (monto / 1000) : 0;
+          const pago_semanal_grupo = parseFloat((factor * (monto / 1000)).toFixed(2));
+          const total_a_pagar_grupo = parseFloat((pago_semanal_grupo * plazos).toFixed(2));
+          const interes_total = parseFloat((total_a_pagar_grupo - monto).toFixed(2));
+          setSelectedOption({
+            ...first,
+            factor,
+            plazoCatalogo: plazos,
+            _pagoBase: pagoBase,
+            plazo_semanas: plazos,
+            pago_semanal_grupo,
+            total_a_pagar_grupo,
+            interes_total,
+            porcentaje_interes: monto > 0 ? parseFloat(((interes_total / monto) * 100).toFixed(2)) : 0,
+          });
+        }
         setStep(3);
       } else {
         toast.error(data.message || "Error en simulación");
@@ -118,6 +138,39 @@ export function CustomGroupCreditForm({ onSuccess, onClose }: CustomGroupCreditF
     } finally {
       setSimulating(false);
     }
+  };
+
+  const applyOptionPlazos = (op: any, plazos: number) => {
+    const monto = Number(formData.monto_total_grupo) || 0;
+    const pagoBase = Number(op.pago_semanal_grupo ?? op.pago_semanal ?? op._pagoBase) || 0;
+    const plazoBase = Number(op.plazoCatalogo ?? op.plazo_semanas) || 1;
+    const factor = Number(op.factor) || (monto > 0 ? pagoBase / (monto / 1000) : 0);
+    const pago_semanal_grupo = parseFloat((factor * (monto / 1000)).toFixed(2));
+    const total_a_pagar_grupo = parseFloat((pago_semanal_grupo * plazos).toFixed(2));
+    const interes_total = parseFloat((total_a_pagar_grupo - monto).toFixed(2));
+    const porcentaje_interes = monto > 0 ? parseFloat(((interes_total / monto) * 100).toFixed(2)) : 0;
+    return {
+      ...op,
+      factor,
+      plazoCatalogo: plazoBase,
+      _pagoBase: pagoBase,
+      plazo_semanas: plazos,
+      pago_semanal_grupo,
+      total_a_pagar_grupo,
+      interes_total,
+      porcentaje_interes,
+    };
+  };
+
+  const handleSelectOption = (op: any) => {
+    setSelectedOption(applyOptionPlazos(op, Number(op.plazo_semanas) || 1));
+  };
+
+  const handlePlazosChange = (value: string) => {
+    if (!selectedOption) return;
+    const plazos = parseInt(value, 10) || 0;
+    if (plazos < 1) return;
+    setSelectedOption(applyOptionPlazos(selectedOption, plazos));
   };
 
   const handleSubmit = async () => {
@@ -325,18 +378,21 @@ export function CustomGroupCreditForm({ onSuccess, onClose }: CustomGroupCreditF
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {simResult.opciones_amortizacion?.map((op: any, i: number) => (
+                  {simResult.opciones_amortizacion?.map((op: any, i: number) => {
+                    const isSelected = selectedOption?.plazoCatalogo === op.plazo_semanas
+                      && Number(selectedOption?._pagoBase ?? selectedOption?.pago_semanal_grupo) === Number(op.pago_semanal_grupo);
+                    return (
                     <tr
                       key={i}
-                      onClick={() => setSelectedOption(op)}
+                      onClick={() => handleSelectOption(op)}
                       className={cn(
                         "transition-colors cursor-pointer",
-                        selectedOption === op ? "bg-primary/10" : "hover:bg-muted/50"
+                        isSelected ? "bg-primary/10" : "hover:bg-muted/50"
                       )}
                     >
                       <td className="p-2 font-bold text-primary">
                         <div className="flex items-center gap-1">
-                          {selectedOption === op && <Check className="h-3 w-3" />}
+                          {isSelected && <Check className="h-3 w-3" />}
                           ${op.pago_semanal_grupo}
                         </div>
                       </td>
@@ -344,11 +400,32 @@ export function CustomGroupCreditForm({ onSuccess, onClose }: CustomGroupCreditF
                       <td className="p-2 text-center text-muted-foreground">{op.porcentaje_interes}%</td>
                       <td className="p-2 text-right font-bold">${op.total_a_pagar_grupo}</td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
           </div>
+
+          {selectedOption && (
+            <div className="grid grid-cols-2 gap-3 rounded-lg border p-3">
+              <div className="grid gap-2">
+                <Label>Semanas</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={104}
+                  value={selectedOption.plazo_semanas}
+                  onChange={(e) => handlePlazosChange(e.target.value)}
+                />
+              </div>
+              <div className="text-right text-xs space-y-1 self-end">
+                <p className="text-muted-foreground">Pago semanal <span className="font-semibold text-foreground">${Number(selectedOption.pago_semanal_grupo).toLocaleString()}</span></p>
+                <p className="text-muted-foreground">Total <span className="font-semibold text-foreground">${Number(selectedOption.total_a_pagar_grupo).toLocaleString()}</span></p>
+              </div>
+            </div>
+          )}
+
           {simResult.mensaje && (
             <div className="p-3 bg-amber-50 text-amber-700 text-xs rounded-lg border border-amber-200 flex gap-2">
               <AlertCircle className="h-4 w-4 shrink-0" />

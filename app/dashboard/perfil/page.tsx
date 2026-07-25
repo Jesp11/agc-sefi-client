@@ -9,15 +9,7 @@ import { Input } from "@/components/ui/input";
 import { User, Mail, Shield, Calendar, IdCard } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { toast } from "sonner";
-
-function formatFecha(fecha: string) {
-  const meses = [
-    "enero", "febrero", "marzo", "abril", "mayo", "junio",
-    "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
-  ];
-  const [y, m, d] = fecha.split("-");
-  return `${parseInt(d, 10)} de ${meses[parseInt(m, 10) - 1]} de ${y}`;
-}
+import { fmtFecha } from "@/lib/utils";
 
 export default function ProfilePage() {
   const { user, refreshUser } = useAuth();
@@ -139,7 +131,7 @@ export default function ProfilePage() {
                 <div className="flex flex-col">
                   <span className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Cumpleaños</span>
                   <span className="font-medium">
-                    {user?.cumpleanos ? formatFecha(user.cumpleanos) : "—"}
+                    {user?.cumpleanos ? fmtFecha(user.cumpleanos) : "—"}
                   </span>
                 </div>
               </div>

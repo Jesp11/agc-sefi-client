@@ -44,7 +44,8 @@ export function CustomLoanForm({ type, onSuccess, onClose }: CustomLoanFormProps
   const [selected, setSelected] = useState<any>(null);
 
   const [catalogo, setCatalogo] = useState<any>(null);
-  const [selectedOption, setSelectedOption] = useState<{ tasaKey: string; plazo: number; factor: number } | null>(null);
+  const [selectedOption, setSelectedOption] = useState<{ tasaKey: string; plazoCatalogo: number; factor: number } | null>(null);
+  const [plazosEditables, setPlazosEditables] = useState<number>(0);
 
   const [formData, setFormData] = useState({
     monto_otorgado: "",
@@ -112,45 +113,74 @@ export function CustomLoanForm({ type, onSuccess, onClose }: CustomLoanFormProps
   const calcInteres = (factor: number, monto: number, plazo: number): number =>
     parseFloat((factor * (monto / 1000) * plazo - monto).toFixed(2));
 
-  const handleSelectOption = (tasaKey: string, plazo: number, factor: number) => {
-    const isSame = selectedOption?.tasaKey === tasaKey && selectedOption?.plazo === plazo;
-    if (isSame) {
-      setSelectedOption(null);
-      return;
-    }
-    setSelectedOption({ tasaKey, plazo, factor });
-
+  const applyPlazos = (plazo: number, factor: number, primerPago?: string) => {
     const monto = parseFloat(formData.monto_otorgado) || 0;
+    const primer = primerPago ?? formData.fecha_primer_pago;
+    setPlazosEditables(plazo);
     setFormData((prev) => ({
       ...prev,
-      ...(formData.fecha_primer_pago && { fecha_ultimo_pago: addWeeks(formData.fecha_primer_pago, plazo) }),
-      ...(monto > 0 && { interes: String(calcInteres(factor, monto, plazo)) }),
+      ...(primer && plazo > 0 ? { fecha_ultimo_pago: addWeeks(primer, plazo) } : {}),
+      ...(monto > 0 && plazo > 0 ? { interes: String(calcInteres(factor, monto, plazo)) } : {}),
     }));
+  };
+
+  const handleSelectOption = (tasaKey: string, plazo: number, factor: number) => {
+    const isSame = selectedOption?.tasaKey === tasaKey && selectedOption?.plazoCatalogo === plazo;
+    if (isSame) {
+      setSelectedOption(null);
+      setPlazosEditables(0);
+      return;
+    }
+    setSelectedOption({ tasaKey, plazoCatalogo: plazo, factor });
+    applyPlazos(plazo, factor);
+  };
+
+  const handlePlazosChange = (value: string) => {
+    const plazo = parseInt(value, 10) || 0;
+    setPlazosEditables(plazo);
+    if (!selectedOption || plazo < 1) return;
+    applyPlazos(plazo, selectedOption.factor);
   };
 
   const handleMontoChange = (value: string) => {
     const monto = parseFloat(value) || 0;
+    const plazo = plazosEditables > 0 ? plazosEditables : selectedOption?.plazoCatalogo ?? 0;
     setFormData((prev) => ({
       ...prev,
       monto_otorgado: value,
-      ...(selectedOption && monto > 0 && {
-        interes: String(calcInteres(selectedOption.factor, monto, selectedOption.plazo)),
+      ...(selectedOption && monto > 0 && plazo > 0 && {
+        interes: String(calcInteres(selectedOption.factor, monto, plazo)),
       }),
     }));
   };
 
   const handleFechaPrimerPagoChange = (value: string) => {
+    const plazo = plazosEditables > 0 ? plazosEditables : selectedOption?.plazoCatalogo ?? 0;
     setFormData((prev) => ({
       ...prev,
       fecha_primer_pago: value,
-      ...(selectedOption && value && { fecha_ultimo_pago: addWeeks(value, selectedOption.plazo) }),
+      ...(selectedOption && value && plazo > 0 ? { fecha_ultimo_pago: addWeeks(value, plazo) } : {}),
+    }));
+  };
+
+  const handleFechaUltimoPagoChange = (value: string) => {
+    const plazo = calcPlazos(formData.fecha_primer_pago, value);
+    setPlazosEditables(plazo);
+    setFormData((prev) => ({
+      ...prev,
+      fecha_ultimo_pago: value,
+      ...(selectedOption && plazo > 0
+        ? { interes: String(calcInteres(selectedOption.factor, parseFloat(formData.monto_otorgado) || 0, plazo)) }
+        : {}),
     }));
   };
 
   const monto = parseFloat(formData.monto_otorgado) || 0;
   const interes = parseFloat(formData.interes) || 0;
   const total = monto + interes;
-  const plazos = calcPlazos(formData.fecha_primer_pago, formData.fecha_ultimo_pago);
+  const plazos = plazosEditables > 0
+    ? plazosEditables
+    : calcPlazos(formData.fecha_primer_pago, formData.fecha_ultimo_pago);
   const valorFicha = plazos > 0 ? parseFloat((total / plazos).toFixed(2)) : 0;
   const diaPago = getDiaPago(formData.fecha_primer_pago);
   const porcentajeInteres = monto > 0 ? parseFloat(((interes / monto) * 100).toFixed(2)) : 0;
@@ -337,7 +367,7 @@ export function CustomLoanForm({ type, onSuccess, onClose }: CustomLoanFormProps
                           </td>
                           {plazosDisponibles.map((p) => {
                             const factor = val[p] ?? val[String(p)];
-                            const isSelected = selectedOption?.tasaKey === key && selectedOption?.plazo === p;
+                            const isSelected = selectedOption?.tasaKey === key && selectedOption?.plazoCatalogo === p;
                             return (
                               <td key={p} className="px-2 py-1.5 text-center">
                                 {factor != null ? (
@@ -379,6 +409,18 @@ export function CustomLoanForm({ type, onSuccess, onClose }: CustomLoanFormProps
                 />
               </div>
               <div className="grid gap-2">
+                <Label>Semanas</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={104}
+                  placeholder="Ej. 16"
+                  disabled={!selectedOption}
+                  value={plazosEditables || ""}
+                  onChange={(e) => handlePlazosChange(e.target.value)}
+                />
+              </div>
+              <div className="grid gap-2">
                 <Label>Interés ($)</Label>
                 <Input
                   type="number"
@@ -404,12 +446,12 @@ export function CustomLoanForm({ type, onSuccess, onClose }: CustomLoanFormProps
                   onChange={(e) => handleFechaPrimerPagoChange(e.target.value)}
                 />
               </div>
-              <div className="grid gap-2 col-span-2">
+              <div className="grid gap-2">
                 <Label>Fecha de Último Pago</Label>
                 <Input
                   type="date"
                   value={formData.fecha_ultimo_pago}
-                  onChange={(e) => setFormData({ ...formData, fecha_ultimo_pago: e.target.value })}
+                  onChange={(e) => handleFechaUltimoPagoChange(e.target.value)}
                 />
               </div>
             </div>

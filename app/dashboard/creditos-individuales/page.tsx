@@ -2,34 +2,34 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { apiFetch } from "@/lib/api";
+import { useAuth } from "@/context/auth-context";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { User, PlusCircle } from "lucide-react";
-import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { CustomLoanForm } from "@/components/custom-loan-form";
-import { fmtFecha } from "@/lib/utils";
+import { TablePagination, TableSearch } from "@/components/table-controls";
+import { PAGE_SIZE, filterBySearch, paginateItems, useTableControls } from "@/hooks/use-paginated-list";
+import { creditoSearchFields, fetchAllPages, onlyCarteraActiva } from "@/lib/table-utils";
+import { CarteraAcciones } from "@/components/cartera-acciones";
 
 export default function CreditosIndividualesPage() {
   const router = useRouter();
-  const [creditos, setCreditos] = useState([]);
+  const { user } = useAuth();
+  const isAsesor = user?.role?.nombre === "asesor";
+  const [creditos, setCreditos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState("");
+  const { search: searchTerm, handleSearch, page, setPage } = useTableControls();
   const [isCustomModalOpen, setIsCustomModalOpen] = useState(false);
 
   const fetchCreditos = async () => {
     setLoading(true);
     try {
-      const res = await apiFetch("/creditos?per_page=100"); 
-      const data = await res.json();
-      if (res.ok) {
-        const individualOnly = (data.data || data).filter((c: any) => c.tipo_credito === 'Individual');
-        setCreditos(individualOnly);
-      }
-    } catch (error) {
+      const rows = await fetchAllPages("/cartera/activa?tipo=individual");
+      setCreditos(onlyCarteraActiva(rows));
+    } catch {
       toast.error("Error al cargar créditos");
     } finally {
       setLoading(false);
@@ -40,44 +40,44 @@ export default function CreditosIndividualesPage() {
     fetchCreditos();
   }, []);
 
-  const filtered = creditos.filter((c: any) => 
-    c.cliente?.nombre_completo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    c.num_prog?.toString().includes(searchTerm)
-  );
+  const filtered = filterBySearch(creditos, searchTerm, creditoSearchFields);
+  const paginated = paginateItems(filtered, page);
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight text-foreground/90">Créditos Individuales</h1>
-        <p className="text-muted-foreground">Gestión de créditos activos sin asociación grupal.</p>
+        <p className="text-muted-foreground">Créditos individuales activos. Los que están en mora aparecen solo en Cartera en Mora.</p>
       </div>
 
       <div className="flex items-center justify-between gap-3">
-        <div className="flex-1 max-w-md">
-          <Input
-            placeholder="Buscar por cliente o folio..."
-            className="bg-background border-muted-foreground/20 focus-visible:ring-primary/30 h-10"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
-        <Button onClick={() => setIsCustomModalOpen(true)} size="sm" className="h-10 px-4">
-          <PlusCircle className="mr-2 h-4 w-4" /> Crear Préstamo
-        </Button>
+        <TableSearch
+          placeholder="Buscar por cliente o folio..."
+          value={searchTerm}
+          onChange={handleSearch}
+          className="flex-1 max-w-md"
+        />
+        {!isAsesor && (
+          <Button onClick={() => setIsCustomModalOpen(true)} size="sm" className="h-10 px-4">
+            <PlusCircle className="mr-2 h-4 w-4" /> Crear Préstamo
+          </Button>
+        )}
       </div>
 
-      <Dialog open={isCustomModalOpen} onOpenChange={setIsCustomModalOpen}>
-        <DialogContent className="sm:max-w-[600px] h-[560px] flex flex-col">
-          <DialogHeader>
-            <DialogTitle>Crear Préstamo Individual</DialogTitle>
-          </DialogHeader>
-          <CustomLoanForm
-            type="individual"
-            onSuccess={() => { fetchCreditos(); setIsCustomModalOpen(false); }}
-            onClose={() => setIsCustomModalOpen(false)}
-          />
-        </DialogContent>
-      </Dialog>
+      {!isAsesor && (
+        <Dialog open={isCustomModalOpen} onOpenChange={setIsCustomModalOpen}>
+          <DialogContent className="sm:max-w-[600px] h-[560px] flex flex-col">
+            <DialogHeader>
+              <DialogTitle>Crear Préstamo Individual</DialogTitle>
+            </DialogHeader>
+            <CustomLoanForm
+              type="individual"
+              onSuccess={() => { fetchCreditos(); setIsCustomModalOpen(false); }}
+              onClose={() => setIsCustomModalOpen(false)}
+            />
+          </DialogContent>
+        </Dialog>
+      )}
 
       <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
         <Table>
@@ -108,11 +108,11 @@ export default function CreditosIndividualesPage() {
             ) : filtered.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={10} className="h-32 text-center text-muted-foreground">
-                  No se encontraron créditos individuales para mostrar.
+                  {searchTerm ? "No se encontraron créditos con ese criterio." : "No se encontraron créditos individuales para mostrar."}
                 </TableCell>
               </TableRow>
             ) : (
-              filtered.map((c: any) => (
+              paginated.map((c: any) => (
                 <TableRow key={c.num_prog} className="hover:bg-muted/30 transition-colors">
                   <TableCell className="font-mono text-xs font-semibold text-primary/80">#{c.num_prog}</TableCell>
                   <TableCell className="font-medium whitespace-nowrap">
@@ -131,13 +131,16 @@ export default function CreditosIndividualesPage() {
                   <TableCell className="text-xs text-muted-foreground">${c.interes}</TableCell>
                   <TableCell className="text-xs font-bold text-primary">${c.total}</TableCell>
                   <TableCell className="text-right">
-                    <Button
-                      size="sm"
-                      className="h-8 text-xs font-medium"
-                      onClick={() => router.push(`/dashboard/creditos/${c.num_prog}`)}
-                    >
-                      Ver Préstamo
-                    </Button>
+                    <div className="flex items-center justify-end gap-2">
+                      <CarteraAcciones credito={c} onSuccess={fetchCreditos} />
+                      <Button
+                        size="sm"
+                        className="h-8 text-xs font-medium"
+                        onClick={() => router.push(`/dashboard/creditos/${c.num_prog}`)}
+                      >
+                        Ver Préstamo
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))
@@ -145,6 +148,16 @@ export default function CreditosIndividualesPage() {
           </TableBody>
         </Table>
       </div>
+
+      {!loading && (
+        <TablePagination
+          page={page}
+          totalItems={filtered.length}
+          pageSize={PAGE_SIZE}
+          onPageChange={setPage}
+          label="créditos"
+        />
+      )}
     </div>
   );
 }

@@ -4,17 +4,26 @@ import React, { createContext, useContext, useState, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 
+interface Role {
+  id: number;
+  nombre: string;
+}
+
 interface User {
   id: number;
   name: string;
   email: string;
   curp?: string | null;
   cumpleanos?: string | null;
+  role_id?: number;
+  id_asesor?: number | null;
+  role?: Role;
 }
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
+  isAdmin: boolean;
   login: (token: string) => Promise<void>;
   logout: () => void;
   refreshUser: () => Promise<void>;
@@ -37,7 +46,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } else {
         setUser(null);
       }
-    } catch (error) {
+    } catch {
       setUser(null);
     } finally {
       setLoading(false);
@@ -46,11 +55,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const token = localStorage.getItem("auth_token");
-    if (token) {
-      fetchMe();
-    } else {
-      setLoading(false);
-    }
+    if (token) fetchMe();
+    else setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -72,8 +78,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     router.push("/login");
   };
 
+  const isAdmin = user?.role?.nombre === "admin";
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, refreshUser: fetchMe }}>
+    <AuthContext.Provider value={{ user, loading, isAdmin, login, logout, refreshUser: fetchMe }}>
       {children}
     </AuthContext.Provider>
   );

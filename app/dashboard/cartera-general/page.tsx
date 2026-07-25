@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -17,64 +16,48 @@ import {
 import { User, Users } from "lucide-react";
 import { toast } from "sonner";
 import { fmtFecha } from "@/lib/utils";
-
-const PAGE_SIZE = 5;
+import { TablePagination, TableSearch } from "@/components/table-controls";
+import { PAGE_SIZE, filterBySearch, paginateItems, useTableControls } from "@/hooks/use-paginated-list";
+import { creditoSearchFields, creditoTotal, fetchAllPages, onlyCarteraActiva } from "@/lib/table-utils";
+import { CarteraAcciones } from "@/components/cartera-acciones";
 
 export default function CarteraGeneralPage() {
   const router = useRouter();
   const [creditos, setCreditos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [page, setPage] = useState(1);
+  const { search, handleSearch, page, setPage } = useTableControls();
+
+  const fetchCreditos = async () => {
+    setLoading(true);
+    try {
+      const rows = await fetchAllPages("/cartera/activa");
+      setCreditos(onlyCarteraActiva(rows));
+    } catch {
+      toast.error("Error al cargar cartera");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchCreditos = async () => {
-      setLoading(true);
-      try {
-        const res = await apiFetch("/creditos?per_page=500");
-        const data = await res.json();
-        if (res.ok) setCreditos(data.data || data);
-      } catch {
-        toast.error("Error al cargar cartera");
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchCreditos();
   }, []);
 
-  const filtered = creditos.filter((c: any) => {
-    const term = search.toLowerCase();
-    return (
-      c.num_prog?.toString().includes(term) ||
-      c.cliente?.nombre_completo?.toLowerCase().includes(term) ||
-      c.grupo?.nombre_grupo?.toLowerCase().includes(term)
-    );
-  });
-
-  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
-  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-
-  const handleSearch = (value: string) => {
-    setSearch(value);
-    setPage(1);
-  };
+  const filtered = filterBySearch(creditos, search, creditoSearchFields);
+  const paginated = paginateItems(filtered, page);
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight text-foreground/90">Cartera General</h1>
-        <p className="text-muted-foreground">Todos los préstamos activos — individuales y grupales.</p>
+        <p className="text-muted-foreground">Préstamos activos (individuales y grupales). La mora se gestiona en Cartera en Mora.</p>
       </div>
 
-      <div className="flex-1 max-w-md">
-        <Input
-          placeholder="Buscar por folio, cliente o grupo..."
-          value={search}
-          onChange={(e) => handleSearch(e.target.value)}
-          className="bg-background border-muted-foreground/20 focus-visible:ring-primary/30 h-10"
-        />
-      </div>
+      <TableSearch
+        placeholder="Buscar por folio, cliente o grupo..."
+        value={search}
+        onChange={handleSearch}
+      />
 
       <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
         <Table>
@@ -88,6 +71,7 @@ export default function CarteraGeneralPage() {
               <TableHead>Asesor</TableHead>
               <TableHead className="text-center">Plazos</TableHead>
               <TableHead>Monto</TableHead>
+              <TableHead>Interés</TableHead>
               <TableHead>Total</TableHead>
               <TableHead>Primer Pago</TableHead>
               <TableHead className="text-right">Acción</TableHead>
@@ -96,7 +80,7 @@ export default function CarteraGeneralPage() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={11} className="h-32 text-center">
+                <TableCell colSpan={12} className="h-32 text-center">
                   <div className="flex flex-col items-center gap-2">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
                     <p className="text-sm text-muted-foreground">Cargando cartera...</p>
@@ -105,7 +89,7 @@ export default function CarteraGeneralPage() {
               </TableRow>
             ) : filtered.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={11} className="h-32 text-center text-muted-foreground">
+                <TableCell colSpan={12} className="h-32 text-center text-muted-foreground">
                   {search ? "No se encontraron préstamos con ese criterio." : "No hay préstamos registrados."}
                 </TableCell>
               </TableRow>
@@ -142,16 +126,20 @@ export default function CarteraGeneralPage() {
                     <TableCell className="text-xs">{c.asesor?.nombre_asesor ?? "—"}</TableCell>
                     <TableCell className="text-center text-xs">{c.plazos} sem</TableCell>
                     <TableCell className="text-xs font-semibold">${c.monto_otorgado}</TableCell>
-                    <TableCell className="text-xs font-bold text-primary">${c.total}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">${c.interes}</TableCell>
+                    <TableCell className="text-xs font-bold text-primary">${creditoTotal(c).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                     <TableCell className="text-xs">{c.fecha_primer_pago ? fmtFecha(c.fecha_primer_pago) : "—"}</TableCell>
                     <TableCell className="text-right">
-                      <Button
-                        size="sm"
-                        className="h-8 text-xs font-medium"
-                        onClick={() => router.push(`/dashboard/creditos/${c.num_prog}`)}
-                      >
-                        Ver Préstamo
-                      </Button>
+                      <div className="flex items-center justify-end gap-2">
+                        <CarteraAcciones credito={c} onSuccess={fetchCreditos} />
+                        <Button
+                          size="sm"
+                          className="h-8 text-xs font-medium"
+                          onClick={() => router.push(`/dashboard/creditos/${c.num_prog}`)}
+                        >
+                          Ver Préstamo
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 );
@@ -161,30 +149,14 @@ export default function CarteraGeneralPage() {
         </Table>
       </div>
 
-      {!loading && filtered.length > PAGE_SIZE && (
-        <div className="flex items-center justify-between text-sm text-muted-foreground">
-          <span>
-            Mostrando {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} de {filtered.length} préstamos
-          </span>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setPage((p) => p - 1)}
-              disabled={page === 1}
-            >
-              Anterior
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setPage((p) => p + 1)}
-              disabled={page >= totalPages}
-            >
-              Siguiente
-            </Button>
-          </div>
-        </div>
+      {!loading && (
+        <TablePagination
+          page={page}
+          totalItems={filtered.length}
+          pageSize={PAGE_SIZE}
+          onPageChange={setPage}
+          label="préstamos"
+        />
       )}
     </div>
   );
