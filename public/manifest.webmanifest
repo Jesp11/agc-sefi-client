@@ -1,0 +1,61 @@
+{
+  "name": "AGC Servicios Financieros",
+  "short_name": "AGC SEFI",
+  "description": "App de cobranza y gestión para asesores de AGC Servicios Financieros",
+  "start_url": "/dashboard/reportes/diario",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#dc2626",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/maskable-icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Cobros del día",
+      "short_name": "Cobros",
+      "description": "Reporte diario de cobros a realizar",
+      "url": "/dashboard/reportes/diario",
+      "icons": [{ "src": "/icons/icon-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Cartera Individual",
+      "short_name": "Individual",
+      "description": "Cartera de créditos individuales",
+      "url": "/dashboard/creditos-individuales",
+      "icons": [{ "src": "/icons/icon-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Cartera Grupal",
+      "short_name": "Grupal",
+      "description": "Cartera de créditos grupales",
+      "url": "/dashboard/creditos-grupales",
+      "icons": [{ "src": "/icons/icon-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Clientes por cerrar",
+      "short_name": "Por cerrar",
+      "description": "Clientes próximos a cerrar su crédito",
+      "url": "/dashboard/reportes/por-cerrar",
+      "icons": [{ "src": "/icons/icon-192x192.png", "sizes": "192x192" }]
+    }
+  ]
+}
