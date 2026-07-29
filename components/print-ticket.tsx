@@ -1,11 +1,14 @@
 "use client";
 
-import { fmtFecha } from "@/lib/utils";
+import { useState } from "react";
+import { fmtFecha, cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { SefiLogo } from "@/components/sefi-logo";
 import { Printer } from "lucide-react";
+import { PrintMethodPicker } from "@/components/print-method-picker";
+import { isPWA, printTicket } from "@/utils/printRouter";
 
-interface PrintTicketProps {
+export interface PrintTicketProps {
   title: string;
   fecha: string;
   items: { label: string; value: string }[];
@@ -13,6 +16,9 @@ interface PrintTicketProps {
   /** Si true, muestra el ticket en pantalla (no solo al imprimir). */
   visible?: boolean;
   ticketId?: string;
+  /** Si true, coloca el botón de imprimir al final del contenedor y agrandado. */
+  buttonAtBottom?: boolean;
+  className?: string;
 }
 
 export function PrintTicket({
@@ -22,78 +28,135 @@ export function PrintTicket({
   totals,
   visible = false,
   ticketId = "print-ticket",
+  buttonAtBottom = false,
+  className,
 }: PrintTicketProps) {
-  const handlePrint = () => {
-    requestAnimationFrame(() => window.print());
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [isPrinting, setIsPrinting] = useState(false);
+
+  const onPrint = () => {
+    if (isPrinting) return;
+    setIsPrinting(true);
+
+    if (isPWA()) {
+      setPickerOpen(true);
+    } else {
+      printTicket({ title, fecha, items, totals });
+    }
+
+    // Liberar el botón después del tiempo que tarda el diálogo de impresión.
+    setTimeout(() => setIsPrinting(false), 2500);
   };
 
   return (
-    <div>
-      <Button type="button" variant="outline" size="sm" className="print:hidden" onClick={handlePrint}>
-        <Printer className="mr-2 h-4 w-4" />
-        Imprimir ticket
-      </Button>
+    <div className={cn(buttonAtBottom && "flex flex-col", className)}>
+      {!buttonAtBottom && (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="print:hidden"
+          onClick={onPrint}
+          disabled={isPrinting}
+        >
+          <Printer className="mr-2 h-4 w-4" />
+          Imprimir ticket
+        </Button>
+      )}
+
       <div
         id={ticketId}
-        className={
+        className={cn(
           visible
-            ? "mt-4 w-[5.7cm] rounded-lg border bg-white p-1 text-foreground"
-            : "hidden w-[5.7cm] print:block"
-        }
+            ? "print-ticket mt-4 w-[5.7cm] rounded-lg border bg-white p-3 text-foreground"
+            : "print-ticket hidden w-[5.7cm] print:block p-3",
+          buttonAtBottom && "max-h-[55vh] overflow-y-auto mt-0"
+        )}
       >
-        <div className="w-full mx-auto font-mono text-[8px] leading-tight">
-          <div className="flex justify-center mb-1">
-            <SefiLogo className="w-8 h-8" />
+        <div className="w-full mx-auto font-mono text-[14px] leading-snug">
+          <div className="flex justify-center mb-4">
+            <SefiLogo className="w-14 h-14" />
           </div>
-          <h2 className="text-center font-bold text-[10px] mb-0.5">{title}</h2>
-          <p className="text-center text-[7px] mb-2">{fmtFecha(fecha)}</p>
-          <div className="border-t border-b border-dashed py-1 space-y-0.5">
+          <h2 className="text-center font-bold text-base mb-2">{title}</h2>
+          <p className="text-center text-sm mb-4">{fmtFecha(fecha)}</p>
+          <div className="border-t border-b border-dashed py-2.5 space-y-2">
             {items.map((item, i) => (
-              <div key={i} className="flex justify-between gap-2">
+              <div
+                key={i}
+                className="grid grid-cols-[auto_1fr] gap-3 text-[14px]"
+              >
                 <span className="shrink-0">{item.label}</span>
                 <span className="text-right break-all">{item.value}</span>
               </div>
             ))}
           </div>
           {totals && totals.length > 0 && (
-            <div className="mt-1 space-y-0.5 font-bold text-[9px]">
+            <div className="mt-4 space-y-2 font-bold text-[15px]">
               {totals.map((t, i) => (
-                <div key={i} className="flex justify-between gap-2">
+                <div
+                  key={i}
+                  className="grid grid-cols-[auto_1fr] gap-3"
+                >
                   <span>{t.label}</span>
-                  <span>{t.value}</span>
+                  <span className="text-right break-all">{t.value}</span>
                 </div>
               ))}
             </div>
           )}
-          <p className="text-center text-[7px] mt-2">AGC Servcios Financieros — Gracias por su pago</p>
+          <p className="text-center text-sm mt-4 font-bold">
+            AGC Servicios Financieros — Gracias por su pago
+          </p>
         </div>
       </div>
+
+      {buttonAtBottom && (
+        <Button
+          type="button"
+          variant="default"
+          size="lg"
+          className="print:hidden w-full h-12 text-base mt-4"
+          onClick={onPrint}
+          disabled={isPrinting}
+        >
+          <Printer className="mr-2 h-5 w-5" />
+          Imprimir ticket
+        </Button>
+      )}
+
       <style jsx global>{`
         @media print {
+          @page {
+            size: 5.7cm auto;
+            margin: 0;
+          }
           body * {
             visibility: hidden !important;
           }
-          #print-ticket,
-          #print-ticket *,
-          #pago-print-ticket,
-          #pago-print-ticket * {
+          .print-ticket,
+          .print-ticket * {
             visibility: visible !important;
           }
-          #print-ticket,
-          #pago-print-ticket {
+          .print-ticket {
             position: absolute !important;
             left: 0 !important;
             top: 0 !important;
             width: 5.7cm !important;
             display: block !important;
             background: white !important;
-            padding: 0.2cm !important;
+            padding: 0.3cm !important;
             border: none !important;
+            border-radius: 0 !important;
             margin: 0 !important;
             box-shadow: none !important;
           }
         }
       `}</style>
+
+      <PrintMethodPicker
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        ticketData={{ title, fecha, items, totals, ticketId }}
+      />
     </div>
   );
 }
@@ -121,7 +184,13 @@ export function buildPagoTicketProps(ticket: PagoTicketData) {
 
   const items = [
     { label: "Folio", value: `#${ticket.num_prog}` },
-    { label: "Pago", value: ticket.num_pago && ticket.total_pagos ? `${ticket.num_pago}/${ticket.total_pagos}` : "—" },
+    {
+      label: "Pago",
+      value:
+        ticket.num_pago && ticket.total_pagos
+          ? `${ticket.num_pago}/${ticket.total_pagos}`
+          : "—",
+    },
     { label: "Cliente/Grupo", value: ticket.beneficiario || "—" },
     { label: "Tipo", value: ticket.tipo_credito || "—" },
     { label: "Asesor", value: ticket.asesor || "—" },

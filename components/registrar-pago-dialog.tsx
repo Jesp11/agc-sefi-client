@@ -173,26 +173,33 @@ export function RegistrarPagoDialog({
           )
         }
       />
-      <DialogContent className="sm:max-w-md print:shadow-none print:border-0">
+      <DialogContent className="sm:max-w-md max-h-[80vh] flex flex-col gap-4 overflow-hidden print:shadow-none print:border-0">
         {ticket && ticketProps ? (
           <>
             <DialogHeader>
               <DialogTitle>Pago registrado</DialogTitle>
             </DialogHeader>
-            <div className="space-y-4">
-              <p className="text-sm text-muted-foreground print:hidden">
-                Puedes imprimir el comprobante para entregarlo al cliente.
-              </p>
+            <div className="flex flex-col flex-1 min-h-0 gap-4">
+              <div className="flex items-start justify-between gap-2 print:hidden">
+                <p className="text-sm text-muted-foreground">
+                  Puedes imprimir el comprobante para entregarlo al cliente.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleClose(false)}
+                >
+                  Cerrar
+                </Button>
+              </div>
               <PrintTicket
                 {...ticketProps}
                 visible
                 ticketId="pago-print-ticket"
+                buttonAtBottom
+                className="flex-1 min-h-0"
               />
-              <div className="flex gap-2 print:hidden">
-                <Button type="button" className="flex-1" onClick={() => handleClose(false)}>
-                  Cerrar
-                </Button>
-              </div>
             </div>
           </>
         ) : (
