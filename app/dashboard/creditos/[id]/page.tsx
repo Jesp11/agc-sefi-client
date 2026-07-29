@@ -137,6 +137,7 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
     ? plazos
     : Math.min(plazos, pagosCubiertos + 1);
   const ultimoAbono = pagosRecientes.find((p) => p.tipo === "Abono") ?? mora.ultimo_abono ?? null;
+  const puedeRegistrarPago = saldoActual > 0 && ["Activo", "EnMora"].includes(credito.estado);
 
   const isGrupal = credito.tipo_credito === "Grupal";
   const integrantesGrupo: any[] = credito.grupo?.clientes ?? [];
@@ -198,12 +199,14 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
               onSuccess={fetchData}
             />
           )}
-          <RegistrarPagoDialog
-            numProg={credito.num_prog}
-            valorFicha={credito.valor_ficha}
-            saldoPendiente={saldoActual}
-            onSuccess={fetchData}
-          />
+          {puedeRegistrarPago && (
+            <RegistrarPagoDialog
+              numProg={credito.num_prog}
+              valorFicha={credito.valor_ficha}
+              saldoPendiente={saldoActual}
+              onSuccess={fetchData}
+            />
+          )}
         </div>
       </div>
 
