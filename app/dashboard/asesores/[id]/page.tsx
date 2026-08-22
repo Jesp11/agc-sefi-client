@@ -136,7 +136,7 @@ export default function AsesorDetallePage() {
     try {
       const fd = new FormData();
       fd.append(slot === 1 ? "ine" : "ine_2", file);
-      const res = await patchAsesor(id, fd);
+      const res = await patchAsesor(String(id), fd);      
       if (res.ok) {
         const data = await res.json();
         setAsesor((prev: any) => ({
@@ -163,7 +163,7 @@ export default function AsesorDetallePage() {
     try {
       const fd = new FormData();
       fd.append(slot === 1 ? "delete_ine" : "delete_ine_2", "1");
-      const res = await patchAsesor(id, fd);
+      const res = await patchAsesor(String(id), fd);      
       if (res.ok) {
         setAsesor((prev: any) => ({
           ...prev,
