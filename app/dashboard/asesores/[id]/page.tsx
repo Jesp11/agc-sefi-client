@@ -112,7 +112,7 @@ export default function AsesorDetallePage() {
     try {
       const fd = new FormData();
       fd.append("telefono", telValue.trim());
-      const res = await patchAsesor(id, fd);
+      const res = await patchAsesor(String(id), fd);      
       if (res.ok) {
         const data = await res.json();
         setAsesor((prev: any) => ({ ...prev, telefono: data.data?.telefono ?? telValue.trim() }));
