@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   ArrowLeft, User, Users, Calendar, DollarSign, Hash, TrendingUp, Clock,
   Table as TableIcon, History, SlidersHorizontal, CalendarCheck, CalendarX,
-  CreditCard, AlertTriangle,
+  CreditCard, AlertTriangle, FileText, ChevronDown, FileDown, FolderArchive,
 } from "lucide-react";
 import { toast } from "sonner";
 import { fmtFecha } from "@/lib/utils";
@@ -17,8 +17,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { RegistrarPagoDialog } from "@/components/registrar-pago-dialog";
 import { RefinanciarCreditoDialog } from "@/components/refinanciar-credito-dialog";
+import { DocumentoAdeudoDialog, type TipoDocumentoAdeudo } from "@/components/documento-adeudo-dialog";
+import { ExpedienteCreditoCard } from "@/components/expediente-credito-card";
 import { TablePagination, TableSearch } from "@/components/table-controls";
 import { PAGE_SIZE, filterBySearch, paginateItems, useTableControls } from "@/hooks/use-paginated-list";
 import { marcarEstadoCuotas, totalAbonadoFromPagos } from "@/lib/table-utils";
@@ -70,6 +78,8 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
   const [credito, setCredito] = useState<any>(null);
   const [pagos, setPagos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [docAdeudoOpen, setDocAdeudoOpen] = useState(false);
+  const [docAdeudoTipo, setDocAdeudoTipo] = useState<TipoDocumentoAdeudo>("pagare");
   const scheduleControls = useTableControls();
   const pagosControls = useTableControls();
 
@@ -189,6 +199,60 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          {credito.tipo_credito === "Individual" && saldoActual > 0 && (
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button variant="outline" size="sm" className="h-9 gap-1.5 font-semibold text-xs">
+                    <FileText className="h-4 w-4 text-primary" />
+                    Documentos de Adeudo
+                    <ChevronDown className="h-3.5 w-3.5 opacity-60" />
+                  </Button>
+                }
+              />
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuItem
+                  onClick={() => {
+                    setDocAdeudoTipo("pagare");
+                    setDocAdeudoOpen(true);
+                  }}
+                  className="cursor-pointer gap-2 py-2"
+                >
+                  <FileText className="h-4 w-4 text-primary" />
+                  <div>
+                    <div className="font-semibold text-xs">Descargar Pagaré</div>
+                    <div className="text-[10px] text-muted-foreground">PDF / Impresión</div>
+                  </div>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => {
+                    setDocAdeudoTipo("carta_adeudo");
+                    setDocAdeudoOpen(true);
+                  }}
+                  className="cursor-pointer gap-2 py-2"
+                >
+                  <FileText className="h-4 w-4 text-amber-600" />
+                  <div>
+                    <div className="font-semibold text-xs">Carta de Adeudo</div>
+                    <div className="text-[10px] text-muted-foreground">PDF / Impresión</div>
+                  </div>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => {
+                    setDocAdeudoTipo("tarjeta_cobro");
+                    setDocAdeudoOpen(true);
+                  }}
+                  className="cursor-pointer gap-2 py-2"
+                >
+                  <FileText className="h-4 w-4 text-emerald-600" />
+                  <div>
+                    <div className="font-semibold text-xs">Tarjeta de Pagos</div>
+                    <div className="text-[10px] text-muted-foreground">PDF / Calendario</div>
+                  </div>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
           {isAdmin && ["Activo", "EnMora"].includes(credito.estado) && saldoActual > 0 && (
             <RefinanciarCreditoDialog
               numProg={credito.num_prog}
@@ -213,12 +277,28 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
       {mora.en_mora && (
         <Card className="border-destructive/30 bg-destructive/5">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base flex items-center gap-2 text-destructive">
-              <AlertTriangle className="h-4 w-4" /> Estado en Mora
+            <CardTitle className="text-base flex items-center justify-between gap-2 text-destructive">
+              <span className="flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4" /> Estado en Mora
+              </span>
+              {credito.tipo_credito === "Individual" && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs gap-1.5 border-destructive/40 hover:bg-destructive/10 text-destructive font-medium"
+                  onClick={() => {
+                    setDocAdeudoTipo("carta_adeudo");
+                    setDocAdeudoOpen(true);
+                  }}
+                >
+                  <FileDown className="h-3.5 w-3.5" />
+                  Carta de Adeudo (PDF)
+                </Button>
+              )}
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
               <div><p className="text-xs text-muted-foreground">Ciclo inicio mora</p><p className="font-bold">{mora.ciclo_inicio_mora ?? "—"}</p></div>
               <div><p className="text-xs text-muted-foreground">Días de mora</p><p className="font-bold text-destructive">{mora.dias_mora}</p></div>
               <div><p className="text-xs text-muted-foreground">Total adeudo</p><p className="font-bold">${Number(mora.total_adeudo).toLocaleString()}</p></div>
@@ -320,6 +400,15 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
                 <div className="flex items-center gap-2 text-sm">
                   <CalendarX className="h-4 w-4 text-rose-500" />
                   {fmtFecha(fechaUltimoPago)}
+                </div>
+              </div>
+              <div className="space-y-1">
+                <p className="text-[10px] font-bold text-muted-foreground uppercase">Expediente Físico</p>
+                <div className="flex items-center gap-1.5 text-xs">
+                  <FolderArchive className="h-3.5 w-3.5 text-primary flex-shrink-0" />
+                  <span className="font-semibold truncate">
+                    {credito.ubicacion_expediente || <span className="text-muted-foreground italic font-normal">Sin asignar</span>}
+                  </span>
                 </div>
               </div>
             </div>
@@ -437,9 +526,13 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
       )}
 
       <Tabs defaultValue="amortizacion" className="w-full">
-        <TabsList className="grid w-full grid-cols-2 bg-muted/40 p-1 h-12">
+        <TabsList className="grid w-full grid-cols-3 bg-muted/40 p-1 h-12">
           <TabsTrigger value="amortizacion"><TableIcon className="h-4 w-4 mr-2" />Calendario</TabsTrigger>
           <TabsTrigger value="historial"><History className="h-4 w-4 mr-2" />Historial de Pagos</TabsTrigger>
+          <TabsTrigger value="expediente">
+            <FolderArchive className="h-4 w-4 mr-2 text-primary" />
+            Expediente ({credito.documentos?.length || 0})
+          </TabsTrigger>
         </TabsList>
         <TabsContent value="amortizacion" className="mt-4">
           <Card className="border-muted/40 shadow-sm overflow-hidden">
@@ -522,7 +615,26 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
             )}
           </Card>
         </TabsContent>
+        <TabsContent value="expediente" className="mt-4">
+          <ExpedienteCreditoCard
+            credito={credito}
+            onUpdated={fetchData}
+            onOpenGenerator={(tipo) => {
+              setDocAdeudoTipo(tipo);
+              setDocAdeudoOpen(true);
+            }}
+          />
+        </TabsContent>
       </Tabs>
+
+      {credito.tipo_credito === "Individual" && (
+        <DocumentoAdeudoDialog
+          credito={credito}
+          open={docAdeudoOpen}
+          onOpenChange={setDocAdeudoOpen}
+          defaultDoc={docAdeudoTipo}
+        />
+      )}
     </div>
   );
 }
