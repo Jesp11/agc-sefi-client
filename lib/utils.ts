@@ -25,3 +25,31 @@ export function fmtFecha(dateStr: string | null | undefined): string {
 
   return dateStr;
 }
+
+/** Extrae la fecha de nacimiento (YYYY-MM-DD) a partir de una CURP válida */
+export function extractBirthdateFromCurp(curp: string | null | undefined): string | null {
+  if (!curp || typeof curp !== "string") return null;
+  const clean = curp.toUpperCase().trim();
+  if (clean.length < 10) return null;
+
+  const yearStr = clean.slice(4, 6);
+  const monthStr = clean.slice(6, 8);
+  const dayStr = clean.slice(8, 10);
+
+  if (!/^\d{2}$/.test(yearStr) || !/^\d{2}$/.test(monthStr) || !/^\d{2}$/.test(dayStr)) {
+    return null;
+  }
+
+  const monthNum = parseInt(monthStr, 10);
+  const dayNum = parseInt(dayStr, 10);
+  if (monthNum < 1 || monthNum > 12 || dayNum < 1 || dayNum > 31) {
+    return null;
+  }
+
+  const currentYearShort = new Date().getFullYear() % 100;
+  const yearNum = parseInt(yearStr, 10);
+  const fullYear = yearNum > currentYearShort ? 1900 + yearNum : 2000 + yearNum;
+
+  return `${fullYear}-${monthStr}-${dayStr}`;
+}
+

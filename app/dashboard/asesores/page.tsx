@@ -12,7 +12,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
-import { fmtFecha } from "@/lib/utils";
+import { fmtFecha, extractBirthdateFromCurp } from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -27,7 +27,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { PlusCircle, Upload, Download, FileSpreadsheet, ChevronDown, FileDown } from "lucide-react";
+import { PlusCircle, Upload, Download, FileSpreadsheet, ChevronDown, FileDown, Pencil } from "lucide-react";
 import * as XLSX from "xlsx";
 
 import { apiFetch } from "@/lib/api";
@@ -49,6 +49,15 @@ export default function AsesoresPage() {
   const [ineFile, setIneFile] = useState<File | null>(null);
   const [ineFile2, setIneFile2] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Edit modal state
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editingAsesorId, setEditingAsesorId] = useState<number | string | null>(null);
+  const [editNombre, setEditNombre] = useState("");
+  const [editCurp, setEditCurp] = useState("");
+  const [editTelefono, setEditTelefono] = useState("");
+  const [isEditSubmitting, setIsEditSubmitting] = useState(false);
+
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const importInputRef = useRef<HTMLInputElement>(null);
@@ -119,6 +128,56 @@ export default function AsesoresPage() {
       toast.error("Error de conexión");
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleOpenEdit = (asesor: any) => {
+    setEditingAsesorId(asesor.id);
+    setEditNombre(asesor.nombre_asesor ?? "");
+    setEditCurp(asesor.curp ?? "");
+    setEditTelefono(asesor.telefono ?? "");
+    setIsEditDialogOpen(true);
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editNombre.trim()) {
+      toast.error("El nombre es requerido");
+      return;
+    }
+    if (editCurp.trim().length !== 18) {
+      toast.error("La CURP debe tener exactamente 18 caracteres");
+      return;
+    }
+
+    setIsEditSubmitting(true);
+    try {
+      const res = await apiFetch(`/asesores/${editingAsesorId}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          nombre_asesor: editNombre.trim(),
+          curp: editCurp.trim().toUpperCase(),
+          telefono: editTelefono.trim() || null,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        toast.success(data.message || "Asesor actualizado exitosamente");
+        setIsEditDialogOpen(false);
+        fetchAsesores();
+      } else {
+        const errorMsg =
+          data.errors?.curp?.[0] ||
+          data.errors?.nombre_asesor?.[0] ||
+          data.message ||
+          "Error al actualizar asesor";
+        toast.error(errorMsg);
+      }
+    } catch {
+      toast.error("Error de conexión");
+    } finally {
+      setIsEditSubmitting(false);
     }
   };
 
@@ -322,9 +381,16 @@ export default function AsesoresPage() {
                   disabled={isSubmitting}
                   className="font-mono uppercase"
                 />
-                <p className="text-xs text-muted-foreground">
-                  {curp.length}/18 — El cumpleaños se extrae automáticamente.
-                </p>
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span>{curp.length}/18 caracteres</span>
+                  {extractBirthdateFromCurp(curp) ? (
+                    <span className="text-primary font-medium">
+                      Cumpleaños: {fmtFecha(extractBirthdateFromCurp(curp))}
+                    </span>
+                  ) : (
+                    <span>El cumpleaños se extrae automáticamente.</span>
+                  )}
+                </div>
               </div>
               <div className="grid gap-2">
                 <label htmlFor="telefono" className="text-sm font-medium">Teléfono <span className="text-muted-foreground font-normal">(opcional)</span></label>
@@ -379,6 +445,75 @@ export default function AsesoresPage() {
             </form>
           </DialogContent>
         </Dialog>
+
+        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>Editar Asesor</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleEditSubmit} className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <label htmlFor="edit_nombre" className="text-sm font-medium">Nombre Completo</label>
+                <Input
+                  id="edit_nombre"
+                  placeholder="Ej. Carlos López"
+                  value={editNombre}
+                  onChange={(e) => setEditNombre(e.target.value)}
+                  disabled={isEditSubmitting}
+                  required
+                />
+              </div>
+              <div className="grid gap-2">
+                <label htmlFor="edit_curp" className="text-sm font-medium">CURP</label>
+                <Input
+                  id="edit_curp"
+                  placeholder="18 caracteres"
+                  value={editCurp}
+                  onChange={(e) => setEditCurp(e.target.value.toUpperCase())}
+                  maxLength={18}
+                  disabled={isEditSubmitting}
+                  className="font-mono uppercase"
+                  required
+                />
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span>{editCurp.length}/18 caracteres</span>
+                  {extractBirthdateFromCurp(editCurp) && (
+                    <span className="text-primary font-medium">
+                      Cumpleaños: {fmtFecha(extractBirthdateFromCurp(editCurp))}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="grid gap-2">
+                <label htmlFor="edit_telefono" className="text-sm font-medium">
+                  Teléfono <span className="text-muted-foreground font-normal">(opcional)</span>
+                </label>
+                <Input
+                  id="edit_telefono"
+                  type="tel"
+                  placeholder="Ej. 5512345678"
+                  value={editTelefono}
+                  onChange={(e) => setEditTelefono(e.target.value)}
+                  maxLength={20}
+                  disabled={isEditSubmitting}
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsEditDialogOpen(false)}
+                  disabled={isEditSubmitting}
+                >
+                  Cancelar
+                </Button>
+                <Button type="submit" disabled={isEditSubmitting}>
+                  {isEditSubmitting ? "Guardando..." : "Guardar"}
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
         </div>
       </div>
 
@@ -424,13 +559,23 @@ export default function AsesoresPage() {
                   </TableCell>
                   <TableCell className="text-sm">{asesor.created_at ? fmtFecha(asesor.created_at.split("T")[0]) : "—"}</TableCell>
                   <TableCell className="text-right">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => router.push(`/dashboard/asesores/${asesor.id}`)}
-                    >
-                      Ver perfil
-                    </Button>
+                    <div className="flex items-center justify-end gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleOpenEdit(asesor)}
+                      >
+                        <Pencil className="h-3.5 w-3.5 mr-1" />
+                        Editar
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => router.push(`/dashboard/asesores/${asesor.id}`)}
+                      >
+                        Ver perfil
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))

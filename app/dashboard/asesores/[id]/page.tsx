@@ -45,7 +45,7 @@ import { Badge } from "@/components/ui/badge";
 import { TablePagination, TableSearch } from "@/components/table-controls";
 import { PAGE_SIZE, filterBySearch, paginateItems, useTableControls } from "@/hooks/use-paginated-list";
 import { creditoSearchFields } from "@/lib/table-utils";
-import { fmtFecha } from "@/lib/utils";
+import { fmtFecha, extractBirthdateFromCurp } from "@/lib/utils";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
 
@@ -69,6 +69,13 @@ export default function AsesorDetallePage() {
   const [asesor, setAsesor] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const creditosControls = useTableControls();
+
+  // edit asesor dialog
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [editNombre, setEditNombre] = useState("");
+  const [editCurp, setEditCurp] = useState("");
+  const [editTelefono, setEditTelefono] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
 
   const [accesoEmail, setAccesoEmail] = useState("");
   const [accesoPassword, setAccesoPassword] = useState("");
@@ -163,6 +170,65 @@ export default function AsesorDetallePage() {
   };
 
   useEffect(() => { fetchAsesor(); }, [id]);
+
+  const handleOpenEdit = () => {
+    if (!asesor) return;
+    setEditNombre(asesor.nombre_asesor ?? "");
+    setEditCurp(asesor.curp ?? "");
+    setEditTelefono(asesor.telefono ?? "");
+    setShowEditDialog(true);
+  };
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editNombre.trim()) {
+      toast.error("El nombre es requerido");
+      return;
+    }
+    if (editCurp.trim().length !== 18) {
+      toast.error("La CURP debe tener exactamente 18 caracteres");
+      return;
+    }
+
+    setSavingEdit(true);
+    try {
+      const res = await apiFetch(`/asesores/${id}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          nombre_asesor: editNombre.trim(),
+          curp: editCurp.trim().toUpperCase(),
+          telefono: editTelefono.trim() || null,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        toast.success(data.message || "Información actualizada exitosamente");
+        const updated = data.data ?? {};
+        setAsesor((prev: any) => ({
+          ...prev,
+          ...updated,
+          nombre_asesor: updated.nombre_asesor ?? editNombre.trim(),
+          curp: updated.curp ?? editCurp.trim().toUpperCase(),
+          cumpleanos: updated.cumpleanos ?? prev.cumpleanos,
+          telefono: updated.telefono ?? (editTelefono.trim() || null),
+        }));
+        setTelValue(editTelefono.trim());
+        setShowEditDialog(false);
+      } else {
+        const errorMsg =
+          data.errors?.curp?.[0] ||
+          data.errors?.nombre_asesor?.[0] ||
+          data.message ||
+          "Error al actualizar asesor";
+        toast.error(errorMsg);
+      }
+    } catch {
+      toast.error("Error de conexión");
+    } finally {
+      setSavingEdit(false);
+    }
+  };
 
   const handleSaveTel = async () => {
     setSavingTel(true);
@@ -335,11 +401,17 @@ export default function AsesorDetallePage() {
           <h1 className="text-3xl font-bold tracking-tight">{asesor.nombre_asesor}</h1>
           <p className="text-muted-foreground font-mono text-sm">{asesor.id_asesor ?? `#${asesor.id}`}</p>
         </div>
-        {tieneAcceso ? (
-          <Badge className="ml-auto bg-emerald-50 text-emerald-700 border-emerald-200">Con acceso</Badge>
-        ) : (
-          <Badge variant="secondary" className="ml-auto">Sin acceso</Badge>
-        )}
+        <div className="ml-auto flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={handleOpenEdit}>
+            <Pencil className="h-4 w-4 mr-1.5" />
+            Editar Datos
+          </Button>
+          {tieneAcceso ? (
+            <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200">Con acceso</Badge>
+          ) : (
+            <Badge variant="secondary">Sin acceso</Badge>
+          )}
+        </div>
       </div>
 
       <Dialog open={showPasswordDialog} onOpenChange={setShowPasswordDialog}>
@@ -362,6 +434,74 @@ export default function AsesorDetallePage() {
               Copiar contraseña
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal para editar información general del asesor */}
+      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Editar Asesor</DialogTitle>
+            <DialogDescription>
+              Modifica los datos del asesor. La fecha de nacimiento se extrae automáticamente a partir de la CURP.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSaveEdit} className="grid gap-4 py-2">
+            <div className="grid gap-2">
+              <label htmlFor="edit-nombre" className="text-sm font-medium">Nombre Completo</label>
+              <Input
+                id="edit-nombre"
+                placeholder="Ej. Carlos López"
+                value={editNombre}
+                onChange={(e) => setEditNombre(e.target.value)}
+                disabled={savingEdit}
+                required
+              />
+            </div>
+            <div className="grid gap-2">
+              <label htmlFor="edit-curp" className="text-sm font-medium">CURP</label>
+              <Input
+                id="edit-curp"
+                placeholder="18 caracteres"
+                value={editCurp}
+                onChange={(e) => setEditCurp(e.target.value.toUpperCase())}
+                maxLength={18}
+                disabled={savingEdit}
+                className="font-mono uppercase"
+                required
+              />
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>{editCurp.length}/18 caracteres</span>
+                {extractBirthdateFromCurp(editCurp) && (
+                  <span className="text-primary font-medium">
+                    Fecha de nacimiento: {fmtFecha(extractBirthdateFromCurp(editCurp))}
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="grid gap-2">
+              <label htmlFor="edit-telefono" className="text-sm font-medium">
+                Teléfono <span className="text-muted-foreground font-normal">(opcional)</span>
+              </label>
+              <Input
+                id="edit-telefono"
+                type="tel"
+                placeholder="Ej. 5512345678"
+                value={editTelefono}
+                onChange={(e) => setEditTelefono(e.target.value)}
+                maxLength={20}
+                disabled={savingEdit}
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="outline" onClick={() => setShowEditDialog(false)} disabled={savingEdit}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={savingEdit}>
+                {savingEdit ? "Guardando..." : "Guardar Cambios"}
+              </Button>
+            </div>
+          </form>
         </DialogContent>
       </Dialog>
 
@@ -487,13 +627,22 @@ export default function AsesorDetallePage() {
       <div className="grid gap-6 md:grid-cols-3">
         {/* Información Personal */}
         <Card className="md:col-span-1">
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
             <CardTitle className="flex items-center gap-2 text-lg">
               <User className="h-5 w-5 text-primary" />
               Información Personal
             </CardTitle>
+            <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={handleOpenEdit}>
+              <Pencil className="h-3.5 w-3.5 mr-1" />
+              Editar
+            </Button>
           </CardHeader>
           <CardContent className="grid gap-4 text-sm">
+            <div className="flex flex-col gap-1">
+              <span className="text-muted-foreground font-medium">Nombre Completo</span>
+              <span className="font-medium text-foreground">{asesor.nombre_asesor}</span>
+            </div>
+
             <div className="flex flex-col gap-1">
               <span className="text-muted-foreground font-medium">ID Asesor</span>
               <span className="font-mono font-bold text-primary">{asesor.id_asesor ?? `#${asesor.id}`}</span>
@@ -501,17 +650,29 @@ export default function AsesorDetallePage() {
 
             <div className="flex flex-col gap-1">
               <span className="text-muted-foreground font-medium">CURP</span>
-              <span className="flex items-center gap-2">
-                <IdCard className="h-3 w-3 shrink-0" />
-                <span className="font-mono">{asesor.curp ?? "—"}</span>
-              </span>
+              <div className="flex items-center justify-between gap-2">
+                <span className="flex items-center gap-2">
+                  <IdCard className="h-3 w-3 shrink-0 text-muted-foreground" />
+                  <span className="font-mono">{asesor.curp ?? "—"}</span>
+                </span>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                  onClick={handleOpenEdit}
+                  title="Editar CURP / Información"
+                >
+                  <Pencil className="h-3 w-3" />
+                </Button>
+              </div>
             </div>
 
             <div className="flex flex-col gap-1">
-              <span className="text-muted-foreground font-medium">Cumpleaños</span>
+              <span className="text-muted-foreground font-medium">Fecha de Nacimiento / Cumpleaños</span>
               <span className="flex items-center gap-2">
-                <Calendar className="h-3 w-3 shrink-0" />
-                {asesor.cumpleanos ? fmtFecha(asesor.cumpleanos) : "—"}
+                <Calendar className="h-3 w-3 shrink-0 text-muted-foreground" />
+                <span>{asesor.cumpleanos ? fmtFecha(asesor.cumpleanos) : "—"}</span>
+                <span className="text-[11px] text-muted-foreground">(de la CURP)</span>
               </span>
             </div>
 
