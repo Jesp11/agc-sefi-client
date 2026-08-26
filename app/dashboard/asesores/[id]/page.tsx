@@ -37,6 +37,8 @@ import {
   Trash2,
   KeyRound,
   Copy,
+  Download,
+  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -46,7 +48,6 @@ import { creditoSearchFields } from "@/lib/table-utils";
 import { fmtFecha } from "@/lib/utils";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
-const STORAGE_BASE = API_BASE.replace("/api", "") + "/storage";
 
 async function patchAsesor(id: string | string[], formData: FormData) {
   const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
@@ -84,6 +85,62 @@ export default function AsesorDetallePage() {
   const [savingIne, setSavingIne] = useState<1 | 2 | null>(null);
   const ine1Ref = useRef<HTMLInputElement>(null);
   const ine2Ref = useRef<HTMLInputElement>(null);
+
+  // ine preview modal
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewTitle, setPreviewTitle] = useState("");
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewType, setPreviewType] = useState<"image" | "pdf">("image");
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewFilename, setPreviewFilename] = useState("");
+
+  const handleVerIne = async (slot: 1 | 2, label: string) => {
+    setPreviewTitle(`INE (${label}) — ${asesor?.nombre_asesor || ""}`);
+    setPreviewFilename(`INE_${label}_${asesor?.nombre_asesor || id}.jpg`);
+    setPreviewLoading(true);
+    setPreviewOpen(true);
+
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(null);
+    }
+
+    try {
+      const res = await apiFetch(`/asesores/${id}/ine/${slot}`, {
+        headers: { Accept: "*/*" },
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.message || "No se pudo cargar el archivo");
+        setPreviewOpen(false);
+        return;
+      }
+
+      const contentType = res.headers.get("content-type") || "";
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      setPreviewUrl(objectUrl);
+      if (contentType.toLowerCase().includes("pdf")) {
+        setPreviewType("pdf");
+      } else {
+        setPreviewType("image");
+      }
+    } catch {
+      toast.error("Error al obtener el documento del servidor");
+      setPreviewOpen(false);
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  const handleClosePreview = (open: boolean) => {
+    setPreviewOpen(open);
+    if (!open && previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(null);
+    }
+  };
 
   const fetchAsesor = async () => {
     setLoading(true);
@@ -308,6 +365,57 @@ export default function AsesorDetallePage() {
         </DialogContent>
       </Dialog>
 
+      {/* Modal visor de INE */}
+      <Dialog open={previewOpen} onOpenChange={handleClosePreview}>
+        <DialogContent className="max-w-3xl max-h-[92vh] flex flex-col p-4 sm:p-6">
+          <DialogHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <div>
+              <DialogTitle className="text-lg font-semibold">{previewTitle}</DialogTitle>
+              <DialogDescription className="text-xs text-muted-foreground">
+                Documento de identificación oficial
+              </DialogDescription>
+            </div>
+            {previewUrl && (
+              <div className="flex items-center gap-2">
+                <a
+                  href={previewUrl}
+                  download={previewFilename}
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground border rounded-md px-3 py-1.5 transition-colors bg-background shadow-xs hover:bg-accent"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Descargar
+                </a>
+              </div>
+            )}
+          </DialogHeader>
+
+          <div className="flex-1 flex items-center justify-center min-h-[300px] max-h-[72vh] overflow-auto rounded-lg border bg-muted/20 p-2">
+            {previewLoading ? (
+              <div className="flex flex-col items-center gap-2 text-muted-foreground text-sm py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <span>Cargando documento...</span>
+              </div>
+            ) : previewUrl ? (
+              previewType === "pdf" ? (
+                <iframe
+                  src={previewUrl}
+                  title={previewTitle}
+                  className="w-full h-[68vh] rounded-md border-0"
+                />
+              ) : (
+                <img
+                  src={previewUrl}
+                  alt={previewTitle}
+                  className="max-h-[68vh] w-auto max-w-full object-contain rounded-md shadow-xs"
+                />
+              )
+            ) : (
+              <p className="text-sm text-muted-foreground py-12">No se pudo mostrar el archivo.</p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {isAdmin && (
         <Card>
           <CardHeader>
@@ -457,14 +565,13 @@ export default function AsesorDetallePage() {
                     {path ? (
                       <div className="flex items-center gap-2 rounded-lg border bg-muted/20 px-3 py-2">
                         <FileText className="h-3.5 w-3.5 text-primary shrink-0" />
-                        <a
-                          href={`${STORAGE_BASE}/${path}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-xs text-primary underline underline-offset-2 hover:opacity-80 truncate flex-1"
+                        <button
+                          type="button"
+                          onClick={() => handleVerIne(slot, label)}
+                          className="text-xs text-primary underline underline-offset-2 hover:opacity-80 truncate flex-1 text-left cursor-pointer"
                         >
                           Ver {label.toLowerCase()}
-                        </a>
+                        </button>
                         <Button
                           size="icon"
                           variant="ghost"
