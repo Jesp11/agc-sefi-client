@@ -29,8 +29,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import {
-  numeroALetras,
-  desglosarFecha,
+  buildDocumentoAdeudoParams,
   generarPagareMarkdown,
   generarCartaAdeudoMarkdown,
   generarTarjetaCobroMarkdown,
@@ -59,11 +58,9 @@ export function DocumentoAdeudoDialog({
   defaultDoc = "pagare",
 }: DocumentoAdeudoDialogProps) {
   const [docType, setDocType] = useState<TipoDocumentoAdeudo>(defaultDoc);
-  const [usarSaldoPendiente, setUsarSaldoPendiente] = useState(true);
   const [copied, setCopied] = useState(false);
 
   // Form State
-  const [montoCustom, setMontoCustom] = useState<number>(0);
   const [nombreAcreedor, setNombreAcreedor] = useState("AGC SERVICIOS FINANCIEROS");
   const [domicilioPago, setDomicilioPago] = useState(
     "SEXTA PRIVADA NUM. 514, ZONA CENTRO DE LA CIUDAD DE TAMPICO, ESTADO DE TAMAULIPAS"
@@ -96,11 +93,6 @@ export function DocumentoAdeudoDialog({
 
   const [multaHorario, setMultaHorario] = useState("75");
   const [multaDia, setMultaDia] = useState("100");
-
-  const saldoActual = Number(
-    credito?.mora?.saldo_actual ?? credito?.saldo_pendiente ?? credito?.total ?? 0
-  );
-  const montoContratoTotal = Number(credito?.total ?? credito?.monto_otorgado ?? 0);
   const montoOtorgadoOriginal = Number(credito?.monto_otorgado ?? 0);
 
   // Initialize or reset form values when credito or defaultDoc changes
@@ -111,9 +103,6 @@ export function DocumentoAdeudoDialog({
     const refFam = referencias.find((r: any) => r.tipo_referencia === "Familiar") || referencias[0] || {};
     const refPer = referencias.find((r: any) => r.tipo_referencia !== "Familiar" && r.id !== refFam?.id) || referencias[1] || {};
 
-    const defaultAdeudo = saldoActual > 0 ? saldoActual : montoContratoTotal;
-
-    setMontoCustom(defaultAdeudo);
     setNombreAcreedor("AGC SERVICIOS FINANCIEROS");
     setDomicilioPago("SEXTA PRIVADA NUM. 514, ZONA CENTRO DE LA CIUDAD DE TAMPICO, ESTADO DE TAMAULIPAS");
     setTipoComprobante("COMAPA");
@@ -152,139 +141,82 @@ export function DocumentoAdeudoDialog({
     }
   }, [open, credito, defaultDoc]);
 
-  // Handle amount toggle (for Carta de Adeudo)
-  const handleToggleAmount = (isSaldo: boolean) => {
-    setUsarSaldoPendiente(isSaldo);
-    if (isSaldo) {
-      setMontoCustom(saldoActual > 0 ? saldoActual : montoContratoTotal);
-    } else {
-      setMontoCustom(montoContratoTotal > 0 ? montoContratoTotal : saldoActual);
-    }
-  };
-
-  const fechaOtorgacion = useMemo(() => {
-    return desglosarFecha(credito?.fecha_otorgacion);
-  }, [credito?.fecha_otorgacion]);
-
-  const fechaVencimiento = useMemo(() => {
-    if (!credito?.fecha_primer_pago || !credito?.plazos) return desglosarFecha(null);
-    const [y, m, d] = String(credito.fecha_primer_pago).split("-").map(Number);
-    if (!y || !m || !d) return desglosarFecha(null);
-    const date = new Date(y, m - 1, d);
-    date.setDate(date.getDate() + (Number(credito.plazos) - 1) * 7);
-    const iso = date.toISOString().split("T")[0];
-    return desglosarFecha(iso);
-  }, [credito?.fecha_primer_pago, credito?.plazos]);
-
-  const numProgPadded = String(credito?.num_prog || "001").padStart(3, "0");
-  const anioOtorgacion = fechaOtorgacion.anio || new Date().getFullYear().toString();
-  const noPagare = `${numProgPadded}/${anioOtorgacion}`;
-
-  // Build document parameters for Pagaré (FIXED TO ORIGINAL CONTRACT OBLIGATION)
   const paramsPagare: DocumentoAdeudoParams = useMemo(() => {
-    const montoFijo = montoContratoTotal > 0 ? montoContratoTotal : montoOtorgadoOriginal;
+    const base = buildDocumentoAdeudoParams(credito, {
+      usarSaldoPendiente: false,
+      nombreAcreedor,
+      domicilioPago,
+      nombreTestigo,
+      tipoComprobante,
+      tasaMoratoria,
+      lugarExpedicion,
+    });
     return {
-      noPagare,
-      monto: montoFijo,
-      montoLetras: numeroALetras(montoFijo),
-      lugarExpedicion: (lugarExpedicion || "TAMPICO, TAMPS.").toUpperCase().trim(),
-      fechaExpedicion: credito?.fecha_otorgacion || new Date().toISOString().split("T")[0],
-      fechaExpedicionLetras: fechaOtorgacion.texto,
-      nombreAcreedor: (nombreAcreedor || "_______________________________________________").toUpperCase().trim(),
-      domicilioPago: (domicilioPago || "SEXTA PRIVADA NUM. 514, ZONA CENTRO DE LA CIUDAD DE TAMPICO, ESTADO DE TAMAULIPAS").toUpperCase().trim(),
-      diaVencimiento: fechaVencimiento.dia,
-      mesVencimiento: fechaVencimiento.mes,
-      anioVencimiento: fechaVencimiento.anio,
-      fechaVencimientoLetras: fechaVencimiento.texto,
-      serieActual: "1",
-      serieTotal: "1",
-      tasaInteresMoratorio: (tasaMoratoria || "20%").trim(),
-      claveElector: (claveElector || "____________________").toUpperCase().trim(),
-      tipoComprobante: (tipoComprobante || "COMAPA").toUpperCase().trim(),
-      nombreCliente: (nombreCliente || "____________________________________").toUpperCase().trim(),
-      curp: (curp || "____________________").toUpperCase().trim(),
-      direccion: (direccion || "____________________________________").toUpperCase().trim(),
-      entreCalles: (entreCalles || "").toUpperCase().trim(),
-      colonia: "COLONIA REGISTRADA",
-      ciudadEstadoCp: (ciudadEstadoCp || "TAMPICO, TAMPS.").toUpperCase().trim(),
-      ciudadOrigen: (ciudadOrigen || "TAMPICO, TAMAULIPAS").toUpperCase().trim(),
-      telefono: telefono || "—",
-      nombreTestigo: (nombreTestigo || "____________________________________").toUpperCase().trim(),
+      ...base,
+      nombreCliente: (nombreCliente || base.nombreCliente).toUpperCase().trim(),
+      curp: (curp || base.curp).toUpperCase().trim(),
+      claveElector: (claveElector || base.claveElector).toUpperCase().trim(),
+      direccion: (direccion || base.direccion).toUpperCase().trim(),
+      entreCalles: (entreCalles || base.entreCalles).toUpperCase().trim(),
+      ciudadEstadoCp: (ciudadEstadoCp || base.ciudadEstadoCp).toUpperCase().trim(),
+      ciudadOrigen: (ciudadOrigen || base.ciudadOrigen).toUpperCase().trim(),
+      telefono: telefono || base.telefono,
     };
   }, [
-    noPagare,
-    montoContratoTotal,
-    montoOtorgadoOriginal,
-    lugarExpedicion,
-    credito?.fecha_otorgacion,
-    fechaOtorgacion.texto,
-    nombreAcreedor,
-    domicilioPago,
-    fechaVencimiento,
-    tasaMoratoria,
-    claveElector,
-    tipoComprobante,
+    credito,
     nombreCliente,
     curp,
+    claveElector,
     direccion,
     entreCalles,
     ciudadEstadoCp,
     ciudadOrigen,
     telefono,
+    nombreAcreedor,
+    domicilioPago,
     nombreTestigo,
+    tipoComprobante,
+    tasaMoratoria,
+    lugarExpedicion,
   ]);
 
-  // Build document parameters for Carta de Adeudo (REFLECTS CURRENT RECOGNIZED DEBT)
   const paramsCartaAdeudo: DocumentoAdeudoParams = useMemo(() => {
-    const montoVal = Number(montoCustom) || 0;
+    const base = buildDocumentoAdeudoParams(credito, {
+      usarSaldoPendiente: true,
+      nombreAcreedor,
+      domicilioPago,
+      nombreTestigo,
+      tipoComprobante,
+      tasaMoratoria,
+      lugarExpedicion,
+    });
     return {
-      noPagare,
-      monto: montoVal,
-      montoLetras: numeroALetras(montoVal),
-      lugarExpedicion: (lugarExpedicion || "TAMPICO, TAMPS.").toUpperCase().trim(),
-      fechaExpedicion: credito?.fecha_otorgacion || new Date().toISOString().split("T")[0],
-      fechaExpedicionLetras: fechaOtorgacion.texto,
-      nombreAcreedor: (nombreAcreedor || "_______________________________________________").toUpperCase().trim(),
-      domicilioPago: (domicilioPago || "SEXTA PRIVADA NUM. 514, ZONA CENTRO DE LA CIUDAD DE TAMPICO, ESTADO DE TAMAULIPAS").toUpperCase().trim(),
-      diaVencimiento: fechaVencimiento.dia,
-      mesVencimiento: fechaVencimiento.mes,
-      anioVencimiento: fechaVencimiento.anio,
-      fechaVencimientoLetras: fechaVencimiento.texto,
-      serieActual: "1",
-      serieTotal: "1",
-      tasaInteresMoratorio: (tasaMoratoria || "20%").trim(),
-      claveElector: (claveElector || "____________________").toUpperCase().trim(),
-      tipoComprobante: (tipoComprobante || "COMAPA").toUpperCase().trim(),
-      nombreCliente: (nombreCliente || "____________________________________").toUpperCase().trim(),
-      curp: (curp || "____________________").toUpperCase().trim(),
-      direccion: (direccion || "____________________________________").toUpperCase().trim(),
-      entreCalles: (entreCalles || "").toUpperCase().trim(),
-      colonia: "COLONIA REGISTRADA",
-      ciudadEstadoCp: (ciudadEstadoCp || "TAMPICO, TAMPS.").toUpperCase().trim(),
-      ciudadOrigen: (ciudadOrigen || "TAMPICO, TAMAULIPAS").toUpperCase().trim(),
-      telefono: telefono || "—",
-      nombreTestigo: (nombreTestigo || "____________________________________").toUpperCase().trim(),
+      ...base,
+      nombreCliente: (nombreCliente || base.nombreCliente).toUpperCase().trim(),
+      curp: (curp || base.curp).toUpperCase().trim(),
+      claveElector: (claveElector || base.claveElector).toUpperCase().trim(),
+      direccion: (direccion || base.direccion).toUpperCase().trim(),
+      entreCalles: (entreCalles || base.entreCalles).toUpperCase().trim(),
+      ciudadEstadoCp: (ciudadEstadoCp || base.ciudadEstadoCp).toUpperCase().trim(),
+      ciudadOrigen: (ciudadOrigen || base.ciudadOrigen).toUpperCase().trim(),
+      telefono: telefono || base.telefono,
     };
   }, [
-    noPagare,
-    montoCustom,
-    lugarExpedicion,
-    credito?.fecha_otorgacion,
-    fechaOtorgacion.texto,
-    nombreAcreedor,
-    domicilioPago,
-    fechaVencimiento,
-    tasaMoratoria,
-    claveElector,
-    tipoComprobante,
+    credito,
     nombreCliente,
     curp,
+    claveElector,
     direccion,
     entreCalles,
     ciudadEstadoCp,
     ciudadOrigen,
     telefono,
+    nombreAcreedor,
+    domicilioPago,
     nombreTestigo,
+    tipoComprobante,
+    tasaMoratoria,
+    lugarExpedicion,
   ]);
 
   // Build parameters for Tarjeta de Cobro (FIXED TO ORIGINAL PLAN)
@@ -477,47 +409,11 @@ export function DocumentoAdeudoDialog({
             ) : docType === "carta_adeudo" ? (
               <div className="space-y-3 p-3.5 rounded-xl border bg-background/80 shadow-xs">
                 <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                  <DollarSign className="h-3.5 w-3.5 text-primary" /> Adeudo Reconocido en la Carta
+                  <DollarSign className="h-3.5 w-3.5 text-primary" /> Carta de adeudo sin monto visible
                 </Label>
-                <div className="grid grid-cols-2 gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={usarSaldoPendiente ? "default" : "outline"}
-                    className="h-9 text-xs flex flex-col items-center justify-center p-1 leading-tight font-medium"
-                    onClick={() => handleToggleAmount(true)}
-                  >
-                    <span>Saldo Pendiente Actual</span>
-                    <span className="font-bold text-[11px]">${saldoActual.toLocaleString()}</span>
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={!usarSaldoPendiente ? "default" : "outline"}
-                    className="h-9 text-xs flex flex-col items-center justify-center p-1 leading-tight font-medium"
-                    onClick={() => handleToggleAmount(false)}
-                  >
-                    <span>Total Contrato</span>
-                    <span className="font-bold text-[11px]">${montoContratoTotal.toLocaleString()}</span>
-                  </Button>
-                </div>
-
-                <div className="pt-1">
-                  <Label htmlFor="montoCustom" className="text-[11px] text-muted-foreground">
-                    Monto de Adeudo Reconocido ($)
-                  </Label>
-                  <Input
-                    id="montoCustom"
-                    type="number"
-                    value={montoCustom || ""}
-                    onChange={(e) => setMontoCustom(Number(e.target.value))}
-                    className="h-9 text-sm font-semibold mt-1"
-                    placeholder="0.00"
-                  />
-                  <p className="text-[10px] text-muted-foreground mt-1 font-mono uppercase truncate">
-                    {numeroALetras(montoCustom)}
-                  </p>
-                </div>
+                <p className="text-xs text-muted-foreground">
+                  La cantidad quedó eliminada del formato final. La vista previa y la impresión usan la misma plantilla legal sin selector saldo/total.
+                </p>
               </div>
             ) : (
               <div className="p-3.5 rounded-xl border bg-emerald-500/5 border-emerald-500/20 space-y-1.5">
@@ -912,6 +808,24 @@ export function DocumentoAdeudoDialog({
                       </div>
                     </div>
                   </div>
+
+                  {paramsPagare.nombreAval && (
+                    <div className="border-t border-dashed border-zinc-400 pt-5 text-xs space-y-1">
+                      <div className="font-bold text-sm uppercase tracking-wider">Datos del Aval:</div>
+                      <p><strong>NOMBRE:</strong> {paramsPagare.nombreAval}</p>
+                      <p><strong>DIRECCIÓN:</strong> {paramsPagare.direccionAval}</p>
+                      <p><strong>TELÉFONO:</strong> {paramsPagare.telefonoAval}</p>
+                      <p className="font-semibold pt-2">{paramsPagare.aceptacionAval}</p>
+                      <div className="pt-8 max-w-sm mx-auto flex flex-col items-center justify-center text-center">
+                        <div className="w-full border-t-2 border-zinc-900 pt-2 font-bold text-xs text-center">
+                          {paramsPagare.nombreAval}
+                        </div>
+                        <div className="text-[10px] text-zinc-500 uppercase tracking-widest mt-0.5 text-center">
+                          FIRMA DEL AVAL
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -933,12 +847,7 @@ export function DocumentoAdeudoDialog({
                     {paramsCartaAdeudo.entreCalles ? `, ENTRE ${paramsCartaAdeudo.entreCalles}` : ""}, RECONOZCO EL ADEUDO
                     CONTRAIDO CON EL SR. (A) <strong>{paramsCartaAdeudo.nombreAcreedor}</strong>, AMPARADO EN EL
                     PAGARE <strong>{paramsCartaAdeudo.serieActual} DE {paramsCartaAdeudo.serieTotal}</strong> DE FECHA{" "}
-                    <strong>{paramsCartaAdeudo.fechaExpedicionLetras}</strong>, POR LA CANTIDAD DE{" "}
-                    <strong>
-                      ${Number(paramsCartaAdeudo.monto).toLocaleString("es-MX", { minimumFractionDigits: 2 })} (
-                      {paramsCartaAdeudo.montoLetras})
-                    </strong>
-                    , BAJO LAS CONDICIONES QUE INDICA REFERIDO PAGARE.
+                    <strong>{paramsCartaAdeudo.fechaExpedicionLetras}</strong>, BAJO LAS CONDICIONES QUE INDICA REFERIDO PAGARE.
                   </div>
 
                   <div className="text-justify text-sm leading-relaxed">
@@ -1071,6 +980,20 @@ export function DocumentoAdeudoDialog({
                       {paramsTarjeta.refPerDireccion}
                     </div>
 
+                    <div className="grid grid-cols-12 border-b border-zinc-900">
+                      <div className="col-span-4 bg-zinc-100 font-bold p-1 border-r border-zinc-900">OCUPACION:</div>
+                      <div className="col-span-4 p-1 border-r border-zinc-900">{paramsTarjeta.ocupacionLaboral}</div>
+                      <div className="col-span-2 bg-zinc-100 font-bold p-1 border-r border-zinc-900">TEL. TRABAJO:</div>
+                      <div className="col-span-2 p-1">{paramsTarjeta.telefonoTrabajo}</div>
+                    </div>
+                    <div className="grid grid-cols-12 border-b border-zinc-900">
+                      <div className="col-span-3 bg-zinc-100 font-bold p-1 border-r border-zinc-900">EMPRESA:</div>
+                      <div className="col-span-9 p-1">{paramsTarjeta.empresaTrabajo}</div>
+                    </div>
+                    <div className="grid grid-cols-12 border-b border-zinc-900">
+                      <div className="col-span-3 bg-zinc-100 font-bold p-1 border-r border-zinc-900">DIR. TRABAJO:</div>
+                      <div className="col-span-9 p-1">{paramsTarjeta.direccionTrabajo}</div>
+                    </div>
                     <div className="grid grid-cols-12">
                       <div className="col-span-3 bg-zinc-100 font-bold p-1 border-r border-zinc-900">ASESOR:</div>
                       <div className="col-span-9 font-bold p-1">{paramsTarjeta.nombreAsesor}</div>

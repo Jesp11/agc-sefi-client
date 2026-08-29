@@ -32,6 +32,10 @@ export interface DocumentoAdeudoParams {
   ciudadOrigen: string;
   telefono: string;
   nombreTestigo: string;
+  nombreAval?: string;
+  direccionAval?: string;
+  telefonoAval?: string;
+  aceptacionAval?: string;
 }
 
 export interface TarjetaCobroItem {
@@ -66,6 +70,10 @@ export interface TarjetaCobroParams {
   refPerCel: string;
   refPerDireccion: string;
   nombreAsesor: string;
+  ocupacionLaboral: string;
+  empresaTrabajo: string;
+  direccionTrabajo: string;
+  telefonoTrabajo: string;
   multaHorario: number | string;
   multaDia: number | string;
   horaLimitePago: string;
@@ -226,6 +234,86 @@ export function desglosarFecha(dateStr?: string | null): { dia: string; mes: str
 }
 
 /**
+ * Factores de catálogo oficial de préstamos grupales e individuales
+ */
+export const GROUP_RATES_TABLE: Record<string, Record<number, number>> = {
+  TCGN10: { 14: 100.0, 16: 94.0, 18: 88.0 },
+  TCGP07: { 14: 97.0, 16: 91.0, 18: 85.0 },
+  TCGPE04: { 14: 94.0, 16: 88.0, 18: 82.0 },
+  TCGPEV01: { 14: 91.0, 16: 85.0, 18: 79.0 },
+  TCGEC00: { 14: 88.0, 16: 80.0, 18: 76.0 },
+};
+
+export const INDIVIDUAL_RATES_TABLE: Record<string, Record<number, number>> = {
+  TCIN21: { 12: 121.0, 14: 109.0, 16: 100.0 },
+  TCIP18: { 12: 118.0, 14: 106.0, 16: 97.0 },
+  TCIPE14: { 12: 115.0, 14: 103.0, 16: 94.0 },
+  TCIPV10: { 12: 112.0, 14: 100.0, 16: 91.0 },
+};
+
+/**
+ * Resuelve la tasa del crédito asegurando que si proviene del catálogo oficial se muestre su clave
+ * (ej. TCGPE04, TCGN10, TCIN21) o un porcentaje de interés formateado limpiamente sin desbordes.
+ */
+export function resolverTasaCredito(credito: any, tipo: "individual" | "grupal" = "individual"): string {
+  if (!credito) return tipo === "grupal" ? "TCGN10" : "TCIN21";
+
+  // 1. Si ya tiene asignada una clave de catálogo explícita
+  const tasaDirecta = String(credito.tasa_asignada || credito.tasa || "").trim();
+  if (tasaDirecta && tasaDirecta !== "null" && tasaDirecta !== "undefined" && tasaDirecta !== "—") {
+    return tasaDirecta.toUpperCase();
+  }
+
+  // 2. Intentar deducir la clave del catálogo oficial según plazos y factor por cada $1,000 autorizados
+  const monto = Number(credito.monto_otorgado || credito.monto || credito.credito_total_grupal || 0);
+  const valorFicha = Number(credito.valor_ficha || 0);
+  const plazos = Number(credito.plazos || 0);
+
+  if (monto > 0 && valorFicha > 0 && plazos > 0) {
+    const factorPorMil = valorFicha / (monto / 1000);
+    const table = tipo === "grupal" ? GROUP_RATES_TABLE : INDIVIDUAL_RATES_TABLE;
+
+    let bestMatchKey: string | null = null;
+    let minDiff = 0.6; // Margen de tolerancia de 60 centavos por cada $1,000 para absorber redondeos
+
+    for (const [key, plazoMap] of Object.entries(table)) {
+      if (plazoMap[plazos] !== undefined) {
+        const diff = Math.abs(plazoMap[plazos] - factorPorMil);
+        if (diff < minDiff) {
+          minDiff = diff;
+          bestMatchKey = key;
+        }
+      }
+    }
+
+    if (bestMatchKey) {
+      return bestMatchKey;
+    }
+  }
+
+  // 3. Formatear porcentaje de interés evitando multiplicar valores que ya vienen como porcentaje
+  const rawPct = credito.porcentaje_interes != null && credito.porcentaje_interes !== ""
+    ? Number(credito.porcentaje_interes)
+    : null;
+
+  if (rawPct != null && !isNaN(rawPct) && rawPct > 0) {
+    const pct = rawPct <= 1 ? rawPct * 100 : rawPct;
+    const clean = parseFloat(pct.toFixed(2));
+    return `TASA ${clean}%`;
+  }
+
+  // 4. Si hay interés total y monto otorgado
+  const interesTotal = Number(credito.interes || 0);
+  if (monto > 0 && interesTotal > 0) {
+    const calcPct = (interesTotal / monto) * 100;
+    const clean = parseFloat(calcPct.toFixed(2));
+    return `TASA ${clean}%`;
+  }
+
+  return tipo === "grupal" ? "TCGN10" : "TCIN21";
+}
+
+/**
  * Extrae y normaliza los parámetros para generar los documentos Pagaré / Carta de Adeudo.
  */
 export function buildDocumentoAdeudoParams(
@@ -255,7 +343,7 @@ export function buildDocumentoAdeudoParams(
     return desglosarFecha(iso);
   };
 
-  const fechaVenc = calcFechaVencimiento();
+  const fechaVenc = opciones?.usarSaldoPendiente ? calcFechaVencimiento() : fechaOtorgacion;
 
   const saldoActual = Number(mora.saldo_actual ?? credito?.saldo_pendiente ?? credito?.total ?? 0);
   const montoTotal = Number(credito?.total ?? credito?.monto_otorgado ?? 0);
@@ -266,7 +354,8 @@ export function buildDocumentoAdeudoParams(
   const noPagare = `${numProgPadded}/${anioOtorgacion}`;
 
   // Testigo por defecto: aval registrado o asesor
-  const avalRegistrado = cliente?.avales && cliente.avales.length > 0 ? cliente.avales[0].nombre : null;
+  const aval = cliente?.avales?.[0] || {};
+  const avalRegistrado = aval?.nombre || null;
   const testigoDefault = opciones?.nombreTestigo || avalRegistrado || credito?.asesor?.nombre_asesor || "_____________________________";
 
   return {
@@ -296,6 +385,12 @@ export function buildDocumentoAdeudoParams(
     ciudadOrigen: "TAMPICO, TAMAULIPAS",
     telefono: cliente?.telefono || "—",
     nombreTestigo: testigoDefault.toUpperCase(),
+    nombreAval: (aval?.nombre || "").toUpperCase(),
+    direccionAval: (aval?.direccion || "—").toUpperCase(),
+    telefonoAval: aval?.telefono || "—",
+    aceptacionAval: avalRegistrado
+      ? "ACEPTO EXPRESAMENTE EL CARÁCTER DE AVAL, MANIFESTANDO MI PLENA VOLUNTAD Y SIN PRESIÓN ALGUNA, OBLIGÁNDOME SOLIDARIAMENTE AL PAGO DE ESTE PAGARÉ."
+      : "",
   };
 }
 
@@ -334,6 +429,26 @@ SE RECIBE COMO IDENTIFICACION OFICIAL COPIA DE SU IDENTIFICACION INE CON CLAVE E
 ____________________________________________________  
 **${p.nombreCliente}**  
 **FIRMA**
+${p.nombreAval ? `
+
+---
+
+### DATOS DEL AVAL:
+
+**NOMBRE:** ${p.nombreAval}  
+**DIRECCIÓN:** ${p.direccionAval}  
+**TELEFONO:** ${p.telefonoAval}  
+
+**${p.aceptacionAval}**
+
+&nbsp;  
+<div align="center">
+
+____________________________________________________  
+**${p.nombreAval}**  
+**FIRMA DEL AVAL**
+
+</div>` : ""}
 `;
 }
 
@@ -341,14 +456,11 @@ ____________________________________________________
  * Genera la Carta de Adeudo en formato Markdown.
  */
 export function generarCartaAdeudoMarkdown(p: DocumentoAdeudoParams): string {
-  const montoFormat = Number(p.monto).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const montoLetras = p.montoLetras || numeroALetras(p.monto);
-
   return `# C A R T A &nbsp;&nbsp; A D E U D O
 
 **A QUIEN CORRESPONDA:**
 
-…..EL (LA) QUE SUSCRIBE **${p.nombreCliente}**, ORIGINARIO (A) DE CIUDAD DE **${p.ciudadOrigen}**, CON DOMICILIO PARTICULAR EN **${p.direccion}**${p.entreCalles ? `, ENTRE ${p.entreCalles}` : ""}, RECONOZCO EL ADEUDO CONTRAIDO CON EL SR. (A) **${p.nombreAcreedor}**, AMPARADO EN EL PAGARE **${p.serieActual} DE ${p.serieTotal}** DE FECHA **${p.fechaExpedicionLetras}**, POR LA CANTIDAD DE **$ ${montoFormat} (${montoLetras})**, BAJO LAS CONDICIONES QUE INDICA REFERIDO PAGARE.
+…..EL (LA) QUE SUSCRIBE **${p.nombreCliente}**, ORIGINARIO (A) DE CIUDAD DE **${p.ciudadOrigen}**, CON DOMICILIO PARTICULAR EN **${p.direccion}**${p.entreCalles ? `, ENTRE ${p.entreCalles}` : ""}, RECONOZCO EL ADEUDO CONTRAIDO CON EL SR. (A) **${p.nombreAcreedor}**, AMPARADO EN EL PAGARE **${p.serieActual} DE ${p.serieTotal}** DE FECHA **${p.fechaExpedicionLetras}**, BAJO LAS CONDICIONES QUE INDICA REFERIDO PAGARE.
 
 PRESTAMO QUE FUE OTORGADO Y RECIBIDO A LA VEZ SIN FINES DE LUCRO, Y COMO APOYO PERSONAL EN FORMA DE CONFIANZA AMISTOSA.
 
@@ -414,6 +526,7 @@ export function generarCalendarioTarjetaCobro(
 export function buildTarjetaCobroParams(credito: any, overrides?: Partial<TarjetaCobroParams>): TarjetaCobroParams {
   const cliente = credito?.cliente || {};
   const referencias = cliente?.referencias || [];
+  const avalPrincipal = cliente?.avales?.[0] || {};
   const refFam = referencias.find((r: any) => r.tipo_referencia === "Familiar") || referencias[0] || {};
   const refPer = referencias.find((r: any) => r.tipo_referencia !== "Familiar" && r.id !== refFam?.id) || referencias[1] || {};
 
@@ -451,7 +564,7 @@ export function buildTarjetaCobroParams(credito: any, overrides?: Partial<Tarjet
     cicloAnterior: cicloAnterior,
     fechaInicio: fechaInicioDesc.texto,
     fechaTermino: fechaTerminoStr,
-    tasa: credito?.tasa_asignada || `TASA ${(credito?.porcentaje_interes ? Number(credito.porcentaje_interes) * 100 : 20)}%`,
+    tasa: resolverTasaCredito(credito, "individual"),
     montoOtorgado: montoOtorgado,
     plazoSemanas: plazos,
     valorFicha: valorFicha,
@@ -464,6 +577,10 @@ export function buildTarjetaCobroParams(credito: any, overrides?: Partial<Tarjet
     refPerCel: refPer?.telefono || "—",
     refPerDireccion: (refPer?.direccion || "—").toUpperCase(),
     nombreAsesor: (credito?.asesor?.nombre_asesor || "—").toUpperCase(),
+    ocupacionLaboral: (cliente?.ocupacion || "—").toUpperCase(),
+    empresaTrabajo: (cliente?.empresa_trabajo || avalPrincipal?.empresa || "—").toUpperCase(),
+    direccionTrabajo: (cliente?.direccion_trabajo || avalPrincipal?.direccion || "—").toUpperCase(),
+    telefonoTrabajo: cliente?.telefono_trabajo || "—",
     multaHorario: 75,
     multaDia: 100,
     horaLimitePago: "15:00",
@@ -506,6 +623,8 @@ export function generarTarjetaCobroMarkdown(p: TarjetaCobroParams): string {
 | :--- | :--- | :--- | :--- |
 | **REF. FAM. (${p.refFamParentesco})** | ${p.refFamNombre} | ${p.refFamCel} | ${p.refFamDireccion} |
 | **REF. (${p.refPerTipo})** | ${p.refPerNombre} | ${p.refPerCel} | ${p.refPerDireccion} |
+| **OCUPACION:** ${p.ocupacionLaboral} | **TEL. TRABAJO:** ${p.telefonoTrabajo} | **EMPRESA:** ${p.empresaTrabajo} |
+| **DIRECCION TRABAJO:** ${p.direccionTrabajo} |  |  |
 
 **ASESOR:** ${p.nombreAsesor}
 
@@ -544,6 +663,7 @@ _________________________________________
  */
 export function generarTarjetaCobroHtml(p: TarjetaCobroParams): string {
   const montoFormat = Number(p.montoOtorgado).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const watermark = "/logo.png";
 
   const rowsHtml = p.pagos.map((item) => {
     return `<tr>
@@ -578,9 +698,33 @@ export function generarTarjetaCobroHtml(p: TarjetaCobroParams): string {
       font-size: 8.5pt;
       line-height: 1.25;
     }
+    .page {
+      position: relative;
+      min-height: 100%;
+      page-break-after: always;
+    }
+    .page:last-child {
+      page-break-after: auto;
+    }
+    .watermark {
+      position: absolute;
+      inset: 18% 10%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0.12;
+      pointer-events: none;
+      z-index: 0;
+    }
+    .watermark img {
+      width: 72%;
+      height: auto;
+    }
     .container {
       width: 100%;
       max-width: 100%;
+      position: relative;
+      z-index: 1;
     }
     .header-box {
       text-align: center;
@@ -655,7 +799,9 @@ export function generarTarjetaCobroHtml(p: TarjetaCobroParams): string {
   </style>
 </head>
 <body>
-  <div class="container">
+  <div class="page">
+    <div class="watermark"><img src="${watermark}" alt=""></div>
+    <div class="container">
     <div class="header-box">
       <div class="header-title-main">${p.empresa}</div>
       <div class="header-subtitle">${p.subtitulo}</div>
@@ -721,6 +867,20 @@ export function generarTarjetaCobroHtml(p: TarjetaCobroParams): string {
         <td colspan="4" style="font-size: 7pt; color: #333;">${p.refPerDireccion}</td>
       </tr>
       <tr>
+        <td class="font-bold bg-gray">OCUPACION:</td>
+        <td>${p.ocupacionLaboral}</td>
+        <td class="font-bold bg-gray">TEL. TRABAJO:</td>
+        <td>${p.telefonoTrabajo}</td>
+      </tr>
+      <tr>
+        <td class="font-bold bg-gray">EMPRESA:</td>
+        <td colspan="3">${p.empresaTrabajo}</td>
+      </tr>
+      <tr>
+        <td class="font-bold bg-gray">DIR. TRABAJO:</td>
+        <td colspan="3">${p.direccionTrabajo}</td>
+      </tr>
+      <tr>
         <td class="font-bold bg-gray">ASESOR:</td>
         <td colspan="3" class="font-bold">${p.nombreAsesor}</td>
       </tr>
@@ -771,6 +931,7 @@ export function generarTarjetaCobroHtml(p: TarjetaCobroParams): string {
         <div><strong>2.- DOS RETRASOS:</strong> Con derecho a renovar al término de ciclo, sin aumento de crédito.</div>
         <div><strong>3.- TRES RETRASOS:</strong> Pierde derecho a renovación, quedando suspendido durante dos ciclos.</div>
       </div>
+    </div>
     </div>
   </div>
 </body>
@@ -891,6 +1052,39 @@ export function generarPagareHtml(p: DocumentoAdeudoParams): string {
       letter-spacing: 2px;
       color: #333;
     }
+    .aval-block {
+      margin-top: 26px;
+      padding-top: 16px;
+      border-top: 1px dashed #444;
+    }
+    .aval-note {
+      margin: 10px 0 18px 0;
+      font-weight: bold;
+    }
+    .aval-signature-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      margin: 25px auto 5px auto;
+      max-width: 320px;
+      text-align: center;
+    }
+    .aval-signature-container .signature-line {
+      width: 100%;
+      border-top: 1.5px solid #000;
+      margin-top: 30px;
+      padding-top: 6px;
+      font-weight: bold;
+      font-size: 10.5pt;
+      text-align: center;
+    }
+    .aval-signature-container .signature-subtitle {
+      font-size: 9.5pt;
+      letter-spacing: 2px;
+      color: #333;
+      text-align: center;
+    }
   </style>
 </head>
 <body>
@@ -939,6 +1133,18 @@ export function generarPagareHtml(p: DocumentoAdeudoParams): string {
         </div>
       </div>
     </div>
+    ${p.nombreAval ? `
+    <div class="aval-block">
+      <div class="debtor-info-title">DATOS DEL AVAL:</div>
+      <div><strong>NOMBRE:</strong> ${p.nombreAval}</div>
+      <div><strong>DIRECCIÓN:</strong> ${p.direccionAval}</div>
+      <div><strong>TELÉFONO:</strong> ${p.telefonoAval}</div>
+      <div class="aval-note">${p.aceptacionAval}</div>
+      <div class="aval-signature-container">
+        <div class="signature-line">${p.nombreAval}</div>
+        <div class="signature-subtitle">FIRMA DEL AVAL</div>
+      </div>
+    </div>` : ""}
   </div>
 </body>
 </html>`;
@@ -948,9 +1154,6 @@ export function generarPagareHtml(p: DocumentoAdeudoParams): string {
  * Genera el HTML formateado e imprimible (formato Carta/Letter con alta resolución) para la Carta de Adeudo.
  */
 export function generarCartaAdeudoHtml(p: DocumentoAdeudoParams): string {
-  const montoFormat = Number(p.monto).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const montoLetras = p.montoLetras || numeroALetras(p.monto);
-
   return `<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -1050,7 +1253,7 @@ export function generarCartaAdeudoHtml(p: DocumentoAdeudoParams): string {
     <div class="recipient">A QUIEN CORRESPONDA:</div>
 
     <div class="body-paragraph">
-      …..EL (LA) QUE SUSCRIBE <strong>${p.nombreCliente}</strong>, ORIGINARIO (A) DE CIUDAD DE <strong>${p.ciudadOrigen}</strong>, CON DOMICILIO PARTICULAR EN <strong>${p.direccion}</strong>${p.entreCalles ? `, ENTRE ${p.entreCalles}` : ""}, RECONOZCO EL ADEUDO CONTRAIDO CON EL SR. (A) <strong>${p.nombreAcreedor}</strong>, AMPARADO EN EL PAGARE <strong>${p.serieActual} DE ${p.serieTotal}</strong> DE FECHA <strong>${p.fechaExpedicionLetras}</strong>, POR LA CANTIDAD DE <strong>$ ${montoFormat} (${montoLetras})</strong>, BAJO LAS CONDICIONES QUE INDICA REFERIDO PAGARE.
+      …..EL (LA) QUE SUSCRIBE <strong>${p.nombreCliente}</strong>, ORIGINARIO (A) DE CIUDAD DE <strong>${p.ciudadOrigen}</strong>, CON DOMICILIO PARTICULAR EN <strong>${p.direccion}</strong>${p.entreCalles ? `, ENTRE ${p.entreCalles}` : ""}, RECONOZCO EL ADEUDO CONTRAIDO CON EL SR. (A) <strong>${p.nombreAcreedor}</strong>, AMPARADO EN EL PAGARE <strong>${p.serieActual} DE ${p.serieTotal}</strong> DE FECHA <strong>${p.fechaExpedicionLetras}</strong>, BAJO LAS CONDICIONES QUE INDICA REFERIDO PAGARE.
     </div>
 
     <div class="body-paragraph-plain">

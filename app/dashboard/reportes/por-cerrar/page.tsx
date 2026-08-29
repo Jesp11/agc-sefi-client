@@ -35,7 +35,7 @@ export default function ReportePorCerrarPage() {
     <div className="space-y-6">
       <h1 className="text-3xl font-bold">Clientes por Cerrar</h1>
       <p className="text-muted-foreground">
-        Créditos que liquidan con su próximo abono y la fecha programada de ese pago.
+        Créditos con entre 1 y 6 pagos restantes calculados desde el calendario amortizado.
       </p>
       <TableSearch placeholder="Buscar..." value={search} onChange={handleSearch} />
       <Card>
@@ -45,6 +45,7 @@ export default function ReportePorCerrarPage() {
               <TableHead>Folio</TableHead>
               <TableHead>Beneficiario</TableHead>
               <TableHead className="text-right">Último abono</TableHead>
+              <TableHead className="text-center">Pagos restantes</TableHead>
               <TableHead>Día del abono</TableHead>
               <TableHead>Estado</TableHead>
             </TableRow>
@@ -52,13 +53,13 @@ export default function ReportePorCerrarPage() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
                   Cargando...
                 </TableCell>
               </TableRow>
             ) : filtered.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center text-muted-foreground">
+                <TableCell colSpan={6} className="text-center text-muted-foreground">
                   {search ? "No se encontraron resultados." : "No hay clientes por cerrar."}
                 </TableCell>
               </TableRow>
@@ -76,6 +77,9 @@ export default function ReportePorCerrarPage() {
                   <TableCell>{c.cliente?.nombre_completo || c.grupo?.nombre_grupo}</TableCell>
                   <TableCell className="text-right font-semibold">
                     ${Number(c.monto_ultimo_abono ?? 0).toLocaleString()}
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <Badge variant="outline">{c.pagos_restantes}</Badge>
                   </TableCell>
                   <TableCell>{fmtFecha(c.fecha_ultimo_abono)}</TableCell>
                   <TableCell>

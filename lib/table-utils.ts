@@ -129,6 +129,7 @@ export const asesorSearchFields = (a: any) => [
   a.id_asesor,
   a.id,
   a.nombre_asesor,
+  a.rol_laboral,
   a.telefono,
   a.curp,
   a.user?.email,
@@ -155,6 +156,7 @@ export const referenciaSearchFields = (r: any) => [
 export const gastoSearchFields = (g: any) => [
   g.concepto,
   g.categoria,
+  g.cuenta,
   g.monto,
   g.fecha,
 ];
@@ -167,6 +169,8 @@ export const nominaSearchFields = (p: any) => [
 
 export const inversionistaSearchFields = (i: any) => [
   i.nombre,
+  i.tipo_entidad,
+  i.origen_fondeo,
   i.contacto,
   i.telefono,
   i.email,

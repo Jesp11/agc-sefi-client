@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/context/auth-context";
+import { isAdminRoleName } from "@/lib/authz";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -33,7 +34,7 @@ export default function ClienteDetallePage() {
   const { id } = useParams();
   const router = useRouter();
   const { user } = useAuth();
-  const isAdmin = user?.role?.nombre === "admin";
+  const isAdmin = isAdminRoleName(user?.role?.nombre);
   const [cliente, setCliente] = useState<any>(null);
   const [documentos, setDocumentos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);

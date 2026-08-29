@@ -27,10 +27,12 @@ import { RegistrarPagoDialog } from "@/components/registrar-pago-dialog";
 import { RefinanciarCreditoDialog } from "@/components/refinanciar-credito-dialog";
 import { DocumentoAdeudoDialog, type TipoDocumentoAdeudo } from "@/components/documento-adeudo-dialog";
 import { ExpedienteCreditoCard } from "@/components/expediente-credito-card";
+import { GrupoDocumentoDialog } from "@/components/grupo-documento-dialog";
 import { TablePagination, TableSearch } from "@/components/table-controls";
 import { PAGE_SIZE, filterBySearch, paginateItems, useTableControls } from "@/hooks/use-paginated-list";
 import { marcarEstadoCuotas, totalAbonadoFromPagos } from "@/lib/table-utils";
 import { useAuth } from "@/context/auth-context";
+import { isAdminRoleName } from "@/lib/authz";
 
 const getDiaSemana = (dateStr: string) => {
   if (!dateStr) return "";
@@ -74,12 +76,13 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
   const id = resolvedParams.id;
   const router = useRouter();
   const { user } = useAuth();
-  const isAdmin = user?.role?.nombre === "admin";
+  const isAdmin = isAdminRoleName(user?.role?.nombre);
   const [credito, setCredito] = useState<any>(null);
   const [pagos, setPagos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [docAdeudoOpen, setDocAdeudoOpen] = useState(false);
   const [docAdeudoTipo, setDocAdeudoTipo] = useState<TipoDocumentoAdeudo>("pagare");
+  const [grupoDocOpen, setGrupoDocOpen] = useState(false);
   const scheduleControls = useTableControls();
   const pagosControls = useTableControls();
 
@@ -252,6 +255,17 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+          )}
+          {credito.tipo_credito === "Grupal" && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 gap-1.5 font-semibold text-xs"
+              onClick={() => setGrupoDocOpen(true)}
+            >
+              <FileText className="h-4 w-4 text-primary" />
+              Tarjeta de Cobro Grupal
+            </Button>
           )}
           {isAdmin && ["Activo", "EnMora"].includes(credito.estado) && saldoActual > 0 && (
             <RefinanciarCreditoDialog
@@ -633,6 +647,13 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
           open={docAdeudoOpen}
           onOpenChange={setDocAdeudoOpen}
           defaultDoc={docAdeudoTipo}
+        />
+      )}
+      {credito.tipo_credito === "Grupal" && (
+        <GrupoDocumentoDialog
+          credito={credito}
+          open={grupoDocOpen}
+          onOpenChange={setGrupoDocOpen}
         />
       )}
     </div>

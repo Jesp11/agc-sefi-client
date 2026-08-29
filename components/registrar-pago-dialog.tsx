@@ -14,6 +14,8 @@ import {
 } from "@/components/ui/dialog";
 import { ClipboardCheck } from "lucide-react";
 import { toast } from "sonner";
+import { useAuth } from "@/context/auth-context";
+import { isFieldRoleName } from "@/lib/authz";
 import {
   PrintTicket,
   buildPagoTicketProps,
@@ -63,10 +65,13 @@ export function RegistrarPagoDialog({
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [ticket, setTicket] = useState<PagoTicketData | null>(null);
+  const { user } = useAuth();
+  const isGestor = isFieldRoleName(user?.role?.nombre);
 
   const buildForm = () => ({
     monto: montoAbonoSugerido(valorFicha, saldoPendiente),
     monto_multa: "",
+    ahorro_personal_monto: "",
     fecha: new Date().toISOString().split("T")[0],
     hora: nowTime(),
     metodo_pago: "Efectivo",
@@ -78,8 +83,9 @@ export function RegistrarPagoDialog({
   const total = useMemo(() => {
     const abono = parseFloat(form.monto) || 0;
     const multa = parseFloat(form.monto_multa) || 0;
-    return abono + multa;
-  }, [form.monto, form.monto_multa]);
+    const ahorro = parseFloat(form.ahorro_personal_monto) || 0;
+    return abono + multa + ahorro;
+  }, [form.monto, form.monto_multa, form.ahorro_personal_monto]);
 
   const handleClose = (next: boolean) => {
     if (!next) {
@@ -104,8 +110,14 @@ export function RegistrarPagoDialog({
 
     const multaRaw = form.monto_multa.trim();
     const multa = multaRaw === "" ? 0 : parseFloat(multaRaw);
+    const ahorroRaw = form.ahorro_personal_monto.trim();
+    const ahorroPersonalMonto = ahorroRaw === "" ? 0 : parseFloat(ahorroRaw);
     if (multaRaw !== "" && (!Number.isFinite(multa) || multa < 0)) {
       toast.error("Indica un monto de multa válido");
+      return;
+    }
+    if (!isGestor && ahorroRaw !== "" && (!Number.isFinite(ahorroPersonalMonto) || ahorroPersonalMonto < 0)) {
+      toast.error("Indica un monto de ahorro válido");
       return;
     }
 
@@ -126,6 +138,9 @@ export function RegistrarPagoDialog({
       };
       if (multa > 0) {
         payload.monto_multa = multa;
+      }
+      if (!isGestor && ahorroPersonalMonto > 0) {
+        payload.ahorro_personal_monto = ahorroPersonalMonto;
       }
 
       const res = await apiFetch(`/creditos/${numProg}/pagos`, {
@@ -193,6 +208,22 @@ export function RegistrarPagoDialog({
                   Cerrar
                 </Button>
               </div>
+
+              {!isGestor && (
+                <div className="grid gap-2">
+                  <Label>
+                    Ahorro personal <span className="text-muted-foreground font-normal">(opcional)</span>
+                  </Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="0.00"
+                    value={form.ahorro_personal_monto}
+                    onChange={(e) => setForm({ ...form, ahorro_personal_monto: e.target.value })}
+                  />
+                </div>
+              )}
               <PrintTicket
                 {...ticketProps}
                 visible

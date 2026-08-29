@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/context/auth-context";
+import { isFieldRoleName } from "@/lib/authz";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -49,7 +50,7 @@ function labelDia(dia: string) {
 export default function ReporteDiarioPage() {
   const router = useRouter();
   const { user, isAdmin, loading: authLoading } = useAuth();
-  const isAsesor = user?.role?.nombre === "asesor";
+  const isAsesor = isFieldRoleName(user?.role?.nombre);
   const [fecha, setFecha] = useState(() => new Date().toISOString().split("T")[0]);
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);

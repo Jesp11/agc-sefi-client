@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/context/auth-context";
+import { isFieldRoleName } from "@/lib/authz";
 import { Card } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -14,7 +15,7 @@ import { creditoSearchFields } from "@/lib/table-utils";
 export default function ReporteAsesorMoraPage() {
   const router = useRouter();
   const { user } = useAuth();
-  const isAsesor = user?.role?.nombre === "asesor";
+  const isAsesor = isFieldRoleName(user?.role?.nombre);
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const { search, handleSearch, page, setPage } = useTableControls();

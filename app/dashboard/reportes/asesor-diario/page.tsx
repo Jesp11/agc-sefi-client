@@ -4,15 +4,20 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/context/auth-context";
+import { isFieldRoleName } from "@/lib/authz";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PrintTicket } from "@/components/print-ticket";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { fetchAllPages } from "@/lib/table-utils";
 
 export default function ReporteAsesorDiarioPage() {
   const router = useRouter();
   const { user } = useAuth();
-  const isAsesor = user?.role?.nombre === "asesor";
+  const isAsesor = isFieldRoleName(user?.role?.nombre);
   const [fecha, setFecha] = useState(new Date().toISOString().split("T")[0]);
+  const [asesores, setAsesores] = useState<any[]>([]);
+  const [idAsesor, setIdAsesor] = useState("");
   const [data, setData] = useState<any>(null);
 
   useEffect(() => {
@@ -23,14 +28,33 @@ export default function ReporteAsesorDiarioPage() {
 
   useEffect(() => {
     if (isAsesor) return;
-    apiFetch(`/reportes/asesor/diario?fecha=${fecha}`).then(async (res) => { if (res.ok) setData(await res.json()); });
-  }, [fecha, isAsesor]);
+    fetchAllPages("/asesores").then(setAsesores).catch(() => setAsesores([]));
+  }, [isAsesor]);
+
+  useEffect(() => {
+    if (isAsesor) return;
+    const params = new URLSearchParams({ fecha });
+    if (idAsesor) params.set("id_asesor", idAsesor);
+    apiFetch(`/reportes/asesor/diario?${params.toString()}`).then(async (res) => { if (res.ok) setData(await res.json()); });
+  }, [fecha, isAsesor, idAsesor]);
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">Detalle Diario por Asesor</h1>
-        <Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className="w-40" />
+        <div className="flex items-end gap-3">
+          <div>
+            <Label>Fecha</Label>
+            <Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className="w-40" />
+          </div>
+          <div>
+            <Label>Gestor</Label>
+            <select className="flex h-10 w-52 rounded-md border border-input bg-background px-3 text-sm" value={idAsesor} onChange={(e) => setIdAsesor(e.target.value)}>
+              <option value="">Todos</option>
+              {asesores.map((a) => <option key={a.id} value={a.id}>{a.nombre_asesor}</option>)}
+            </select>
+          </div>
+        </div>
       </div>
       {data && (
         <>

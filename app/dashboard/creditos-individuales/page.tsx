@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/auth-context";
+import { isFieldRoleName } from "@/lib/authz";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { User, PlusCircle } from "lucide-react";
@@ -18,7 +19,7 @@ import { CarteraAcciones } from "@/components/cartera-acciones";
 export default function CreditosIndividualesPage() {
   const router = useRouter();
   const { user } = useAuth();
-  const isAsesor = user?.role?.nombre === "asesor";
+  const isAsesor = isFieldRoleName(user?.role?.nombre);
   const [creditos, setCreditos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const { search: searchTerm, handleSearch, page, setPage } = useTableControls();

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/context/auth-context";
+import { isFieldRoleName } from "@/lib/authz";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
@@ -41,7 +42,7 @@ const asesorItems: NavItem[] = [
 export function MobileBottomNav() {
   const pathname = usePathname();
   const { user } = useAuth();
-  const isAsesor = user?.role?.nombre === "asesor";
+  const isAsesor = isFieldRoleName(user?.role?.nombre);
   const items = isAsesor ? asesorItems : adminItems;
 
   return (

@@ -46,6 +46,7 @@ export default function AsesoresPage() {
   const [nombreAsesor, setNombreAsesor] = useState("");
   const [curp, setCurp] = useState("");
   const [telefono, setTelefono] = useState("");
+  const [rolLaboral, setRolLaboral] = useState("Gestor de Cobranza");
   const [ineFile, setIneFile] = useState<File | null>(null);
   const [ineFile2, setIneFile2] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -56,10 +57,12 @@ export default function AsesoresPage() {
   const [editNombre, setEditNombre] = useState("");
   const [editCurp, setEditCurp] = useState("");
   const [editTelefono, setEditTelefono] = useState("");
+  const [editRolLaboral, setEditRolLaboral] = useState("Gestor de Cobranza");
   const [isEditSubmitting, setIsEditSubmitting] = useState(false);
 
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [rolFiltro, setRolFiltro] = useState("todos");
   const importInputRef = useRef<HTMLInputElement>(null);
 
   const fetchAsesores = async () => {
@@ -78,7 +81,10 @@ export default function AsesoresPage() {
     fetchAsesores();
   }, []);
 
-  const filtered = filterBySearch(Array.isArray(asesores) ? asesores : [], search, asesorSearchFields);
+  const filteredBase = Array.isArray(asesores)
+    ? asesores.filter((asesor) => rolFiltro === "todos" || (asesor.rol_laboral ?? "Gestor de Cobranza") === rolFiltro)
+    : [];
+  const filtered = filterBySearch(filteredBase, search, asesorSearchFields);
   const paginated = paginateItems(filtered, page);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -99,6 +105,7 @@ export default function AsesoresPage() {
       formData.append("nombre_asesor", nombreAsesor);
       formData.append("curp", curp.toUpperCase());
       if (telefono.trim()) formData.append("telefono", telefono.trim());
+      formData.append("rol_laboral", rolLaboral);
       if (ineFile) formData.append("ine", ineFile);
       if (ineFile2) formData.append("ine_2", ineFile2);
 
@@ -112,17 +119,18 @@ export default function AsesoresPage() {
       });
 
       if (res.ok) {
-        toast.success("Asesor creado exitosamente");
+        toast.success("Empleado creado exitosamente");
         setNombreAsesor("");
         setCurp("");
         setTelefono("");
+        setRolLaboral("Gestor de Cobranza");
         setIneFile(null);
         setIneFile2(null);
         setIsOpen(false);
         fetchAsesores();
       } else {
         const errorData = await res.json();
-        toast.error(errorData.message || "Error al crear asesor");
+        toast.error(errorData.message || "Error al crear empleado");
       }
     } catch {
       toast.error("Error de conexión");
@@ -136,6 +144,7 @@ export default function AsesoresPage() {
     setEditNombre(asesor.nombre_asesor ?? "");
     setEditCurp(asesor.curp ?? "");
     setEditTelefono(asesor.telefono ?? "");
+    setEditRolLaboral(asesor.rol_laboral ?? "Gestor de Cobranza");
     setIsEditDialogOpen(true);
   };
 
@@ -158,12 +167,13 @@ export default function AsesoresPage() {
           nombre_asesor: editNombre.trim(),
           curp: editCurp.trim().toUpperCase(),
           telefono: editTelefono.trim() || null,
+          rol_laboral: editRolLaboral,
         }),
       });
 
       const data = await res.json();
       if (res.ok) {
-        toast.success(data.message || "Asesor actualizado exitosamente");
+        toast.success(data.message || "Empleado actualizado exitosamente");
         setIsEditDialogOpen(false);
         fetchAsesores();
       } else {
@@ -171,7 +181,7 @@ export default function AsesoresPage() {
           data.errors?.curp?.[0] ||
           data.errors?.nombre_asesor?.[0] ||
           data.message ||
-          "Error al actualizar asesor";
+          "Error al actualizar empleado";
         toast.error(errorMsg);
       }
     } catch {
@@ -183,14 +193,14 @@ export default function AsesoresPage() {
 
   const handleExportTemplate = () => {
     const ws = XLSX.utils.aoa_to_sheet([
-      ["Nombre", "CURP", "Teléfono"],
-      ["Ej. Carlos López", "LOCC850101HDFRRL09", "5512345678"],
+      ["Nombre", "CURP", "Teléfono", "Rol", "Correo", "Contraseña Temporal"],
+      ["Ej. Carlos López", "LOCC850101HDFRRL09", "5512345678", "Gestor de Cobranza", "carlos.lopez@sefi.com", "Temporal123#"],
     ]);
-    ws["!cols"] = [{ wch: 30 }, { wch: 20 }, { wch: 15 }];
+    ws["!cols"] = [{ wch: 30 }, { wch: 20 }, { wch: 15 }, { wch: 22 }, { wch: 28 }, { wch: 22 }];
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Plantilla");
-    XLSX.writeFile(wb, "plantilla_asesores.xlsx");
-    toast.success("Plantilla descargada");
+    XLSX.utils.book_append_sheet(wb, ws, "Plantilla Empleados");
+    XLSX.writeFile(wb, "plantilla_empleados.xlsx");
+    toast.success("Plantilla descargada (incluye acceso y contraseña)");
   };
 
   const handleExport = async () => {
@@ -199,26 +209,29 @@ export default function AsesoresPage() {
       const res = await apiFetch("/asesores/export");
       const json = await res.json();
       if (!res.ok) {
-        toast.error("Error al exportar asesores");
+        toast.error("Error al exportar empleados");
         return;
       }
 
       const rows = (json.data || []).map((a: any) => ({
-        "ID Asesor": a.id_asesor ?? "",
+        "Clave": a.id_asesor ?? "",
         "Nombre": a.nombre_asesor ?? "",
         "CURP": a.curp ?? "",
         "Teléfono": a.telefono ?? "",
+        "Rol": a.rol_laboral ?? "Gestor de Cobranza",
+        "Correo": a.user?.email ?? "",
+        "Tiene acceso": a.user?.email ? "Sí" : "No",
         "Cumpleaños": a.cumpleanos ? fmtFecha(a.cumpleanos) : "",
         "Fecha de alta": a.created_at ? fmtFecha(a.created_at.split("T")[0]) : "",
       }));
 
       const ws = XLSX.utils.json_to_sheet(rows);
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Asesores");
-      XLSX.writeFile(wb, `asesores_${new Date().toISOString().slice(0, 10)}.xlsx`);
-      toast.success(`${rows.length} asesor(es) exportado(s)`);
+      XLSX.utils.book_append_sheet(wb, ws, "Empleados");
+      XLSX.writeFile(wb, `empleados_${new Date().toISOString().slice(0, 10)}.xlsx`);
+      toast.success(`${rows.length} empleado(s) exportado(s)`);
     } catch {
-      toast.error("Error al exportar asesores");
+      toast.error("Error al exportar empleados");
     } finally {
       setIsExporting(false);
     }
@@ -237,12 +250,26 @@ export default function AsesoresPage() {
       const h = normalizeHeader(key);
       const val = String(value ?? "").trim();
       if (!val) continue;
-      if (h === "nombre" || h === "nombre_asesor" || h === "nombre completo") {
+      if (h === "nombre" || h === "nombre_asesor" || h === "nombre completo" || h === "empleado") {
         mapped.nombre_asesor = val;
       } else if (h === "curp") {
         mapped.curp = val.toUpperCase();
-      } else if (h === "telefono" || h === "tel") {
+      } else if (h === "telefono" || h === "tel" || h === "celular") {
         mapped.telefono = val;
+      } else if (h === "rol" || h === "puesto" || h === "cargo" || h === "rol_laboral") {
+        mapped.rol_laboral = val;
+      } else if (h === "correo" || h === "email" || h === "correo electronico" || h === "correo_electronico") {
+        mapped.email = val.toLowerCase();
+      } else if (
+        h === "contrasena" ||
+        h === "contraseña" ||
+        h === "contrasena temporal" ||
+        h === "contraseña temporal" ||
+        h === "password" ||
+        h === "clave" ||
+        h === "pass"
+      ) {
+        mapped.password = val;
       }
     }
     return mapped;
@@ -265,7 +292,7 @@ export default function AsesoresPage() {
         .filter((row) => row.nombre_asesor || row.curp);
 
       if (asesores.length === 0) {
-        toast.error("El archivo no contiene filas válidas. Use columnas: Nombre, CURP, Teléfono.");
+        toast.error("El archivo no contiene filas válidas. Use columnas: Nombre, CURP, Teléfono, Correo, Contraseña.");
         return;
       }
 
@@ -299,17 +326,32 @@ export default function AsesoresPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight text-foreground/90">Asesores</h1>
-        <p className="text-muted-foreground">Gestión de asesores de préstamo registrados en el sistema.</p>
+        <h1 className="text-3xl font-bold tracking-tight text-foreground/90">Empleados</h1>
+        <p className="text-muted-foreground">Catálogo operativo del personal con acceso y rol visible.</p>
       </div>
 
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <TableSearch
-          placeholder="Buscar asesores..."
+          placeholder="Buscar empleados..."
           value={search}
           onChange={handleSearch}
           className="flex-1 max-w-md"
         />
+        <select
+          value={rolFiltro}
+          onChange={(e) => {
+            setRolFiltro(e.target.value);
+            setPage(1);
+          }}
+          className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+        >
+          <option value="todos">Todos los roles</option>
+          <option value="Gestor de Cobranza">Gestor de Cobranza (GC)</option>
+          <option value="Asesor Financiero">Asesor Financiero (AF)</option>
+          <option value="Administrador">Administrador (AD)</option>
+          <option value="Gerencia">Gerencia (GE)</option>
+          <option value="Contabilidad">Contabilidad (CO)</option>
+        </select>
         <div className="flex items-center gap-2">
           <input
             ref={importInputRef}
@@ -334,7 +376,7 @@ export default function AsesoresPage() {
               </DropdownMenuItem>
               <DropdownMenuItem onClick={handleExport} disabled={isImporting || isExporting}>
                 <Download className="mr-2 h-4 w-4" />
-                {isExporting ? "Exportando..." : "Exportar asesores"}
+                {isExporting ? "Exportando..." : "Exportar empleados"}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
@@ -342,7 +384,7 @@ export default function AsesoresPage() {
                 disabled={isImporting || isExporting}
               >
                 <FileSpreadsheet className="mr-2 h-4 w-4" />
-                {isImporting ? "Importando..." : "Importar asesores"}
+                {isImporting ? "Importando..." : "Importar empleados"}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -351,13 +393,13 @@ export default function AsesoresPage() {
             render={
               <Button size="sm" className="h-10 px-4">
                 <PlusCircle className="mr-2 h-4 w-4" />
-                Nuevo Asesor
+                Nuevo Empleado
               </Button>
             }
           />
           <DialogContent className="sm:max-w-[425px]">
             <DialogHeader>
-              <DialogTitle>Crear Asesor</DialogTitle>
+              <DialogTitle>Crear Empleado</DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="grid gap-4 py-4">
               <div className="grid gap-2">
@@ -405,6 +447,21 @@ export default function AsesoresPage() {
                 />
               </div>
               <div className="grid gap-2">
+                <label htmlFor="rol_laboral" className="text-sm font-medium">Rol</label>
+                <select
+                  id="rol_laboral"
+                  value={rolLaboral}
+                  onChange={(e) => setRolLaboral(e.target.value)}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="Gestor de Cobranza">Gestor de Cobranza (ID: GC...)</option>
+                  <option value="Asesor Financiero">Asesor Financiero (ID: AF...)</option>
+                  <option value="Administrador">Administrador (ID: AD...)</option>
+                  <option value="Gerencia">Gerencia (ID: GE...)</option>
+                  <option value="Contabilidad">Contabilidad (ID: CO...)</option>
+                </select>
+              </div>
+              <div className="grid gap-2">
                 <span className="text-sm font-medium">
                   INE <span className="text-muted-foreground font-normal">(opcional — JPG, PNG o PDF, máx. 5 MB)</span>
                 </span>
@@ -449,7 +506,7 @@ export default function AsesoresPage() {
         <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
           <DialogContent className="sm:max-w-[425px]">
             <DialogHeader>
-              <DialogTitle>Editar Asesor</DialogTitle>
+              <DialogTitle>Editar Empleado</DialogTitle>
             </DialogHeader>
             <form onSubmit={handleEditSubmit} className="grid gap-4 py-4">
               <div className="grid gap-2">
@@ -498,6 +555,21 @@ export default function AsesoresPage() {
                   disabled={isEditSubmitting}
                 />
               </div>
+              <div className="grid gap-2">
+                <label htmlFor="edit_rol_laboral" className="text-sm font-medium">Rol</label>
+                <select
+                  id="edit_rol_laboral"
+                  value={editRolLaboral}
+                  onChange={(e) => setEditRolLaboral(e.target.value)}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="Gestor de Cobranza">Gestor de Cobranza (GC)</option>
+                  <option value="Asesor Financiero">Asesor Financiero (AF)</option>
+                  <option value="Administrador">Administrador (AD)</option>
+                  <option value="Gerencia">Gerencia (GE)</option>
+                  <option value="Contabilidad">Contabilidad (CO)</option>
+                </select>
+              </div>
               <div className="flex justify-end gap-2 pt-2">
                 <Button
                   type="button"
@@ -521,8 +593,9 @@ export default function AsesoresPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>ID Asesor</TableHead>
+              <TableHead>ID</TableHead>
               <TableHead>Nombre</TableHead>
+              <TableHead>Rol</TableHead>
               <TableHead>CURP</TableHead>
               <TableHead>Acceso</TableHead>
               <TableHead>Dado de alta</TableHead>
@@ -532,14 +605,14 @@ export default function AsesoresPage() {
           <TableBody>
             {loading ? (
               <TableRow key="loading">
-                <TableCell colSpan={6} className="h-24 text-center">
-                  Cargando asesores...
+                <TableCell colSpan={7} className="h-24 text-center">
+                  Cargando empleados...
                 </TableCell>
               </TableRow>
             ) : filtered.length === 0 ? (
               <TableRow key="empty">
-                <TableCell colSpan={6} className="h-24 text-center">
-                  {search ? "No se encontraron asesores con ese criterio." : "No hay asesores registrados."}
+                <TableCell colSpan={7} className="h-24 text-center">
+                  {search ? "No se encontraron empleados con ese criterio." : "No hay empleados registrados."}
                 </TableCell>
               </TableRow>
             ) : (
@@ -547,6 +620,7 @@ export default function AsesoresPage() {
                 <TableRow key={asesor.id}>
                   <TableCell className="font-mono text-xs">{asesor.id_asesor ?? asesor.id}</TableCell>
                   <TableCell className="font-medium">{asesor.nombre_asesor}</TableCell>
+                  <TableCell>{asesor.rol_laboral ?? "Gestor de Cobranza"}</TableCell>
                   <TableCell className="font-mono text-xs">{asesor.curp ?? "—"}</TableCell>
                   <TableCell>
                     {asesor.user?.email ? (
@@ -571,7 +645,7 @@ export default function AsesoresPage() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => router.push(`/dashboard/asesores/${asesor.id}`)}
+                        onClick={() => router.push(`/dashboard/empleados/${asesor.id}`)}
                       >
                         Ver perfil
                       </Button>
@@ -590,7 +664,7 @@ export default function AsesoresPage() {
           totalItems={filtered.length}
           pageSize={PAGE_SIZE}
           onPageChange={setPage}
-          label="asesores"
+          label="empleados"
         />
       )}
     </div>

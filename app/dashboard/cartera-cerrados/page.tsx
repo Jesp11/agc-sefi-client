@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/auth-context";
+import { isFieldRoleName } from "@/lib/authz";
 import { apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -17,7 +18,7 @@ import { creditoSearchFields, fetchAllPages } from "@/lib/table-utils";
 function CerradosTable({ tipo }: { tipo: "individual" | "grupal" }) {
   const router = useRouter();
   const { user } = useAuth();
-  const isAsesor = user?.role?.nombre === "asesor";
+  const isAsesor = isFieldRoleName(user?.role?.nombre);
   const { search, handleSearch, page, setPage } = useTableControls();
   const [creditos, setCreditos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);

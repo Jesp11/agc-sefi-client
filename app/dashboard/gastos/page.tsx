@@ -29,6 +29,7 @@ const emptyForm = () => ({
   monto: "",
   fecha: new Date().toISOString().split("T")[0],
   categoria: "",
+  cuenta: "Efectivo",
 });
 
 const emptyCatalogoForm = () => ({
@@ -102,6 +103,7 @@ export default function GastosPage() {
       payload.concepto = form.concepto;
       payload.categoria = form.categoria || null;
     }
+    payload.cuenta = form.cuenta || null;
 
     const res = await apiFetch("/gastos", { method: "POST", body: JSON.stringify(payload) });
     if (res.ok) {
@@ -280,6 +282,23 @@ export default function GastosPage() {
                     disabled={!!form.catalogo_gasto_id}
                   />
                 </div>
+                <div>
+                  <Label>Cuenta</Label>
+                  <select
+                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none"
+                    value={form.cuenta}
+                    onChange={(e) => setForm({ ...form, cuenta: e.target.value })}
+                  >
+                    <option value="Efectivo">Efectivo</option>
+                    <option value="Spin">Spin</option>
+                    <option value="Bancomer">Bancomer</option>
+                    <option value="Banorte">Banorte</option>
+                    <option value="Banamex">Banamex</option>
+                    <option value="BBVA">BBVA</option>
+                    <option value="Nue">Nue</option>
+                    <option value="Otro">Otro</option>
+                  </select>
+                </div>
                 <Button
                   onClick={handleCreate}
                   disabled={!form.monto || (!form.catalogo_gasto_id && !form.concepto.trim())}
@@ -294,17 +313,18 @@ export default function GastosPage() {
       <TableSearch placeholder="Buscar gastos..." value={search} onChange={handleSearch} />
       <Card>
         <Table>
-          <TableHeader><TableRow><TableHead>Fecha</TableHead><TableHead>Concepto</TableHead><TableHead>Categoría</TableHead><TableHead className="text-right">Monto</TableHead></TableRow></TableHeader>
+          <TableHeader><TableRow><TableHead>Fecha</TableHead><TableHead>Concepto</TableHead><TableHead>Categoría</TableHead><TableHead>Cuenta</TableHead><TableHead className="text-right">Monto</TableHead></TableRow></TableHeader>
           <TableBody>
             {loading ? (
-              <TableRow><TableCell colSpan={4} className="h-24 text-center text-muted-foreground">Cargando...</TableCell></TableRow>
+              <TableRow><TableCell colSpan={5} className="h-24 text-center text-muted-foreground">Cargando...</TableCell></TableRow>
             ) : filtered.length === 0 ? (
-              <TableRow><TableCell colSpan={4} className="h-24 text-center text-muted-foreground">{search ? "No se encontraron gastos." : "Sin gastos registrados."}</TableCell></TableRow>
+              <TableRow><TableCell colSpan={5} className="h-24 text-center text-muted-foreground">{search ? "No se encontraron gastos." : "Sin gastos registrados."}</TableCell></TableRow>
             ) : paginated.map((g) => (
               <TableRow key={g.id}>
                 <TableCell>{fmtFecha(g.fecha)}</TableCell>
                 <TableCell>{g.concepto}</TableCell>
                 <TableCell>{g.categoria}</TableCell>
+                <TableCell>{g.cuenta || "—"}</TableCell>
                 <TableCell className="text-right font-semibold">${Number(g.monto).toLocaleString()}</TableCell>
               </TableRow>
             ))}

@@ -1,27 +1,44 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { TablePagination, TableSearch } from "@/components/table-controls";
 import { PAGE_SIZE, filterBySearch, paginateItems, useTableControls } from "@/hooks/use-paginated-list";
+import { fetchAllPages } from "@/lib/table-utils";
 import { fmtFecha } from "@/lib/utils";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 const diaSearchFields = (d: any) => [d.fecha, fmtFecha(d.fecha), d.total_abonos, d.monto_colocado, d.creditos_otorgados];
 
 export default function ReporteSemanalPage() {
+  const [semanaInicio, setSemanaInicio] = useState("");
+  const [asesores, setAsesores] = useState<any[]>([]);
+  const [idAsesor, setIdAsesor] = useState("");
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const { search, handleSearch, page, setPage } = useTableControls();
 
-  useEffect(() => {
+  const loadData = useCallback(() => {
     setLoading(true);
-    apiFetch("/reportes/semanal").then(async (res) => {
+    const params = new URLSearchParams();
+    if (semanaInicio) params.set("semana_inicio", semanaInicio);
+    if (idAsesor) params.set("id_asesor", idAsesor);
+    apiFetch(`/reportes/${idAsesor ? "gestor/semanal" : "semanal"}?${params.toString()}`).then(async (res) => {
       if (res.ok) setData(await res.json());
       setLoading(false);
     });
+  }, [semanaInicio, idAsesor]);
+
+  useEffect(() => {
+    fetchAllPages("/asesores").then(setAsesores).catch(() => setAsesores([]));
   }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   if (loading) return <div className="p-8">Cargando...</div>;
   if (!data) return <div className="p-8">Error al cargar datos.</div>;
@@ -32,8 +49,25 @@ export default function ReporteSemanalPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-bold">Reporte Global Semanal</h1>
-      <p className="text-muted-foreground">{fmtFecha(data.semana_inicio)} — {fmtFecha(data.semana_fin)} (Lun–Sáb)</p>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-3xl font-bold">Reporte Semanal</h1>
+          <p className="text-muted-foreground">{fmtFecha(data.semana_inicio)} — {fmtFecha(data.semana_fin)} (Lun–Sáb)</p>
+        </div>
+        <div className="grid gap-3 md:grid-cols-2">
+          <div>
+            <Label>Semana base</Label>
+            <Input type="date" value={semanaInicio} onChange={(e) => setSemanaInicio(e.target.value)} className="w-40" />
+          </div>
+          <div>
+            <Label>Gestor</Label>
+            <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={idAsesor} onChange={(e) => setIdAsesor(e.target.value)}>
+              <option value="">Global</option>
+              {asesores.map((a) => <option key={a.id} value={a.id}>{a.nombre_asesor}</option>)}
+            </select>
+          </div>
+        </div>
+      </div>
       <div className="grid md:grid-cols-3 gap-4">
         <Card><CardHeader><CardTitle className="text-sm">Total Abonos</CardTitle></CardHeader><CardContent className="text-xl font-bold">${Number(data.totales.abonos).toLocaleString()}</CardContent></Card>
         <Card><CardHeader><CardTitle className="text-sm">Préstamos nuevos (monto)</CardTitle></CardHeader><CardContent className="text-xl font-bold">${Number(data.totales.colocacion).toLocaleString()}</CardContent></Card>

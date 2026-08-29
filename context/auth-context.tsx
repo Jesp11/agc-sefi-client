@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { apiFetch } from "@/lib/api";
+import { isAdminRoleName } from "@/lib/authz";
 
 interface Role {
   id: number;
@@ -78,7 +79,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     router.push("/login");
   };
 
-  const isAdmin = user?.role?.nombre === "admin";
+  const isAdmin = isAdminRoleName(user?.role?.nombre);
 
   return (
     <AuthContext.Provider value={{ user, loading, isAdmin, login, logout, refreshUser: fetchMe }}>

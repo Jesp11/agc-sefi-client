@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/context/auth-context";
 import { Button } from "@/components/ui/button";
@@ -39,6 +40,8 @@ import {
   Copy,
   Download,
   Loader2,
+  ExternalLink,
+  AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -69,12 +72,14 @@ export default function AsesorDetallePage() {
   const [asesor, setAsesor] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const creditosControls = useTableControls();
+  const [creditoEstadoFilter, setCreditoEstadoFilter] = useState<"todos" | "activo" | "mora" | "finalizado">("todos");
 
-  // edit asesor dialog
+  // edit empleado dialog
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [editNombre, setEditNombre] = useState("");
   const [editCurp, setEditCurp] = useState("");
   const [editTelefono, setEditTelefono] = useState("");
+  const [editRolLaboral, setEditRolLaboral] = useState("Gestor de Cobranza");
   const [savingEdit, setSavingEdit] = useState(false);
 
   const [accesoEmail, setAccesoEmail] = useState("");
@@ -159,8 +164,8 @@ export default function AsesorDetallePage() {
         setTelValue(data.telefono ?? "");
         setAccesoEmail(data.user?.email ?? "");
       } else {
-        toast.error("No se encontró el asesor");
-        router.push("/dashboard/asesores");
+        toast.error("No se encontró el empleado");
+        router.push("/dashboard/empleados");
       }
     } catch {
       toast.error("Error al cargar detalles");
@@ -176,6 +181,7 @@ export default function AsesorDetallePage() {
     setEditNombre(asesor.nombre_asesor ?? "");
     setEditCurp(asesor.curp ?? "");
     setEditTelefono(asesor.telefono ?? "");
+    setEditRolLaboral(asesor.rol_laboral ?? "Gestor de Cobranza");
     setShowEditDialog(true);
   };
 
@@ -198,6 +204,7 @@ export default function AsesorDetallePage() {
           nombre_asesor: editNombre.trim(),
           curp: editCurp.trim().toUpperCase(),
           telefono: editTelefono.trim() || null,
+          rol_laboral: editRolLaboral,
         }),
       });
 
@@ -212,6 +219,7 @@ export default function AsesorDetallePage() {
           curp: updated.curp ?? editCurp.trim().toUpperCase(),
           cumpleanos: updated.cumpleanos ?? prev.cumpleanos,
           telefono: updated.telefono ?? (editTelefono.trim() || null),
+          rol_laboral: updated.rol_laboral ?? editRolLaboral,
         }));
         setTelValue(editTelefono.trim());
         setShowEditDialog(false);
@@ -220,7 +228,7 @@ export default function AsesorDetallePage() {
           data.errors?.curp?.[0] ||
           data.errors?.nombre_asesor?.[0] ||
           data.message ||
-          "Error al actualizar asesor";
+          "Error al actualizar empleado";
         toast.error(errorMsg);
       }
     } catch {
@@ -383,11 +391,53 @@ export default function AsesorDetallePage() {
     }
   };
 
-  if (loading) return <div className="p-8 text-center">Cargando perfil del asesor...</div>;
+  if (loading) return <div className="p-8 text-center">Cargando perfil del empleado...</div>;
   if (!asesor) return null;
 
-  const creditosList = asesor.creditos || [];
-  const creditosFiltered = filterBySearch(creditosList, creditosControls.search, creditoSearchFields);
+  const getEstadoRank = (estado?: string): number => {
+    if (!estado) return 99;
+    const lower = estado.toLowerCase().trim();
+    if (lower === "activo") return 1;
+    if (lower === "enmora" || lower === "mora" || lower === "en mora") return 2;
+    if (lower === "cerrado" || lower === "finalizado" || lower === "liquidado" || lower === "inactivo") return 3;
+    return 4;
+  };
+
+  const normalizeEstado = (estado?: string): "activo" | "mora" | "finalizado" | "otro" => {
+    if (!estado) return "otro";
+    const lower = estado.toLowerCase().trim();
+    if (lower === "activo") return "activo";
+    if (lower === "enmora" || lower === "mora" || lower === "en mora") return "mora";
+    if (lower === "cerrado" || lower === "finalizado" || lower === "liquidado" || lower === "inactivo") return "finalizado";
+    return "otro";
+  };
+
+  const rawCreditos: any[] = asesor.creditos || [];
+  const totalCreditosCount = rawCreditos.length;
+  const activosCreditosCount = rawCreditos.filter((c) => normalizeEstado(c.estado) === "activo").length;
+  const moraCreditosCount = rawCreditos.filter((c) => normalizeEstado(c.estado) === "mora").length;
+  const finalizadosCreditosCount = rawCreditos.filter((c) => normalizeEstado(c.estado) === "finalizado").length;
+
+  const creditosByEstado = rawCreditos.filter((c) => {
+    if (creditoEstadoFilter === "todos") return true;
+    return normalizeEstado(c.estado) === creditoEstadoFilter;
+  });
+
+  // Ordenar: 1) Activos, 2) Mora, 3) Finalizados / Cerrados
+  const sortedCreditos = [...creditosByEstado].sort((a, b) => {
+    const rankA = getEstadoRank(a.estado);
+    const rankB = getEstadoRank(b.estado);
+    if (rankA !== rankB) return rankA - rankB;
+    return Number(b.num_prog || b.id || 0) - Number(a.num_prog || a.id || 0);
+  });
+
+  const creditosFiltered = filterBySearch(sortedCreditos, creditosControls.search, (c: any) => [
+    ...creditoSearchFields(c),
+    c.id,
+    c.monto_otorgado,
+    c.total,
+    c.estado,
+  ]);
   const creditosPaginated = paginateItems(creditosFiltered, creditosControls.page);
   const tieneAcceso = Boolean(asesor.user?.email);
 
@@ -399,7 +449,10 @@ export default function AsesorDetallePage() {
         </Button>
         <div>
           <h1 className="text-3xl font-bold tracking-tight">{asesor.nombre_asesor}</h1>
-          <p className="text-muted-foreground font-mono text-sm">{asesor.id_asesor ?? `#${asesor.id}`}</p>
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <p className="text-muted-foreground font-mono">{asesor.id_asesor ?? `#${asesor.id}`}</p>
+            <Badge variant="outline">{asesor.rol_laboral ?? "Gestor de Cobranza"}</Badge>
+          </div>
         </div>
         <div className="ml-auto flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={handleOpenEdit}>
@@ -419,7 +472,7 @@ export default function AsesorDetallePage() {
           <DialogHeader>
             <DialogTitle>Contraseña temporal</DialogTitle>
             <DialogDescription>
-              Guárdala ahora: no se volverá a mostrar. Entrégala al asesor para que inicie sesión.
+              Guárdala ahora: no se volverá a mostrar. Entrégala al empleado para que inicie sesión.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
@@ -437,13 +490,13 @@ export default function AsesorDetallePage() {
         </DialogContent>
       </Dialog>
 
-      {/* Modal para editar información general del asesor */}
+      {/* Modal para editar información general del empleado */}
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Editar Asesor</DialogTitle>
+            <DialogTitle>Editar Empleado</DialogTitle>
             <DialogDescription>
-              Modifica los datos del asesor. La fecha de nacimiento se extrae automáticamente a partir de la CURP.
+              Modifica los datos del empleado. La fecha de nacimiento se extrae automáticamente a partir de la CURP.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSaveEdit} className="grid gap-4 py-2">
@@ -492,6 +545,22 @@ export default function AsesorDetallePage() {
                 maxLength={20}
                 disabled={savingEdit}
               />
+            </div>
+            <div className="grid gap-2">
+              <label htmlFor="edit-rol-laboral" className="text-sm font-medium">Rol</label>
+              <select
+                id="edit-rol-laboral"
+                value={editRolLaboral}
+                onChange={(e) => setEditRolLaboral(e.target.value)}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                disabled={savingEdit}
+              >
+                <option value="Gestor de Cobranza">Gestor de Cobranza (GC)</option>
+                <option value="Asesor Financiero">Asesor Financiero (AF)</option>
+                <option value="Administrador">Administrador (AD)</option>
+                <option value="Gerencia">Gerencia (GE)</option>
+                <option value="Contabilidad">Contabilidad (CO)</option>
+              </select>
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <Button type="button" variant="outline" onClick={() => setShowEditDialog(false)} disabled={savingEdit}>
@@ -567,8 +636,8 @@ export default function AsesorDetallePage() {
           <CardContent>
             <p className="text-sm text-muted-foreground mb-4">
               {tieneAcceso
-                ? "Este asesor ya puede iniciar sesión. Puedes cambiar el correo o generar una contraseña temporal nueva."
-                : "Crea un correo y una contraseña temporal para que el asesor entre al sistema."}
+                ? "Este empleado ya puede iniciar sesión. Puedes cambiar el correo o generar una contraseña temporal nueva."
+                : "Crea un correo y una contraseña temporal para que el empleado entre al sistema."}
             </p>
             <form
               onSubmit={tieneAcceso ? (e) => { e.preventDefault(); handleResetPassword(); } : handleCrearAcceso}
@@ -579,7 +648,7 @@ export default function AsesorDetallePage() {
                 <Input
                   id="acceso-email"
                   type="email"
-                  placeholder="asesor@ejemplo.com"
+                  placeholder="empleado@ejemplo.com"
                   value={accesoEmail}
                   onChange={(e) => setAccesoEmail(e.target.value)}
                   disabled={accesoSaving}
@@ -644,8 +713,13 @@ export default function AsesorDetallePage() {
             </div>
 
             <div className="flex flex-col gap-1">
-              <span className="text-muted-foreground font-medium">ID Asesor</span>
+              <span className="text-muted-foreground font-medium">Clave</span>
               <span className="font-mono font-bold text-primary">{asesor.id_asesor ?? `#${asesor.id}`}</span>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <span className="text-muted-foreground font-medium">Rol</span>
+              <span>{asesor.rol_laboral ?? "Gestor de Cobranza"}</span>
             </div>
 
             <div className="flex flex-col gap-1">
@@ -769,50 +843,153 @@ export default function AsesorDetallePage() {
         {/* Préstamos Asignados */}
         <Card className="md:col-span-2">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <CreditCard className="h-5 w-5 text-primary" />
-              Préstamos Asignados
-              <Badge variant="secondary" className="ml-auto">
-                {asesor.creditos?.length ?? 0}
-              </Badge>
-            </CardTitle>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <CreditCard className="h-5 w-5 text-primary" />
+                Préstamos Asignados
+              </CardTitle>
+              <div className="flex items-center gap-2 text-xs">
+                <span className="text-muted-foreground">Total:</span>
+                <Badge variant="secondary" className="font-semibold">
+                  {totalCreditosCount}
+                </Badge>
+              </div>
+            </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            <TableSearch placeholder="Buscar préstamos..." value={creditosControls.search} onChange={creditosControls.handleSearch} />
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>ID Préstamo</TableHead>
-                  <TableHead>Ciclo</TableHead>
-                  <TableHead>Monto</TableHead>
-                  <TableHead>Total</TableHead>
-                  <TableHead>Estado</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {creditosFiltered.length > 0 ? (
-                  creditosPaginated.map((c: any, i: number) => (
-                    <TableRow key={c.id_credito ?? c.id ?? i}>
-                      <TableCell className="font-mono text-xs">{c.id_credito ?? c.id}</TableCell>
-                      <TableCell>{c.ciclo}</TableCell>
-                      <TableCell>${c.monto_otorgado}</TableCell>
-                      <TableCell>${c.total}</TableCell>
-                      <TableCell>
-                        <Badge variant={c.estado === "activo" ? "default" : "secondary"}>
-                          {c.estado ?? "—"}
-                        </Badge>
+            {/* Status Filters */}
+            <div className="flex flex-wrap items-center gap-1.5 border-b pb-3 text-xs">
+              <span className="text-muted-foreground mr-1 font-medium hidden sm:inline">Filtrar:</span>
+              {[
+                { id: "todos", label: "Todos", count: totalCreditosCount, badgeColor: "bg-gray-100 text-gray-700" },
+                { id: "activo", label: "Activos", count: activosCreditosCount, badgeColor: "bg-emerald-100 text-emerald-800" },
+                { id: "mora", label: "En Mora", count: moraCreditosCount, badgeColor: "bg-rose-100 text-rose-800" },
+                { id: "finalizado", label: "Finalizados / Cerrados", count: finalizadosCreditosCount, badgeColor: "bg-gray-100 text-gray-700" },
+              ].map((f) => {
+                const isActive = creditoEstadoFilter === f.id;
+                return (
+                  <button
+                    key={f.id}
+                    type="button"
+                    onClick={() => {
+                      setCreditoEstadoFilter(f.id as any);
+                      creditosControls.setPage(1);
+                    }}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium transition-all cursor-pointer ${
+                      isActive
+                        ? "bg-primary text-primary-foreground shadow-xs"
+                        : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground"
+                    }`}
+                  >
+                    <span>{f.label}</span>
+                    <span
+                      className={`px-1.5 py-0.2 rounded-full text-[10px] font-semibold ${
+                        isActive ? "bg-white/20 text-white" : f.badgeColor
+                      }`}
+                    >
+                      {f.count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <TableSearch placeholder="Buscar por titular, folio o monto..." value={creditosControls.search} onChange={creditosControls.handleSearch} />
+
+            <div className="overflow-x-auto rounded-lg border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[100px]">Folio</TableHead>
+                    <TableHead>Titular / Acreditado</TableHead>
+                    <TableHead>Tipo / Ciclo</TableHead>
+                    <TableHead>Monto</TableHead>
+                    <TableHead>Total</TableHead>
+                    <TableHead>Estado</TableHead>
+                    <TableHead className="text-right">Acción</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {creditosFiltered.length > 0 ? (
+                    creditosPaginated.map((c: any, i: number) => {
+                      const normEstado = normalizeEstado(c.estado);
+                      const titular =
+                        c.cliente?.nombre_completo ||
+                        c.grupo?.nombre_grupo ||
+                        (c.id_cliente ? `Cliente #${c.id_cliente}` : c.id_grupo ? `Grupo #${c.id_grupo}` : "—");
+                      const tipo = c.tipo_credito || (c.id_grupo ? "Grupal" : "Individual");
+                      const folio = c.num_prog || c.id_credito || c.id;
+
+                      return (
+                        <TableRow key={folio ?? i} className="hover:bg-muted/40 transition-colors">
+                          <TableCell className="font-mono text-xs font-semibold text-primary">
+                            <Link href={`/dashboard/creditos/${folio}`} className="underline underline-offset-2 hover:opacity-80">
+                              #{folio}
+                            </Link>
+                          </TableCell>
+                          <TableCell>
+                            <div className="font-medium text-foreground truncate max-w-[180px]" title={titular}>
+                              {titular}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground">
+                            <div>{tipo}</div>
+                            <div className="text-[11px]">Ciclo {c.ciclo ?? 1}</div>
+                          </TableCell>
+                          <TableCell className="font-medium">
+                            ${Number(c.monto_otorgado || 0).toLocaleString("es-MX")}
+                          </TableCell>
+                          <TableCell>
+                            ${Number(c.total || 0).toLocaleString("es-MX")}
+                          </TableCell>
+                          <TableCell>
+                            {normEstado === "activo" && (
+                              <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 hover:bg-emerald-100">
+                                Activo
+                              </Badge>
+                            )}
+                            {normEstado === "mora" && (
+                              <Badge className="bg-rose-100 text-rose-800 border-rose-200 hover:bg-rose-100 flex items-center gap-1 w-fit">
+                                <AlertTriangle className="size-3" />
+                                En Mora
+                              </Badge>
+                            )}
+                            {normEstado === "finalizado" && (
+                              <Badge variant="secondary">
+                                {c.estado || "Liquidado"}
+                              </Badge>
+                            )}
+                            {normEstado === "otro" && (
+                              <Badge variant="outline">
+                                {c.estado ?? "—"}
+                              </Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Link
+                              href={`/dashboard/creditos/${folio}`}
+                              className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline hover:opacity-80"
+                            >
+                              <ExternalLink className="size-3.5" />
+                              Ver
+                            </Link>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                        {creditosControls.search
+                          ? `No se encontraron préstamos para "${creditosControls.search}".`
+                          : "No hay préstamos asignados en esta categoría."}
                       </TableCell>
                     </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                      {creditosControls.search ? "No se encontraron préstamos." : "Sin préstamos asignados"}
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+
             {creditosFiltered.length > 0 && (
               <TablePagination page={creditosControls.page} totalItems={creditosFiltered.length} pageSize={PAGE_SIZE} onPageChange={creditosControls.setPage} label="préstamos" />
             )}

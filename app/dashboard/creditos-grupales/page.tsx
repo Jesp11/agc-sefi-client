@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useAuth } from "@/context/auth-context";
+import { isFieldRoleName } from "@/lib/authz";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -30,7 +31,7 @@ import { creditoSearchFields, creditoTotal, fetchAllPages, onlyCarteraActiva } f
 export default function CreditosGrupalesPage() {
   const router = useRouter();
   const { user } = useAuth();
-  const isAsesor = user?.role?.nombre === "asesor";
+  const isAsesor = isFieldRoleName(user?.role?.nombre);
   const [creditos, setCreditos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const { search, handleSearch, page, setPage } = useTableControls();

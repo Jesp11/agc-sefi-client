@@ -172,7 +172,7 @@ export default function FlujoCajaPage() {
                 </div>
                 <div><Label>Fecha</Label><Input type="date" value={form.fecha} onChange={(e) => setForm({ ...form, fecha: e.target.value })} /></div>
                 <div>
-                  <Label>Vendedor / Asesor</Label>
+                  <Label>Gestor de cobranza</Label>
                   <select className="w-full border rounded-md px-3 py-2 text-sm bg-background h-9" value={form.id_asesor} onChange={(e) => setForm({ ...form, id_asesor: e.target.value })}>
                     <option value="">— Sin asesor —</option>
                     {asesores.map((a) => (
@@ -209,8 +209,8 @@ export default function FlujoCajaPage() {
       {resumen && (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Saldo en caja</CardTitle></CardHeader>
-            <CardContent className="text-2xl font-bold text-primary">{fmt(resumen.saldo_actual)}</CardContent>
+            <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Saldo inicial del mes</CardTitle></CardHeader>
+            <CardContent className="text-2xl font-bold">{fmt(resumen.saldo_inicial_mes)}</CardContent>
           </Card>
           <Card>
             <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Ingresos {MESES[mes - 1]}</CardTitle></CardHeader>
@@ -221,8 +221,8 @@ export default function FlujoCajaPage() {
             <CardContent className="text-2xl font-bold text-red-600">{fmt(resumen.total_egresos)}</CardContent>
           </Card>
           <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Saldo mes anterior</CardTitle></CardHeader>
-            <CardContent className="text-2xl font-bold">{fmt(resumen.saldo_anterior)}</CardContent>
+            <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Disponible del mes</CardTitle></CardHeader>
+            <CardContent className="text-2xl font-bold text-primary">{fmt(resumen.disponible)}</CardContent>
           </Card>
         </div>
       )}
@@ -235,26 +235,46 @@ export default function FlujoCajaPage() {
               <div><p className="text-muted-foreground text-xs">Cartera individual</p><p className="font-semibold">{fmt(resumen.cartera_individual)}</p></div>
               <div><p className="text-muted-foreground text-xs">Cartera grupal</p><p className="font-semibold">{fmt(resumen.cartera_grupal)}</p></div>
               <div><p className="text-muted-foreground text-xs">Mora</p><p className="font-semibold text-red-600">{fmt(resumen.mora)}</p></div>
-              <div><p className="text-muted-foreground text-xs">Capital pasivo</p><p className="font-semibold">{fmt(resumen.capital_pasivo)}</p></div>
+              <div><p className="text-muted-foreground text-xs">Gastos operativos</p><p className="font-semibold">{fmt(resumen.gastos_operativos)}</p></div>
               <div><p className="text-muted-foreground text-xs">Ahorro personal</p><p className="font-semibold">{fmt(resumen.ahorro_personal)}</p></div>
               <div><p className="text-muted-foreground text-xs">Ahorro grupal (socios)</p><p className="font-semibold">{fmt(resumen.ahorro_grupal)}</p></div>
             </CardContent>
           </Card>
           <Card>
-            <CardHeader><CardTitle className="text-base">Distribución por cuenta (ingresos del mes)</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-base">Distribución por cuenta</CardTitle></CardHeader>
             <CardContent>
-              {Object.keys(resumen.distribucion_cuentas || {}).length === 0 ? (
-                <p className="text-sm text-muted-foreground">Sin ingresos con cuenta asignada este mes.</p>
-              ) : (
-                <div className="space-y-2">
-                  {Object.entries(resumen.distribucion_cuentas).map(([cuenta, monto]) => (
-                    <div key={cuenta} className="flex justify-between text-sm">
-                      <span>{cuenta}</span>
-                      <span className="font-semibold">{fmt(monto as number)}</span>
+              <div className="space-y-4">
+                <div>
+                  <p className="text-sm font-medium mb-2">Ingresos</p>
+                  {Object.keys(resumen.distribucion_cuentas?.ingresos || {}).length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Sin ingresos con cuenta asignada este mes.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {Object.entries(resumen.distribucion_cuentas.ingresos).map(([cuenta, monto]) => (
+                        <div key={`ing-${cuenta}`} className="flex justify-between text-sm">
+                          <span>{cuenta}</span>
+                          <span className="font-semibold">{fmt(monto as number)}</span>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  )}
                 </div>
-              )}
+                <div>
+                  <p className="text-sm font-medium mb-2">Egresos</p>
+                  {Object.keys(resumen.distribucion_cuentas?.egresos || {}).length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Sin egresos con cuenta asignada este mes.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {Object.entries(resumen.distribucion_cuentas.egresos).map(([cuenta, monto]) => (
+                        <div key={`egr-${cuenta}`} className="flex justify-between text-sm">
+                          <span>{cuenta}</span>
+                          <span className="font-semibold">{fmt(monto as number)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
             </CardContent>
           </Card>
         </div>

@@ -11,6 +11,11 @@ const normalizeHeader = (header: string) =>
     .toLowerCase()
     .trim();
 
+const isTotalsLabel = (value: unknown) => {
+  const normalized = normalizeHeader(String(value ?? ""));
+  return normalized === "total" || normalized === "totales";
+};
+
 const monthFromHeader = (header: string, anio: number): string | null => {
   const h = normalizeHeader(header);
   const yy = String(anio).slice(2);
@@ -101,7 +106,7 @@ export function parseAhorroImportFile(buffer: ArrayBuffer, anio: number): { fila
 
     for (let c = 0; c < row.length; c++) {
       const cell = normalizeHeader(String(row[c] ?? ""));
-      if (cell === "id" || cell === "id asesor") foundId = c;
+      if (cell === "id" || cell === "id asesor" || cell === "id empleado") foundId = c;
       const mes = monthFromHeader(String(row[c] ?? ""), anio);
       if (mes) foundMonths[mes] = c;
     }
@@ -124,7 +129,8 @@ export function parseAhorroImportFile(buffer: ArrayBuffer, anio: number): { fila
   for (let r = headerRowIdx + 1; r < raw.length; r++) {
     const row = raw[r] as unknown[];
     const codigo = String(row[idCol] ?? "").trim();
-    if (!codigo || normalizeHeader(codigo) === "totales") continue;
+    const nombre = String(row[0] ?? "").trim();
+    if (!codigo || isTotalsLabel(codigo) || isTotalsLabel(nombre)) continue;
 
     const meses: Record<string, number> = {};
     for (const [mes, col] of Object.entries(monthCols)) {
