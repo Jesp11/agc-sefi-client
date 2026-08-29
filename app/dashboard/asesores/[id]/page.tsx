@@ -85,6 +85,7 @@ export default function AsesorDetallePage() {
   const [accesoEmail, setAccesoEmail] = useState("");
   const [accesoPassword, setAccesoPassword] = useState("");
   const [accesoSaving, setAccesoSaving] = useState(false);
+  const [showAccesoModal, setShowAccesoModal] = useState(false);
   const [passwordTemporal, setPasswordTemporal] = useState<string | null>(null);
   const [showPasswordDialog, setShowPasswordDialog] = useState(false);
 
@@ -459,6 +460,12 @@ export default function AsesorDetallePage() {
             <Pencil className="h-4 w-4 mr-1.5" />
             Editar Datos
           </Button>
+          {isAdmin && (
+            <Button variant="outline" size="sm" onClick={() => setShowAccesoModal(true)}>
+              <KeyRound className="h-4 w-4 mr-1.5" />
+              {tieneAcceso ? "Gestionar Acceso" : "Crear Acceso"}
+            </Button>
+          )}
           {tieneAcceso ? (
             <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200">Con acceso</Badge>
           ) : (
@@ -466,6 +473,74 @@ export default function AsesorDetallePage() {
           )}
         </div>
       </div>
+
+      {/* Modal para crear o modificar acceso al sistema */}
+      {isAdmin && (
+        <Dialog open={showAccesoModal} onOpenChange={setShowAccesoModal}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <KeyRound className="h-5 w-5 text-primary" />
+                {tieneAcceso ? "Modificar Acceso al Sistema" : "Crear Acceso al Sistema"}
+              </DialogTitle>
+              <DialogDescription>
+                {tieneAcceso
+                  ? "Modifica el correo de acceso o genera una nueva contraseña temporal."
+                  : "Crea credenciales de inicio de sesión para este empleado."}
+              </DialogDescription>
+            </DialogHeader>
+            <form
+              onSubmit={async (e) => {
+                if (tieneAcceso) {
+                  e.preventDefault();
+                  await handleResetPassword();
+                } else {
+                  await handleCrearAcceso(e);
+                }
+                setShowAccesoModal(false);
+              }}
+              className="grid gap-4 py-2"
+            >
+              <div className="grid gap-2">
+                <label htmlFor="modal-acceso-email" className="text-sm font-medium">Correo electrónico</label>
+                <Input
+                  id="modal-acceso-email"
+                  type="email"
+                  placeholder="empleado@ejemplo.com"
+                  value={accesoEmail}
+                  onChange={(e) => setAccesoEmail(e.target.value)}
+                  disabled={accesoSaving}
+                  required
+                />
+              </div>
+              <div className="grid gap-2">
+                <label htmlFor="modal-acceso-password" className="text-sm font-medium">
+                  Contraseña temporal{" "}
+                  <span className="text-muted-foreground font-normal">(opcional)</span>
+                </label>
+                <Input
+                  id="modal-acceso-password"
+                  type="text"
+                  placeholder="Se genera automáticamente si se deja vacío"
+                  value={accesoPassword}
+                  onChange={(e) => setAccesoPassword(e.target.value)}
+                  disabled={accesoSaving}
+                  minLength={6}
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button type="button" variant="outline" onClick={() => setShowAccesoModal(false)} disabled={accesoSaving}>
+                  Cancelar
+                </Button>
+                <Button type="submit" disabled={accesoSaving}>
+                  {accesoSaving && <Loader2 className="h-4 w-4 animate-spin mr-1.5" />}
+                  {tieneAcceso ? "Guardar y Restablecer" : "Crear Acceso"}
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
+      )}
 
       <Dialog open={showPasswordDialog} onOpenChange={setShowPasswordDialog}>
         <DialogContent className="sm:max-w-md">
@@ -624,74 +699,6 @@ export default function AsesorDetallePage() {
           </div>
         </DialogContent>
       </Dialog>
-
-      {isAdmin && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <KeyRound className="h-5 w-5 text-primary" />
-              Acceso al sistema
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground mb-4">
-              {tieneAcceso
-                ? "Este empleado ya puede iniciar sesión. Puedes cambiar el correo o generar una contraseña temporal nueva."
-                : "Crea un correo y una contraseña temporal para que el empleado entre al sistema."}
-            </p>
-            <form
-              onSubmit={tieneAcceso ? (e) => { e.preventDefault(); handleResetPassword(); } : handleCrearAcceso}
-              className="grid gap-4 sm:grid-cols-2"
-            >
-              <div className="grid gap-2">
-                <label htmlFor="acceso-email" className="text-sm font-medium">Correo electrónico</label>
-                <Input
-                  id="acceso-email"
-                  type="email"
-                  placeholder="empleado@ejemplo.com"
-                  value={accesoEmail}
-                  onChange={(e) => setAccesoEmail(e.target.value)}
-                  disabled={accesoSaving}
-                  required
-                />
-              </div>
-              <div className="grid gap-2">
-                <label htmlFor="acceso-password" className="text-sm font-medium">
-                  Contraseña temporal{" "}
-                  <span className="text-muted-foreground font-normal">(opcional)</span>
-                </label>
-                <Input
-                  id="acceso-password"
-                  type="text"
-                  placeholder="Se genera automáticamente si se deja vacío"
-                  value={accesoPassword}
-                  onChange={(e) => setAccesoPassword(e.target.value)}
-                  disabled={accesoSaving}
-                  minLength={6}
-                />
-              </div>
-              <div className="sm:col-span-2 flex flex-wrap gap-2">
-                {tieneAcceso ? (
-                  <>
-                    <Button type="submit" disabled={accesoSaving}>
-                      {accesoSaving ? "Guardando..." : "Restablecer contraseña temporal"}
-                    </Button>
-                    {accesoEmail.trim() && accesoEmail.trim() !== asesor.user?.email && (
-                      <p className="text-xs text-muted-foreground self-center">
-                        También se actualizará el correo.
-                      </p>
-                    )}
-                  </>
-                ) : (
-                  <Button type="submit" disabled={accesoSaving}>
-                    {accesoSaving ? "Creando..." : "Crear acceso"}
-                  </Button>
-                )}
-              </div>
-            </form>
-          </CardContent>
-        </Card>
-      )}
 
       <div className="grid gap-6 md:grid-cols-3">
         {/* Información Personal */}

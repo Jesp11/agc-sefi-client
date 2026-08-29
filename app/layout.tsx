@@ -26,10 +26,12 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: [
-      { url: "/icons/icon-192x192.png", sizes: "192x192", type: "image/png" },
-      { url: "/icons/icon-512x512.png", sizes: "512x512", type: "image/png" },
+      { url: "/favicon.ico?v=2", sizes: "any" },
+      { url: "/icons/icon-192x192.png?v=2", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512x512.png?v=2", sizes: "512x512", type: "image/png" },
     ],
-    apple: "/icons/apple-touch-icon.png",
+    shortcut: "/favicon.ico?v=2",
+    apple: "/icons/apple-touch-icon.png?v=2",
   },
   manifest: "/manifest.webmanifest",
 };

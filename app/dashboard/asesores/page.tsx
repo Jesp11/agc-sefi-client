@@ -71,7 +71,7 @@ export default function AsesoresPage() {
       const rows = await fetchAllPages("/asesores");
       setAsesores(rows);
     } catch {
-      toast.error("Error al cargar asesores");
+      toast.error("Error al cargar empleados");
     } finally {
       setLoading(false);
     }
@@ -314,7 +314,7 @@ export default function AsesoresPage() {
           .join(" · ");
         toast.error(`${data.errors.length} fila(s) con error. ${detalle}`);
       } else if (!res.ok && !data.created && !data.updated) {
-        toast.error(data.message || "Error al importar asesores");
+        toast.error(data.message || "Error al importar empleados");
       }
     } catch {
       toast.error("Error al leer el archivo Excel");
@@ -337,22 +337,22 @@ export default function AsesoresPage() {
           onChange={handleSearch}
           className="flex-1 max-w-md"
         />
-        <select
-          value={rolFiltro}
-          onChange={(e) => {
-            setRolFiltro(e.target.value);
-            setPage(1);
-          }}
-          className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-        >
-          <option value="todos">Todos los roles</option>
-          <option value="Gestor de Cobranza">Gestor de Cobranza (GC)</option>
-          <option value="Asesor Financiero">Asesor Financiero (AF)</option>
-          <option value="Administrador">Administrador (AD)</option>
-          <option value="Gerencia">Gerencia (GE)</option>
-          <option value="Contabilidad">Contabilidad (CO)</option>
-        </select>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <select
+            value={rolFiltro}
+            onChange={(e) => {
+              setRolFiltro(e.target.value);
+              setPage(1);
+            }}
+            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+          >
+            <option value="todos">Todos los roles</option>
+            <option value="Gestor de Cobranza">Gestor de Cobranza (GC)</option>
+            <option value="Asesor Financiero">Asesor Financiero (AF)</option>
+            <option value="Administrador">Administrador (AD)</option>
+            <option value="Gerencia">Gerencia (GE)</option>
+            <option value="Contabilidad">Contabilidad (CO)</option>
+          </select>
           <input
             ref={importInputRef}
             type="file"
@@ -597,7 +597,7 @@ export default function AsesoresPage() {
               <TableHead>Nombre</TableHead>
               <TableHead>Rol</TableHead>
               <TableHead>CURP</TableHead>
-              <TableHead>Acceso</TableHead>
+              <TableHead>Teléfono</TableHead>
               <TableHead>Dado de alta</TableHead>
               <TableHead className="text-right">Acciones</TableHead>
             </TableRow>
@@ -622,15 +622,7 @@ export default function AsesoresPage() {
                   <TableCell className="font-medium">{asesor.nombre_asesor}</TableCell>
                   <TableCell>{asesor.rol_laboral ?? "Gestor de Cobranza"}</TableCell>
                   <TableCell className="font-mono text-xs">{asesor.curp ?? "—"}</TableCell>
-                  <TableCell>
-                    {asesor.user?.email ? (
-                      <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 font-normal">
-                        {asesor.user.email}
-                      </Badge>
-                    ) : (
-                      <Badge variant="secondary" className="font-normal">Sin acceso</Badge>
-                    )}
-                  </TableCell>
+                  <TableCell className="text-xs">{asesor.telefono || "—"}</TableCell>
                   <TableCell className="text-sm">{asesor.created_at ? fmtFecha(asesor.created_at.split("T")[0]) : "—"}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
