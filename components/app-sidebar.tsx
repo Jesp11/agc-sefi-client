@@ -46,26 +46,14 @@ const contabilidadItems = [
   { title: "Ahorro Personal", url: "/dashboard/ahorros-personal", icon: PiggyBank },
 ];
 
-const reporteOperativos = [
-  { title: "Reporte Diario", url: "/dashboard/reportes/diario", icon: CalendarDays },
-  { title: "Reporte Cartera", url: "/dashboard/reportes/cartera", icon: LayoutList },
-  { title: "Global Semanal", url: "/dashboard/reportes/semanal", icon: FileText },
-];
-
-const reporteAsesor = [
-  { title: "Mora por Asesor", url: "/dashboard/reportes/asesor-mora", icon: AlertTriangle },
-  { title: "Clientes por Cerrar", url: "/dashboard/reportes/por-cerrar", icon: UserX },
-  { title: "Sin Renovación", url: "/dashboard/reportes/clientes-sin-renovacion", icon: UserX },
+const reporteItems = [
+  { title: "Diario", url: "/dashboard/reportes/diario", icon: CalendarDays },
+  { title: "Cartera", url: "/dashboard/reportes/cartera", icon: LayoutList },
+  { title: "Renovacion de clientes", url: "/dashboard/reportes/por-cerrar", icon: Users },
+  { title: "Global Mensual", url: "/dashboard/reportes/semanal", icon: FileText },
   { title: "Gestor Mensual", url: "/dashboard/reportes/gestor-mensual", icon: CalendarDays },
-];
-
-const reporteFinancieros = [
-  { title: "Inversionistas", url: "/dashboard/reportes/inversionistas", icon: TrendingUp },
   { title: "Estado Financiero", url: "/dashboard/reportes/inversionistas-estado", icon: TrendingUp },
   { title: "Cierre Mensual", url: "/dashboard/reportes/cierre-mensual", icon: BarChart3 },
-  { title: "Cartera Ahorro", url: "/dashboard/reportes/cartera-ahorro", icon: PiggyBank },
-  { title: "Gastos Operativos", url: "/dashboard/reportes/gastos-operativos", icon: Receipt },
-  { title: "Comparativas", url: "/dashboard/reportes/comparativas", icon: BarChart3 },
 ];
 
 export function AppSidebar() {
@@ -73,10 +61,12 @@ export function AppSidebar() {
   const { user } = useAuth();
   const isAsesor = isFieldRoleName(user?.role?.nombre);
 
-  const reportesAsesor = [
-    ...reporteOperativos.filter((item) => item.url !== "/dashboard/reportes/cartera"),
-    ...reporteAsesor.filter((item) => item.url === "/dashboard/reportes/por-cerrar"),
-  ];
+  const reportesAsesor = reporteItems.filter(
+    (item) =>
+      item.url === "/dashboard/reportes/diario" ||
+      item.url === "/dashboard/reportes/gestor-mensual" ||
+      item.url === "/dashboard/reportes/por-cerrar"
+  );
 
   const groups = [
     ...(!isAsesor ? [{ label: "Catálogos", items: catalogItems }] : []),
@@ -84,9 +74,7 @@ export function AppSidebar() {
     ...(!isAsesor ? [{ label: "Contabilidad", items: contabilidadItems }] : []),
     {
       label: "Reportes",
-      items: isAsesor
-        ? reportesAsesor
-        : [...reporteOperativos, ...reporteAsesor, ...reporteFinancieros],
+      items: isAsesor ? reportesAsesor : reporteItems,
     },
   ];
 

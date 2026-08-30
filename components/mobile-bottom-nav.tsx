@@ -35,7 +35,7 @@ const asesorItems: NavItem[] = [
   { title: "General", url: "/dashboard/cartera-general", icon: LayoutDashboard },
   { title: "Individual", url: "/dashboard/creditos-individuales", icon: User },
   { title: "Cobros", url: "/dashboard/reportes/diario", icon: CalendarDays, primary: true },
-  { title: "Por cerrar", url: "/dashboard/reportes/por-cerrar", icon: FileText },
+  { title: "Mensual", url: "/dashboard/reportes/gestor-mensual", icon: FileText },
   { title: "Perfil", url: "/dashboard/perfil", icon: User },
 ];
 

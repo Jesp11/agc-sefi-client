@@ -57,7 +57,6 @@ type VisualData = {
   captura_manual?: {
     mes?: string;
     aumento_cartera?: number | null;
-    cancelacion_credito_vehicular?: number | null;
     pase_a_cartera_mora?: number | null;
     actualizado_en?: string | null;
   };
@@ -244,14 +243,19 @@ function TableCard({
 function FullWidthBanner({
   title,
   value,
+  hint,
 }: {
   title: string;
   value: string;
+  hint?: string;
 }) {
   return (
     <Card size="sm">
       <CardContent className="flex flex-col gap-2 py-1 sm:flex-row sm:items-center sm:justify-between">
-        <div className="text-sm font-semibold">{title}</div>
+        <div>
+          <div className="text-sm font-semibold">{title}</div>
+          {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
+        </div>
         <div className="text-2xl font-semibold tracking-tight">{value}</div>
       </CardContent>
     </Card>
@@ -268,7 +272,6 @@ export default function ReporteCierreMensualPage() {
   const [isSavingShareholders, setIsSavingShareholders] = useState(false);
   const [manualForm, setManualForm] = useState({
     aumento_cartera: "",
-    cancelacion_credito_vehicular: "",
     pase_a_cartera_mora: "",
   });
   const [shareholdersForm, setShareholdersForm] = useState<Array<{ nombre: string; porcentaje: string }>>([]);
@@ -284,8 +287,6 @@ export default function ReporteCierreMensualPage() {
         setData(payload);
         setManualForm({
           aumento_cartera: payload.visual?.captura_manual?.aumento_cartera?.toString() ?? "",
-          cancelacion_credito_vehicular:
-            payload.visual?.captura_manual?.cancelacion_credito_vehicular?.toString() ?? "",
           pase_a_cartera_mora: payload.visual?.captura_manual?.pase_a_cartera_mora?.toString() ?? "",
         });
       }
@@ -427,8 +428,6 @@ export default function ReporteCierreMensualPage() {
       const payload = {
         mes,
         aumento_cartera: manualForm.aumento_cartera === "" ? null : Number(manualForm.aumento_cartera),
-        cancelacion_credito_vehicular:
-          manualForm.cancelacion_credito_vehicular === "" ? null : Number(manualForm.cancelacion_credito_vehicular),
         pase_a_cartera_mora:
           manualForm.pase_a_cartera_mora === "" ? null : Number(manualForm.pase_a_cartera_mora),
       };
@@ -450,8 +449,6 @@ export default function ReporteCierreMensualPage() {
         setData(payload);
         setManualForm({
           aumento_cartera: payload.visual?.captura_manual?.aumento_cartera?.toString() ?? "",
-          cancelacion_credito_vehicular:
-            payload.visual?.captura_manual?.cancelacion_credito_vehicular?.toString() ?? "",
           pase_a_cartera_mora: payload.visual?.captura_manual?.pase_a_cartera_mora?.toString() ?? "",
         });
       }
@@ -519,8 +516,6 @@ export default function ReporteCierreMensualPage() {
         setData(payload);
         setManualForm({
           aumento_cartera: payload.visual?.captura_manual?.aumento_cartera?.toString() ?? "",
-          cancelacion_credito_vehicular:
-            payload.visual?.captura_manual?.cancelacion_credito_vehicular?.toString() ?? "",
           pase_a_cartera_mora: payload.visual?.captura_manual?.pase_a_cartera_mora?.toString() ?? "",
         });
         setShareholdersForm(
@@ -642,7 +637,7 @@ export default function ReporteCierreMensualPage() {
                     </p>
                   ) : null}
                 </DialogHeader>
-                <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="aumento_cartera">Aumento de cartera</Label>
                     <Input
@@ -651,16 +646,6 @@ export default function ReporteCierreMensualPage() {
                       step="0.01"
                       value={manualForm.aumento_cartera}
                       onChange={(e) => setManualForm((prev) => ({ ...prev, aumento_cartera: e.target.value }))}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="cancelacion_credito_vehicular">Cancelación crédito vehicular</Label>
-                    <Input
-                      id="cancelacion_credito_vehicular"
-                      type="number"
-                      step="0.01"
-                      value={manualForm.cancelacion_credito_vehicular}
-                      onChange={(e) => setManualForm((prev) => ({ ...prev, cancelacion_credito_vehicular: e.target.value }))}
                     />
                   </div>
                   <div className="space-y-2">
@@ -673,8 +658,8 @@ export default function ReporteCierreMensualPage() {
                       onChange={(e) => setManualForm((prev) => ({ ...prev, pase_a_cartera_mora: e.target.value }))}
                     />
                   </div>
-                  <div className="flex items-end">
-                    <Button onClick={handleSaveManual} disabled={isSavingManual || loading} className="w-full">
+                  <div className="sm:col-span-2 flex justify-end">
+                    <Button onClick={handleSaveManual} disabled={isSavingManual || loading} className="w-full sm:w-auto">
                       {isSavingManual ? "Guardando..." : "Guardar indicadores"}
                     </Button>
                   </div>
@@ -685,10 +670,6 @@ export default function ReporteCierreMensualPage() {
           <CardContent className="space-y-3">
             {[
               { label: "Aumento de cartera", value: valueOrDash(operacion.aumento_cartera) },
-              {
-                label: "Cancelación crédito vehicular",
-                value: valueOrDash(operacion.cancelacion_credito_vehicular),
-              },
               { label: "Pase a cartera de mora", value: valueOrDash(operacion.pase_a_cartera_mora) },
             ].map((row, index) => (
               <div
@@ -705,10 +686,15 @@ export default function ReporteCierreMensualPage() {
           title="Operación mensual"
           rows={[
             { label: "Liquidaciones", value: valueOrDash(operacion.liquidaciones) },
-            { label: "Productividad mensual", value: valueOrDash(operacion.productividad_mensual) },
           ]}
         />
       </div>
+
+      <FullWidthBanner
+        title="Productividad mensual"
+        value={fmtMoney(operacion.productividad_mensual)}
+        hint={`Aumento de cartera + Liquidaciones`}
+      />
 
       <div className="grid gap-4 xl:grid-cols-2">
         <TableCard

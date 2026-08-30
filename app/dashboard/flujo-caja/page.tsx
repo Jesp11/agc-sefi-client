@@ -120,7 +120,13 @@ export default function FlujoCajaPage() {
   const filtered = filterBySearch(filteredByTab, listControls.search, movimientoCajaSearchFields);
   const paginated = paginateItems(filtered, listControls.page);
 
-  const fmt = (n: number) => `$${Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const fmt = (n: number | null | undefined) => {
+    if (n == null) return "—";
+    const num = Number(n);
+    if (isNaN(num)) return "—";
+    const formatted = Math.abs(num).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return num < 0 ? `-$${formatted}` : `$${formatted}`;
+  };
 
   return (
     <div className="space-y-6">
@@ -307,22 +313,36 @@ export default function FlujoCajaPage() {
                   <TableRow><TableCell colSpan={8} className="h-32 text-center text-muted-foreground">Cargando...</TableCell></TableRow>
                 ) : filtered.length === 0 ? (
                   <TableRow><TableCell colSpan={8} className="h-32 text-center text-muted-foreground">{listControls.search ? "Sin resultados." : "Sin movimientos este mes."}</TableCell></TableRow>
-                ) : paginated.map((m) => (
-                  <TableRow key={m.id}>
-                    <TableCell>{fmtFecha(m.fecha)}</TableCell>
-                    <TableCell className="text-xs">{m.asesor?.nombre_asesor ?? "—"}</TableCell>
-                    <TableCell className="max-w-[280px] truncate text-sm" title={m.motivo}>{m.motivo}</TableCell>
-                    <TableCell><Badge variant="outline" className="text-xs">{m.categoria ?? "—"}</Badge></TableCell>
-                    <TableCell className="text-xs">{m.cuenta ?? "—"}</TableCell>
-                    <TableCell className="text-right text-red-600 font-medium">
-                      {m.tipo === "Egreso" ? fmt(m.monto) : "—"}
-                    </TableCell>
-                    <TableCell className="text-right text-green-600 font-medium">
-                      {m.tipo === "Ingreso" ? fmt(m.monto) : "—"}
-                    </TableCell>
-                    <TableCell className="text-right font-semibold">{m.saldo_resultante != null ? fmt(m.saldo_resultante) : "—"}</TableCell>
-                  </TableRow>
-                ))}
+                ) : paginated.map((m) => {
+                  const isSaldoInicial = m.categoria === "SaldoInicial";
+                  return (
+                    <TableRow key={m.id} className={isSaldoInicial ? "bg-muted/40 font-medium" : undefined}>
+                      <TableCell>{fmtFecha(m.fecha)}</TableCell>
+                      <TableCell className="text-xs">{m.asesor?.nombre_asesor ?? "—"}</TableCell>
+                      <TableCell className="max-w-[280px] truncate text-sm" title={m.motivo}>
+                        {m.motivo}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={isSaldoInicial ? "secondary" : "outline"}
+                          className={`text-xs ${isSaldoInicial ? "bg-blue-50 text-blue-800 border-blue-200" : ""}`}
+                        >
+                          {isSaldoInicial ? "Saldo Inicial" : (m.categoria ?? "—")}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-xs">{m.cuenta ?? "—"}</TableCell>
+                      <TableCell className="text-right text-red-600 font-medium">
+                        {!isSaldoInicial && m.tipo === "Egreso" ? fmt(m.monto) : "—"}
+                      </TableCell>
+                      <TableCell className="text-right text-green-600 font-medium">
+                        {!isSaldoInicial && m.tipo === "Ingreso" ? fmt(m.monto) : "—"}
+                      </TableCell>
+                      <TableCell className={`text-right font-semibold ${isSaldoInicial ? "text-primary font-bold" : ""}`}>
+                        {m.saldo_resultante != null ? fmt(m.saldo_resultante) : "—"}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </Card>

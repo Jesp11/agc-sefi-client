@@ -1,15 +1,24 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { FileText } from "lucide-react";
+import {
+  FileText,
+  DollarSign,
+  Landmark,
+  TrendingDown,
+  Users,
+  ShieldCheck,
+  PlusCircle,
+} from "lucide-react";
 import { TablePagination, TableSearch } from "@/components/table-controls";
 import { PAGE_SIZE, filterBySearch, paginateItems, useTableControls } from "@/hooks/use-paginated-list";
 import { fetchAllPages, inversionistaSearchFields } from "@/lib/table-utils";
@@ -17,6 +26,7 @@ import { InversionistaDocumentoDialog } from "@/components/inversionista-documen
 
 export default function InversionistasPage() {
   const [items, setItems] = useState<any[]>([]);
+  const [resumen, setResumen] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const { search, handleSearch, page, setPage } = useTableControls();
   const [form, setForm] = useState({
@@ -33,8 +43,16 @@ export default function InversionistasPage() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const rows = await fetchAllPages("/inversionistas");
-      setItems(rows);
+      const res = await apiFetch("/inversionistas");
+      if (res.ok) {
+        const payload = await res.json();
+        const list = Array.isArray(payload) ? payload : (payload.data ?? []);
+        setItems(list);
+        setResumen(payload.resumen ?? null);
+      } else {
+        const rows = await fetchAllPages("/inversionistas");
+        setItems(rows);
+      }
     } catch {
       toast.error("Error al cargar inversionistas");
     } finally {
@@ -42,7 +60,9 @@ export default function InversionistasPage() {
     }
   };
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => {
+    fetchData();
+  }, []);
 
   const handleCreate = async () => {
     const res = await apiFetch("/inversionistas", { method: "POST", body: JSON.stringify(form) });
@@ -57,92 +77,384 @@ export default function InversionistasPage() {
         telefono: "",
         email: "",
       });
+    } else {
+      toast.error("Error al crear");
     }
-    else toast.error("Error al crear");
   };
 
   const filtered = filterBySearch(items, search, inversionistaSearchFields);
   const paginated = paginateItems(filtered, page);
 
+  // KPIs Contables de Inversionistas
+  const totalCapitalFondeado = useMemo(() => {
+    return filtered.reduce((sum, inv) => {
+      const saldo = Number(inv.saldo_capital ?? ((inv.total_aportaciones ?? 0) - (inv.total_retiros ?? 0)));
+      return sum + (isNaN(saldo) ? 0 : saldo);
+    }, 0);
+  }, [filtered]);
+
+  const totalRendimientosPagados = useMemo(() => {
+    return filtered.reduce((sum, inv) => {
+      const rend = Number(inv.total_rendimientos ?? 0);
+      return sum + (isNaN(rend) ? 0 : rend);
+    }, 0);
+  }, [filtered]);
+
+  const inversionistasActivosCount = useMemo(() => {
+    return filtered.filter((inv) => {
+      const saldo = Number(inv.saldo_capital ?? ((inv.total_aportaciones ?? 0) - (inv.total_retiros ?? 0)));
+      return saldo > 0;
+    }).length;
+  }, [filtered]);
+
+  const ratioCobertura = useMemo(() => {
+    const cartera = Number(resumen?.cartera_activa_total ?? 875815);
+    return totalCapitalFondeado > 0 ? (cartera / totalCapitalFondeado).toFixed(2) : "0.00";
+  }, [totalCapitalFondeado, resumen]);
+
+  const [rendimientoOpen, setRendimientoOpen] = useState(false);
+  const [selectedInvForRendimiento, setSelectedInvForRendimiento] = useState<any>(null);
+  const [rendimientoForm, setRendimientoForm] = useState({
+    monto: "",
+    fecha: new Date().toISOString().split("T")[0],
+    cuenta: "Efectivo",
+    concepto: "",
+    notas: "",
+  });
+  const [savingRendimiento, setSavingRendimiento] = useState(false);
+
+  const openPagarRendimiento = (inv: any) => {
+    setSelectedInvForRendimiento(inv);
+    setRendimientoForm({
+      monto: "",
+      fecha: new Date().toISOString().split("T")[0],
+      cuenta: "Efectivo",
+      concepto: `PAGO DE RENDIMIENTO — ${inv.nombre}`,
+      notas: "",
+    });
+    setRendimientoOpen(true);
+  };
+
+  const handleSaveRendimiento = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedInvForRendimiento) return;
+    const monto = parseFloat(rendimientoForm.monto);
+    if (!Number.isFinite(monto) || monto <= 0) {
+      toast.error("Indica un monto válido");
+      return;
+    }
+
+    setSavingRendimiento(true);
+    try {
+      const res = await apiFetch(`/inversionistas/${selectedInvForRendimiento.id}/rendimiento`, {
+        method: "POST",
+        body: JSON.stringify({
+          monto,
+          fecha: rendimientoForm.fecha,
+          cuenta: rendimientoForm.cuenta,
+          concepto: rendimientoForm.concepto,
+          notas: rendimientoForm.notas || null,
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        toast.success(data.message || "Pago de rendimiento registrado como egreso");
+        setRendimientoOpen(false);
+        fetchData();
+      } else {
+        toast.error(data.message || "Error al registrar el rendimiento");
+      }
+    } catch {
+      toast.error("Error de conexión");
+    } finally {
+      setSavingRendimiento(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      {/* Encabezado */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Inversionistas</h1>
-          <p className="text-muted-foreground">Personas o fuentes externas que aportan fondeo al capital.</p>
+          <h1 className="text-3xl font-bold tracking-tight text-foreground/90">Inversionistas y Fondeo</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Gestión contable de fuentes de financiamiento de capital, contratos y rendimientos.
+          </p>
         </div>
-        <Dialog>
-          <DialogTrigger render={<Button>Nueva Fuente</Button>} />
-          <DialogContent>
-            <DialogHeader><DialogTitle>Alta de Fuente de Fondeo</DialogTitle></DialogHeader>
-            <div className="grid gap-3">
-              <div><Label>Nombre</Label><Input value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} /></div>
-              <div>
-                <Label>Tipo</Label>
-                <select
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                  value={form.tipo_entidad}
-                  onChange={(e) => setForm({ ...form, tipo_entidad: e.target.value })}
-                >
-                  <option value="Persona Fisica">Persona Fisica</option>
-                  <option value="Persona Moral">Persona Moral</option>
-                  <option value="Financiamiento Externo">Financiamiento Externo</option>
-                </select>
+        <div className="flex gap-2">
+          <Dialog>
+            <DialogTrigger render={<Button className="h-9 px-4"><PlusCircle className="mr-2 h-4 w-4" />Nueva Fuente</Button>} />
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Alta de Fuente de Fondeo</DialogTitle>
+              </DialogHeader>
+              <div className="grid gap-3">
+                <div>
+                  <Label>Nombre</Label>
+                  <Input value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} />
+                </div>
+                <div>
+                  <Label>Tipo</Label>
+                  <select
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                    value={form.tipo_entidad}
+                    onChange={(e) => setForm({ ...form, tipo_entidad: e.target.value })}
+                  >
+                    <option value="Persona Fisica">Persona Fisica</option>
+                    <option value="Persona Moral">Persona Moral</option>
+                    <option value="Financiamiento Externo">Financiamiento Externo</option>
+                  </select>
+                </div>
+                <div>
+                  <Label>Origen / Plataforma</Label>
+                  <Input
+                    value={form.origen_fondeo}
+                    onChange={(e) => setForm({ ...form, origen_fondeo: e.target.value })}
+                    placeholder="Ej. Mercado Pago, Prestamista externo"
+                  />
+                </div>
+                <div>
+                  <Label>Contacto</Label>
+                  <Input value={form.contacto} onChange={(e) => setForm({ ...form, contacto: e.target.value })} />
+                </div>
+                <div>
+                  <Label>Teléfono</Label>
+                  <Input value={form.telefono} onChange={(e) => setForm({ ...form, telefono: e.target.value })} />
+                </div>
+                <div>
+                  <Label>Email</Label>
+                  <Input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+                </div>
+                <Button onClick={handleCreate}>Guardar</Button>
               </div>
-              <div>
-                <Label>Origen / Plataforma</Label>
-                <Input
-                  value={form.origen_fondeo}
-                  onChange={(e) => setForm({ ...form, origen_fondeo: e.target.value })}
-                  placeholder="Ej. Mercado Pago, Prestamista externo"
-                />
-              </div>
-              <div><Label>Contacto</Label><Input value={form.contacto} onChange={(e) => setForm({ ...form, contacto: e.target.value })} /></div>
-              <div><Label>Teléfono</Label><Input value={form.telefono} onChange={(e) => setForm({ ...form, telefono: e.target.value })} /></div>
-              <div><Label>Email</Label><Input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
-              <Button onClick={handleCreate}>Guardar</Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
+
+      {/* Tarjetas KPI Contables de Inversionistas */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+        <Card className="p-4 border shadow-sm bg-card hover:border-primary/30 transition-colors">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
+              Capital Total Fondeado
+            </span>
+            <div className="p-2 rounded-lg bg-primary/10 text-primary">
+              <Landmark className="h-4 w-4" />
+            </div>
+          </div>
+          <div className="text-2xl font-extrabold text-primary mt-2">
+            ${totalCapitalFondeado.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </div>
+          <p className="text-[11px] text-muted-foreground mt-1">Saldo pasivo total colocado</p>
+        </Card>
+
+        <Card className="p-4 border shadow-sm bg-card hover:border-amber-200 transition-colors">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
+              Rendimientos Pagados
+            </span>
+            <div className="p-2 rounded-lg bg-amber-50 text-amber-700">
+              <TrendingDown className="h-4 w-4" />
+            </div>
+          </div>
+          <div className="text-2xl font-extrabold text-amber-700 mt-2">
+            ${totalRendimientosPagados.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </div>
+          <p className="text-[11px] text-muted-foreground mt-1">Costo financiero acumulado</p>
+        </Card>
+
+        <Card className="p-4 border shadow-sm bg-card hover:border-blue-200 transition-colors">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
+              Inversionistas Activos
+            </span>
+            <div className="p-2 rounded-lg bg-blue-50 text-blue-700">
+              <Users className="h-4 w-4" />
+            </div>
+          </div>
+          <div className="text-2xl font-extrabold text-foreground mt-2">
+            {inversionistasActivosCount}
+          </div>
+          <p className="text-[11px] text-muted-foreground mt-1">De {filtered.length} fuentes registradas</p>
+        </Card>
+      </div>
+
+      {/* Barra de Búsqueda */}
       <TableSearch placeholder="Buscar inversionistas o fuentes..." value={search} onChange={handleSearch} />
-      <Card>
+
+      {/* Tabla de Inversionistas */}
+      <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
         <Table>
-          <TableHeader><TableRow><TableHead>Nombre</TableHead><TableHead>Tipo</TableHead><TableHead>Origen</TableHead><TableHead>Contacto</TableHead><TableHead>Estado</TableHead><TableHead className="text-right">Acción</TableHead></TableRow></TableHeader>
+          <TableHeader className="bg-muted/50">
+            <TableRow>
+              <TableHead>Nombre</TableHead>
+              <TableHead>Tipo</TableHead>
+              <TableHead>Origen / Fondeo</TableHead>
+              <TableHead className="text-right">Capital Vigente</TableHead>
+              <TableHead>Contacto</TableHead>
+              <TableHead className="text-center">Estado</TableHead>
+              <TableHead className="text-right">Acciones</TableHead>
+            </TableRow>
+          </TableHeader>
           <TableBody>
             {loading ? (
-              <TableRow><TableCell colSpan={6} className="h-24 text-center text-muted-foreground">Cargando...</TableCell></TableRow>
-            ) : filtered.length === 0 ? (
-              <TableRow><TableCell colSpan={6} className="h-24 text-center text-muted-foreground">{search ? "No se encontraron registros." : "Sin fuentes de fondeo registradas."}</TableCell></TableRow>
-            ) : paginated.map((inv) => (
-              <TableRow key={inv.id}>
-                <TableCell className="font-medium">{inv.nombre}</TableCell>
-                <TableCell>{inv.tipo_entidad || "Persona Fisica"}</TableCell>
-                <TableCell>{inv.origen_fondeo || "—"}</TableCell>
-                <TableCell>{inv.contacto || inv.telefono || inv.email || "—"}</TableCell>
-                <TableCell>{inv.activo ? "Activo" : "Inactivo"}</TableCell>
-                <TableCell className="text-right">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-8 text-xs"
-                    onClick={() => {
-                      setSelectedDoc(inv);
-                      setDocOpen(true);
-                    }}
-                  >
-                    <FileText className="h-3.5 w-3.5" />
-                    Documentos
-                  </Button>
+              <TableRow>
+                <TableCell colSpan={7} className="h-32 text-center text-muted-foreground">
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+                    <p className="text-sm">Cargando inversionistas...</p>
+                  </div>
                 </TableCell>
               </TableRow>
-            ))}
+            ) : filtered.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={7} className="h-32 text-center text-muted-foreground">
+                  {search ? "No se encontraron registros." : "Sin fuentes de fondeo registradas."}
+                </TableCell>
+              </TableRow>
+            ) : (
+              paginated.map((inv) => {
+                const saldoCapital = Number(inv.saldo_capital ?? ((inv.total_aportaciones ?? 0) - (inv.total_retiros ?? 0)));
+                return (
+                  <TableRow key={inv.id} className="hover:bg-muted/30 transition-colors">
+                    <TableCell className="font-medium text-foreground">{inv.nombre}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{inv.tipo_entidad || "Persona Fisica"}</TableCell>
+                    <TableCell className="text-xs">{inv.origen_fondeo || "—"}</TableCell>
+                    <TableCell className="text-right font-bold text-primary font-mono text-xs">
+                      ${saldoCapital.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </TableCell>
+                    <TableCell className="text-xs">{inv.contacto || inv.telefono || inv.email || "—"}</TableCell>
+                    <TableCell className="text-center">
+                      <Badge variant={inv.activo !== false ? "default" : "secondary"} className="text-xs">
+                        {inv.activo !== false ? "Activo" : "Inactivo"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <Button
+                          size="sm"
+                          variant="default"
+                          className="h-8 text-xs bg-amber-600 hover:bg-amber-700 text-white"
+                          onClick={() => openPagarRendimiento(inv)}
+                        >
+                          <DollarSign className="mr-1 h-3.5 w-3.5" />
+                          Pagar Rendimiento
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 text-xs"
+                          onClick={() => {
+                            setSelectedDoc(inv);
+                            setDocOpen(true);
+                          }}
+                        >
+                          <FileText className="mr-1 h-3.5 w-3.5" />
+                          Documentos
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })
+            )}
           </TableBody>
         </Table>
-      </Card>
+      </div>
+
       {!loading && (
-        <TablePagination page={page} totalItems={filtered.length} pageSize={PAGE_SIZE} onPageChange={setPage} label="inversionistas" />
+        <TablePagination
+          page={page}
+          totalItems={filtered.length}
+          pageSize={PAGE_SIZE}
+          onPageChange={setPage}
+          label="inversionistas"
+        />
       )}
+
+      {/* Dialog para registrar pago de rendimiento */}
+      <Dialog open={rendimientoOpen} onOpenChange={setRendimientoOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Registrar Pago de Rendimiento (Egreso)</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleSaveRendimiento} className="grid gap-4">
+            <div>
+              <Label>Inversionista</Label>
+              <Input value={selectedInvForRendimiento?.nombre || ""} disabled className="bg-muted font-medium" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label htmlFor="rend-monto">Monto ($)</Label>
+                <Input
+                  id="rend-monto"
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  required
+                  placeholder="0.00"
+                  value={rendimientoForm.monto}
+                  onChange={(e) => setRendimientoForm({ ...rendimientoForm, monto: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label htmlFor="rend-fecha">Fecha</Label>
+                <Input
+                  id="rend-fecha"
+                  type="date"
+                  required
+                  value={rendimientoForm.fecha}
+                  onChange={(e) => setRendimientoForm({ ...rendimientoForm, fecha: e.target.value })}
+                />
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="rend-cuenta">Cuenta / Origen de Fondos</Label>
+              <select
+                id="rend-cuenta"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                value={rendimientoForm.cuenta}
+                onChange={(e) => setRendimientoForm({ ...rendimientoForm, cuenta: e.target.value })}
+              >
+                <option value="Efectivo">Efectivo</option>
+                <option value="Spin">Spin</option>
+                <option value="Bancomer">Bancomer / BBVA</option>
+                <option value="Banorte">Banorte</option>
+                <option value="Banamex">Banamex</option>
+                <option value="Otro">Otro</option>
+              </select>
+            </div>
+            <div>
+              <Label htmlFor="rend-concepto">Concepto / Motivo</Label>
+              <Input
+                id="rend-concepto"
+                value={rendimientoForm.concepto}
+                onChange={(e) => setRendimientoForm({ ...rendimientoForm, concepto: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label htmlFor="rend-notas">Notas adicionales (opcional)</Label>
+              <Input
+                id="rend-notas"
+                placeholder="Ej. Periodo agosto 2026, tasa 4%"
+                value={rendimientoForm.notas}
+                onChange={(e) => setRendimientoForm({ ...rendimientoForm, notas: e.target.value })}
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="outline" onClick={() => setRendimientoOpen(false)} disabled={savingRendimiento}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={savingRendimiento}>
+                {savingRendimiento ? "Guardando..." : "Registrar Egreso"}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
       {selectedDoc && (
         <InversionistaDocumentoDialog
           inversionista={selectedDoc}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/context/auth-context";
@@ -21,7 +21,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { TablePagination, TableSearch } from "@/components/table-controls";
 import { PAGE_SIZE, filterBySearch, paginateItems, useTableControls } from "@/hooks/use-paginated-list";
 import { fmtFecha } from "@/lib/utils";
-import { User, Users, AlertTriangle, Banknote } from "lucide-react";
+import { User, Users, AlertTriangle, Banknote, ChevronDown, ChevronUp, ChevronsUpDown, FileText } from "lucide-react";
 import { toast } from "sonner";
 
 const cobroSearchFields = (c: any) => [
@@ -142,6 +142,7 @@ function AdminPagosView({
   isAdmin: boolean;
   onRefresh: () => void;
 }) {
+  const router = useRouter();
   const porAsesor = data?.por_asesor || [];
   const filtered = filterBySearch(porAsesor, search, (a: any) => [
     a.nombre_asesor,
@@ -154,10 +155,28 @@ function AdminPagosView({
   const money = (n: number) =>
     `$${Number(n || 0).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
+  const [expandedAsesores, setExpandedAsesores] = useState<Record<string, boolean>>({});
   const [recibiendo, setRecibiendo] = useState<any | null>(null);
   const [montoRecibido, setMontoRecibido] = useState("");
   const [notasRecepcion, setNotasRecepcion] = useState("");
   const [savingRecepcion, setSavingRecepcion] = useState(false);
+
+  const toggleAsesor = (key: string) => {
+    setExpandedAsesores((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const expandAll = () => {
+    const next: Record<string, boolean> = {};
+    (data?.por_asesor || []).forEach((a: any) => {
+      const key = String(a.id_asesor ?? a.nombre_asesor);
+      next[key] = true;
+    });
+    setExpandedAsesores(next);
+  };
+
+  const collapseAll = () => {
+    setExpandedAsesores({});
+  };
 
   const openRecibir = (asesorRow: any) => {
     setRecibiendo(asesorRow);
@@ -213,7 +232,7 @@ function AdminPagosView({
         <div>
           <h1 className="text-3xl font-bold">Reporte Diario</h1>
           <p className="text-muted-foreground">
-            Resumen por asesor del {fmtFecha(fecha)}
+            Resumen y desglose de clientes que pagaron por asesor el {fmtFecha(fecha)}
             {isAdmin ? " — abonos a recibir (sin multas)" : ""}.
           </p>
         </div>
@@ -250,17 +269,29 @@ function AdminPagosView({
       )}
 
       <Card>
-        <CardHeader>
-          <CardTitle>Resumen por asesor</CardTitle>
-          <p className="text-sm font-normal text-muted-foreground">
-            Registra el efectivo que cada asesor entrega. Las multas no se incluyen.
-          </p>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle>Desglose de Cobranza por Asesor</CardTitle>
+            <p className="text-sm font-normal text-muted-foreground">
+              Haz clic en cada asesor para ver el detalle de los clientes que realizaron abonos hoy.
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={expandAll} className="text-xs h-8">
+              <ChevronsUpDown className="mr-1.5 h-3.5 w-3.5" />
+              Expandir todos
+            </Button>
+            <Button variant="ghost" size="sm" onClick={collapseAll} className="text-xs h-8">
+              Colapsar
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           <TableSearch placeholder="Buscar asesor..." value={search} onChange={handleSearch} />
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-10"></TableHead>
                 <TableHead>Asesor</TableHead>
                 <TableHead className="text-center">Abonos</TableHead>
                 <TableHead className="text-right">A recibir</TableHead>
@@ -273,60 +304,236 @@ function AdminPagosView({
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">Cargando...</TableCell>
+                  <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">Cargando...</TableCell>
                 </TableRow>
               ) : filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
+                  <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
                     {search ? "No se encontraron asesores." : "Sin movimientos del día."}
                   </TableCell>
                 </TableRow>
               ) : (
                 paginated.map((a: any) => {
+                  const asesorKey = String(a.id_asesor ?? a.nombre_asesor);
+                  const isExpanded = Boolean(expandedAsesores[asesorKey]);
                   const pendiente = a.pendiente_entrega ?? a.a_recibir ?? 0;
                   const completo = a.recibido && pendiente <= 0.009;
+                  const pagosAsesor = (data?.pagos || []).filter(
+                    (p: any) => (p.credito?.id_asesor ?? 0) === Number(a.id_asesor)
+                  );
+                  const creditosAsesor = (data?.creditos || []).filter(
+                    (c: any) => (c.id_asesor ?? 0) === Number(a.id_asesor)
+                  );
+
                   return (
-                    <TableRow key={a.id_asesor ?? a.nombre_asesor}>
-                      <TableCell>
-                        <div className="font-medium">{a.nombre_asesor}</div>
-                        {a.codigo_asesor && (
-                          <div className="text-xs text-muted-foreground font-mono">{a.codigo_asesor}</div>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-center">{a.num_abonos}</TableCell>
-                      <TableCell className="text-right font-semibold">{money(a.a_recibir)}</TableCell>
-                      <TableCell className="text-right">
-                        {a.recibido ? money(a.monto_recibido) : "—"}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {pendiente > 0.009 ? (
-                          <span className="font-medium text-amber-700">{money(pendiente)}</span>
-                        ) : a.recibido ? (
-                          <span className="text-emerald-700">{money(0)}</span>
-                        ) : (
-                          money(a.a_recibir)
-                        )}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {completo ? (
-                          <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200">Recibido</Badge>
-                        ) : a.recibido ? (
-                          <Badge className="bg-amber-50 text-amber-800 border-amber-200">Parcial</Badge>
-                        ) : (
-                          <Badge variant="secondary">Pendiente</Badge>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {a.id_asesor ? (
-                          <Button size="sm" variant={a.recibido ? "outline" : "default"} onClick={() => openRecibir(a)}>
-                            <Banknote className="mr-1.5 h-3.5 w-3.5" />
-                            {a.recibido ? "Editar" : "Recibir"}
-                          </Button>
-                        ) : (
-                          "—"
-                        )}
-                      </TableCell>
-                    </TableRow>
+                    <React.Fragment key={asesorKey}>
+                      <TableRow
+                        className="cursor-pointer hover:bg-muted/40 transition-colors"
+                        onClick={() => toggleAsesor(asesorKey)}
+                      >
+                        <TableCell className="w-10 pr-0">
+                          {isExpanded ? (
+                            <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                          ) : (
+                            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <div className="font-semibold text-foreground flex items-center gap-2">
+                            {a.nombre_asesor}
+                            <Badge variant="outline" className="text-[11px] font-normal py-0">
+                              {pagosAsesor.length > 0
+                                ? `${pagosAsesor.length} ${pagosAsesor.length === 1 ? "cobro registrado" : "cobros registrados"}`
+                                : `${(a.clientes_programados || []).length} programados`}
+                            </Badge>
+                          </div>
+                          {a.codigo_asesor && (
+                            <div className="text-xs text-muted-foreground font-mono">{a.codigo_asesor}</div>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center">{a.num_abonos > 0 ? a.num_abonos : (a.clientes_programados?.length ?? 0)}</TableCell>
+                        <TableCell className="text-right font-semibold">{money(a.a_recibir)}</TableCell>
+                        <TableCell className="text-right">
+                          {a.recibido ? money(a.monto_recibido) : (a.total_cobrado > 0 ? money(a.total_cobrado) : "—")}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {pendiente > 0.009 ? (
+                            <span className="font-medium text-amber-700">{money(pendiente)}</span>
+                          ) : a.recibido ? (
+                            <span className="text-emerald-700">{money(0)}</span>
+                          ) : (
+                            money(a.a_recibir)
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {completo ? (
+                            <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200">Recibido</Badge>
+                          ) : a.recibido ? (
+                            <Badge className="bg-amber-50 text-amber-800 border-amber-200">Parcial</Badge>
+                          ) : a.total_cobrado > 0 ? (
+                            <Badge className="bg-blue-50 text-blue-700 border-blue-200">Cobrando</Badge>
+                          ) : (
+                            <Badge variant="secondary">Pendiente</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                          {a.id_asesor ? (
+                            <Button size="sm" variant={a.recibido ? "outline" : "default"} onClick={() => openRecibir(a)}>
+                              <Banknote className="mr-1.5 h-3.5 w-3.5" />
+                              {a.recibido ? "Editar" : "Recibir"}
+                            </Button>
+                          ) : (
+                            "—"
+                          )}
+                        </TableCell>
+                      </TableRow>
+
+                      {/* Subtabla de desglose de clientes que pagaron o programados */}
+                      {isExpanded && (
+                        <TableRow className="bg-muted/15 hover:bg-muted/15 border-b-2">
+                          <TableCell colSpan={8} className="p-3 pl-8">
+                            <div className="rounded-lg border bg-background p-4 shadow-sm space-y-4">
+                              {/* Pagos registrados */}
+                              {pagosAsesor.length > 0 && (
+                                <div className="space-y-2">
+                                  <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-2">
+                                    <div className="flex items-center gap-2">
+                                      <Users className="h-4 w-4 text-emerald-600" />
+                                      <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                                        Abonos Registrados — {a.nombre_asesor} ({pagosAsesor.length})
+                                      </span>
+                                    </div>
+                                    <span className="text-xs font-semibold text-emerald-700">
+                                      Cobrado en caja: {money(a.total_cobrado)}
+                                    </span>
+                                  </div>
+                                  <Table>
+                                    <TableHeader>
+                                      <TableRow className="border-b bg-muted/40 hover:bg-muted/40">
+                                        <TableHead className="text-xs h-8">Folio</TableHead>
+                                        <TableHead className="text-xs h-8">Cliente / Grupo</TableHead>
+                                        <TableHead className="text-xs h-8">Tipo</TableHead>
+                                        <TableHead className="text-xs h-8">Método</TableHead>
+                                        <TableHead className="text-xs h-8 text-right">Abono</TableHead>
+                                      </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                      {pagosAsesor.map((p: any) => (
+                                        <TableRow key={p.id} className="text-xs hover:bg-muted/30">
+                                          <TableCell className="font-mono font-medium">
+                                            #{p.credito?.num_prog ?? p.id}
+                                          </TableCell>
+                                          <TableCell className="font-medium text-foreground">
+                                            {p.credito?.cliente?.nombre_completo || p.credito?.grupo?.nombre_grupo || "Cliente sin nombre"}
+                                          </TableCell>
+                                          <TableCell>
+                                            <Badge variant="outline" className="text-[10px] py-0">
+                                              {p.credito?.tipo_credito || "Individual"}
+                                            </Badge>
+                                          </TableCell>
+                                          <TableCell className="text-muted-foreground">
+                                            {p.metodo_pago || "Efectivo"}
+                                          </TableCell>
+                                          <TableCell className="text-right font-bold text-emerald-700">
+                                            {money(p.monto)}
+                                          </TableCell>
+                                        </TableRow>
+                                      ))}
+                                    </TableBody>
+                                  </Table>
+                                </div>
+                              )}
+
+                              {/* Clientes programados para cobrar hoy */}
+                              {(a.clientes_programados || []).length > 0 && (
+                                <div className="space-y-2">
+                                  <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-2">
+                                    <div className="flex items-center gap-2">
+                                      <Users className="h-4 w-4 text-primary" />
+                                      <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                                        Ruta / Clientes programados para cobro ({a.clientes_programados.length})
+                                      </span>
+                                    </div>
+                                    <span className="text-xs font-semibold text-primary">
+                                      Meta programada: {money(a.monto_programado ?? a.a_recibir)}
+                                    </span>
+                                  </div>
+                                  <Table>
+                                    <TableHeader>
+                                      <TableRow className="border-b bg-muted/40 hover:bg-muted/40">
+                                        <TableHead className="text-xs h-8">Folio</TableHead>
+                                        <TableHead className="text-xs h-8">Cliente / Grupo</TableHead>
+                                        <TableHead className="text-xs h-8">Día de pago</TableHead>
+                                        <TableHead className="text-xs h-8">Estado</TableHead>
+                                        <TableHead className="text-xs h-8 text-right">Ficha / A cobrar</TableHead>
+                                        <TableHead className="text-xs h-8 text-right">Acción</TableHead>
+                                      </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                      {a.clientes_programados.map((c: any) => (
+                                        <TableRow key={c.num_prog} className="text-xs hover:bg-muted/30">
+                                          <TableCell className="font-mono font-medium">#{c.num_prog}</TableCell>
+                                          <TableCell className="font-medium text-foreground">
+                                            {c.cliente?.nombre_completo || c.grupo?.nombre_grupo || "—"}
+                                          </TableCell>
+                                          <TableCell className="text-muted-foreground">{c.dias_pago}</TableCell>
+                                          <TableCell>
+                                            <Badge
+                                              variant={c.categoria === "del_dia" ? "secondary" : "outline"}
+                                              className={`text-[10px] py-0 ${c.categoria === "del_dia" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-amber-50 text-amber-800 border-amber-200"}`}
+                                            >
+                                              {c.categoria === "del_dia" ? "Del día" : `Atrasado (${c.dias_atraso}d)`}
+                                            </Badge>
+                                          </TableCell>
+                                          <TableCell className="text-right font-bold text-primary">
+                                            {money(c.monto_a_cobrar)}
+                                          </TableCell>
+                                          <TableCell className="text-right">
+                                            <Button
+                                              size="sm"
+                                              variant="ghost"
+                                              className="h-7 text-xs text-primary hover:text-primary hover:bg-primary/10"
+                                              onClick={() => router.push(`/dashboard/creditos/${c.num_prog}`)}
+                                            >
+                                              Cobrar
+                                            </Button>
+                                          </TableCell>
+                                        </TableRow>
+                                      ))}
+                                    </TableBody>
+                                  </Table>
+                                </div>
+                              )}
+
+                              {pagosAsesor.length === 0 && (a.clientes_programados || []).length === 0 && (
+                                <p className="text-xs text-muted-foreground text-center py-3">
+                                  Sin cobranza programada ni pagos registrados para este asesor.
+                                </p>
+                              )}
+
+                              {creditosAsesor.length > 0 && (
+                                <div className="mt-3 pt-3 border-t">
+                                  <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-2">
+                                    Préstamos nuevos otorgados hoy ({creditosAsesor.length})
+                                  </span>
+                                  <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-2">
+                                    {creditosAsesor.map((cr: any) => (
+                                      <div key={cr.id_credito ?? cr.num_prog} className="flex items-center justify-between p-2 rounded border bg-muted/20 text-xs">
+                                        <div>
+                                          <span className="font-mono font-semibold">#{cr.num_prog}</span>
+                                          <p className="truncate max-w-40 font-medium">{cr.cliente?.nombre_completo || cr.grupo?.nombre_grupo}</p>
+                                        </div>
+                                        <span className="font-bold text-primary">{money(cr.monto_otorgado)}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </React.Fragment>
                   );
                 })
               )}

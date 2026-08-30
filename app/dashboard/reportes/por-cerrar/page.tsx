@@ -10,13 +10,23 @@ import { PAGE_SIZE, filterBySearch, paginateItems, useTableControls } from "@/ho
 import { creditoSearchFields } from "@/lib/table-utils";
 import { fmtFecha } from "@/lib/utils";
 
+type ReporteRenovacionItem = {
+  num_prog: number;
+  cliente?: { nombre_completo?: string | null } | null;
+  grupo?: { nombre_grupo?: string | null } | null;
+  monto_ultimo_abono?: number | null;
+  pagos_restantes: number;
+  fecha_ultimo_abono?: string | null;
+  dias_restantes: number;
+  [key: string]: unknown;
+};
+
 export default function ReportePorCerrarPage() {
-  const [items, setItems] = useState<any[]>([]);
+  const [items, setItems] = useState<ReporteRenovacionItem[]>([]);
   const [loading, setLoading] = useState(true);
   const { search, handleSearch, page, setPage } = useTableControls();
 
   useEffect(() => {
-    setLoading(true);
     apiFetch("/reportes/asesor/por-cerrar").then(async (res) => {
       if (res.ok) setItems(await res.json());
       setLoading(false);
@@ -33,9 +43,9 @@ export default function ReportePorCerrarPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-bold">Clientes por Cerrar</h1>
+      <h1 className="text-3xl font-bold">Renovacion de clientes</h1>
       <p className="text-muted-foreground">
-        Créditos con entre 1 y 6 pagos restantes calculados desde el calendario amortizado.
+        Clientes con entre 1 y 6 pagos restantes, calculados desde el calendario amortizado y sin mora.
       </p>
       <TableSearch placeholder="Buscar..." value={search} onChange={handleSearch} />
       <Card>
@@ -60,7 +70,7 @@ export default function ReportePorCerrarPage() {
             ) : filtered.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={6} className="text-center text-muted-foreground">
-                  {search ? "No se encontraron resultados." : "No hay clientes por cerrar."}
+                  {search ? "No se encontraron resultados." : "No hay clientes para renovación."}
                 </TableCell>
               </TableRow>
             ) : paginated.map((c) => {
