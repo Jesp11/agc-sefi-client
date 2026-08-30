@@ -65,9 +65,9 @@ export default function ProfilePage() {
                 {user?.name?.charAt(0) || "A"}
               </div>
               <div>
-                <h2 className="text-2xl font-bold">{user?.name || "Administrador"}</h2>
+                <h2 className="text-2xl font-bold">{user?.name || "Usuario"}</h2>
                 <Badge variant="secondary" className="mt-1">
-                  Administrador
+                  {user?.role?.nombre || "Sin rol"}
                 </Badge>
               </div>
             </div>
@@ -79,7 +79,7 @@ export default function ProfilePage() {
                 </div>
                 <div className="flex flex-col">
                   <span className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Email</span>
-                  <span className="font-medium">{user?.email || "admin@sefi.com"}</span>
+                  <span className="font-medium">{user?.email || "—"}</span>
                 </div>
               </div>
 
@@ -89,7 +89,7 @@ export default function ProfilePage() {
                 </div>
                 <div className="flex flex-col">
                   <span className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Rol</span>
-                  <span className="font-medium">Administrador del Sistema</span>
+                  <span className="font-medium">{user?.role?.nombre || "Sin rol"}</span>
                 </div>
               </div>
 

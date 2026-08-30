@@ -24,8 +24,8 @@ export function HeaderUserMenu() {
             <Shield className="size-4 text-white" />
           </div>
           <div className="text-left text-sm leading-tight hidden md:block">
-            <p className="font-semibold truncate max-w-36">{user?.name || "Administrador"}</p>
-            <p className="text-xs text-white/60 truncate max-w-36">{user?.email || "admin@sefi.com"}</p>
+            <p className="font-semibold truncate max-w-36">{user?.name || "Usuario"}</p>
+            <p className="text-xs text-white/70 truncate max-w-36">{user?.role?.nombre || user?.email || ""}</p>
           </div>
           <ChevronsUpDown className="size-4 text-white/70" />
         </button>
@@ -34,12 +34,13 @@ export function HeaderUserMenu() {
         <DropdownMenuGroup>
           <DropdownMenuLabel className="p-0 font-normal">
             <div className="flex items-center gap-2 px-2 py-2 text-sm">
-              <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                <Shield className="size-4" />
+              <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold">
+                {user?.name?.charAt(0) || "U"}
               </div>
               <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-semibold">{user?.name || "Administrador"}</span>
-                <span className="truncate text-xs text-muted-foreground">{user?.email || "admin@sefi.com"}</span>
+                <span className="truncate font-semibold">{user?.name || "Usuario"}</span>
+                <span className="truncate text-xs text-muted-foreground">{user?.email}</span>
+                <span className="text-[11px] font-medium text-primary mt-0.5">{user?.role?.nombre || "Sin rol"}</span>
               </div>
             </div>
           </DropdownMenuLabel>
