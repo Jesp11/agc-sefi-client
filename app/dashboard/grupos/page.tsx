@@ -89,7 +89,7 @@ export default function GruposPage() {
             <TableRow>
               <TableHead className="w-[80px]">ID</TableHead>
               <TableHead>Nombre del Grupo</TableHead>
-              <TableHead>Asesor</TableHead>
+              <TableHead>Gestor Cobranza</TableHead>
               <TableHead className="text-center">Integrantes</TableHead>
               <TableHead className="text-right">Acción</TableHead>
             </TableRow>

@@ -297,7 +297,7 @@ export default function ClienteDetallePage() {
                   <TableRow>
                     <TableHead>Ciclo</TableHead>
                     <TableHead>Dia Pago</TableHead>
-                    <TableHead>Asesor</TableHead>
+                    <TableHead>Gestor Cobranza</TableHead>
                     <TableHead>Valor Ficha</TableHead>
                     <TableHead>Plazos</TableHead>
                     <TableHead>Monto Otorgado</TableHead>

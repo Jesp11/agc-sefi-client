@@ -271,7 +271,7 @@ function AdminPagosView({
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
-            <CardTitle>Desglose de Cobranza por Asesor</CardTitle>
+            <CardTitle>Desglose de Cobranza por Gestor Cobranza</CardTitle>
             <p className="text-sm font-normal text-muted-foreground">
               Haz clic en cada asesor para ver el detalle de los clientes que realizaron abonos hoy.
             </p>
@@ -287,12 +287,12 @@ function AdminPagosView({
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          <TableSearch placeholder="Buscar asesor..." value={search} onChange={handleSearch} />
+          <TableSearch placeholder="Buscar gestor de cobranza..." value={search} onChange={handleSearch} />
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead className="w-10"></TableHead>
-                <TableHead>Asesor</TableHead>
+                <TableHead>Gestor Cobranza</TableHead>
                 <TableHead className="text-center">Abonos</TableHead>
                 <TableHead className="text-right">A recibir</TableHead>
                 <TableHead className="text-right">Recibido</TableHead>
@@ -309,7 +309,7 @@ function AdminPagosView({
               ) : filtered.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
-                    {search ? "No se encontraron asesores." : "Sin movimientos del día."}
+                    {search ? "No se encontraron gestores de cobranza." : "Sin movimientos del día."}
                   </TableCell>
                 </TableRow>
               ) : (
@@ -507,7 +507,7 @@ function AdminPagosView({
 
                               {pagosAsesor.length === 0 && (a.clientes_programados || []).length === 0 && (
                                 <p className="text-xs text-muted-foreground text-center py-3">
-                                  Sin cobranza programada ni pagos registrados para este asesor.
+                                  Sin cobranza programada ni pagos registrados para este gestor de cobranza.
                                 </p>
                               )}
 
@@ -556,7 +556,7 @@ function AdminPagosView({
           <DialogHeader>
             <DialogTitle>Recibir de {recibiendo?.nombre_asesor}</DialogTitle>
             <DialogDescription>
-              Indica el efectivo que entregó el asesor el {fmtFecha(fecha)}.
+              Indica el efectivo que entregó el gestor de cobranza el {fmtFecha(fecha)}.
               Esperado (abonos): {money(recibiendo?.a_recibir ?? 0)}.
             </DialogDescription>
           </DialogHeader>

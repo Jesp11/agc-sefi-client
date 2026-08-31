@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +9,13 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import {
   FileText,
@@ -18,11 +25,17 @@ import {
   Users,
   ShieldCheck,
   PlusCircle,
+  FileSpreadsheet,
+  Download,
+  FileDown,
+  ChevronDown,
 } from "lucide-react";
 import { TablePagination, TableSearch } from "@/components/table-controls";
 import { PAGE_SIZE, filterBySearch, paginateItems, useTableControls } from "@/hooks/use-paginated-list";
 import { fetchAllPages, inversionistaSearchFields } from "@/lib/table-utils";
 import { InversionistaDocumentoDialog } from "@/components/inversionista-documento-dialog";
+import * as XLSX from "xlsx";
+import { parseInversionistasImportFile } from "@/lib/inversionistas-xlsx";
 
 export default function InversionistasPage() {
   const [items, setItems] = useState<any[]>([]);
@@ -39,6 +52,9 @@ export default function InversionistasPage() {
   });
   const [selectedDoc, setSelectedDoc] = useState<any>(null);
   const [docOpen, setDocOpen] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const importInputRef = useRef<HTMLInputElement>(null);
 
   const fetchData = async () => {
     setLoading(true);
@@ -84,6 +100,96 @@ export default function InversionistasPage() {
 
   const filtered = filterBySearch(items, search, inversionistaSearchFields);
   const paginated = paginateItems(filtered, page);
+
+  const handleImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    setIsImporting(true);
+    try {
+      const buffer = await file.arrayBuffer();
+      const { rows, errores } = parseInversionistasImportFile(buffer);
+      if (errores.length > 0 && rows.length === 0) {
+        toast.error(errores[0]);
+        return;
+      }
+
+      const res = await apiFetch("/inversionistas/import", {
+        method: "POST",
+        body: JSON.stringify({ rows }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        const detail = [...(data.errors ?? [])]
+          .slice(0, 3)
+          .map((item: { fila?: number; mensaje?: string }) => `Fila ${item.fila ?? "?"}: ${item.mensaje ?? "Error"}`)
+          .join(" · ");
+        toast.error(detail || data.message || "Error al importar inversionistas");
+        return;
+      }
+
+      if (data.warnings?.length) {
+        const detail = data.warnings
+          .slice(0, 2)
+          .map((item: { fila?: number; mensaje?: string }) => `Fila ${item.fila ?? "?"}: ${item.mensaje ?? ""}`)
+          .join(" · ");
+        toast.warning(detail);
+      }
+
+      toast.success(data.message || "Inversionistas importados");
+      fetchData();
+    } catch {
+      toast.error("Error al importar inversionistas");
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  const handleExportTemplate = () => {
+    const ws = XLSX.utils.aoa_to_sheet([
+      ["EMPLEADO", "INVERSION", "2026-01-31", "2026-02-28", "2026-03-31", "TOTAL"],
+      ["JUAN PEREZ", "100000", "4000", "4000", "4000", "12000"],
+    ]);
+    ws["!cols"] = [{ wch: 28 }, { wch: 16 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Inversionistas");
+    XLSX.writeFile(wb, "plantilla_inversionistas.xlsx");
+    toast.success("Plantilla descargada");
+  };
+
+  const handleExportInfo = () => {
+    setIsExporting(true);
+    try {
+      if (filtered.length === 0) {
+        toast.error("No hay inversionistas para exportar");
+        return;
+      }
+
+      const rows = filtered.map((inv) => ({
+        "Nombre": inv.nombre ?? "",
+        "Tipo": inv.tipo_entidad ?? "",
+        "Origen / Fondeo": inv.origen_fondeo ?? "",
+        "Contacto": inv.contacto ?? "",
+        "Teléfono": inv.telefono ?? "",
+        "Email": inv.email ?? "",
+        "Capital vigente": Number(inv.saldo_capital ?? ((inv.total_aportaciones ?? 0) - (inv.total_retiros ?? 0))),
+        "Total aportaciones": Number(inv.total_aportaciones ?? 0),
+        "Total retiros": Number(inv.total_retiros ?? 0),
+        "Total rendimientos": Number(inv.total_rendimientos ?? 0),
+        "Estado": inv.activo !== false ? "Activo" : "Inactivo",
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Inversionistas");
+      XLSX.writeFile(wb, `inversionistas_${new Date().toISOString().slice(0, 10)}.xlsx`);
+      toast.success("Información exportada");
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   // KPIs Contables de Inversionistas
   const totalCapitalFondeado = useMemo(() => {
@@ -179,10 +285,45 @@ export default function InversionistasPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-foreground/90">Inversionistas y Fondeo</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Gestión contable de fuentes de financiamiento de capital, contratos y rendimientos.
+            Gestión contable de fuentes de financiamiento de capital, contratos y rendimientos. Importa solo el Excel de esta pantalla.
           </p>
         </div>
         <div className="flex gap-2">
+          <input
+            ref={importInputRef}
+            type="file"
+            accept=".xlsx,.xls"
+            className="hidden"
+            onChange={handleImportFile}
+          />
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button variant="outline" className="h-9 px-4" disabled={isImporting || isExporting}>
+                  Acciones
+                  <ChevronDown className="ml-2 h-4 w-4" />
+                </Button>
+              }
+            />
+            <DropdownMenuContent align="end" className="min-w-52">
+              <DropdownMenuItem onClick={handleExportTemplate} disabled={isImporting || isExporting}>
+                <FileDown className="mr-2 h-4 w-4" />
+                Exportar plantilla
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleExportInfo} disabled={isImporting || isExporting}>
+                <Download className="mr-2 h-4 w-4" />
+                {isExporting ? "Exportando..." : "Exportar inversionistas"}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => importInputRef.current?.click()}
+                disabled={isImporting || isExporting}
+              >
+                <FileSpreadsheet className="mr-2 h-4 w-4" />
+                {isImporting ? "Importando..." : "Importar Excel"}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Dialog>
             <DialogTrigger render={<Button className="h-9 px-4"><PlusCircle className="mr-2 h-4 w-4" />Nueva Fuente</Button>} />
             <DialogContent>

@@ -1,10 +1,19 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/context/auth-context";
+import { isFieldRoleName } from "@/lib/authz";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
@@ -15,13 +24,18 @@ import {
   DollarSign,
   TrendingUp,
   UserX,
-  Layers,
+  FileSpreadsheet,
+  Download,
+  FileDown,
+  ChevronDown,
 } from "lucide-react";
 import { TablePagination, TableSearch } from "@/components/table-controls";
 import { PAGE_SIZE, filterBySearch, paginateItems, useTableControls } from "@/hooks/use-paginated-list";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, apiUpload } from "@/lib/api";
 import { creditoSearchFields } from "@/lib/table-utils";
 import { CarteraAcciones } from "@/components/cartera-acciones";
+import { toast } from "sonner";
+import * as XLSX from "xlsx";
 
 interface MoraTableProps {
   endpoint: "/cartera/mora-activa" | "/cartera/mora-muerta";
@@ -283,13 +297,159 @@ function MoraTable({ endpoint, tipoFiltro = "todos", badgeLabel, badgeVariant = 
 }
 
 export default function CarteraMoraPage() {
+  const { user } = useAuth();
+  const isAsesor = isFieldRoleName(user?.role?.nombre);
+  const [isImporting, setIsImporting] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const importInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    setIsImporting(true);
+    try {
+      const formData = new FormData();
+      formData.append("archivo", file);
+
+      const res = await apiUpload("/cartera/import/mora", formData);
+      const data = await res.json();
+
+      if (!res.ok) {
+        const detail = [...(data.error ?? []), ...(data.output ?? [])].slice(0, 4).join(" · ");
+        toast.error(detail || data.message || "Error al importar mora");
+        return;
+      }
+
+      toast.success("Mora conciliada e importada");
+      window.location.reload();
+    } catch {
+      toast.error("Error al importar mora");
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  const handleExportTemplate = () => {
+    const ws = XLSX.utils.aoa_to_sheet([
+      ["NUM. PROG", "FECHA", "CLIENTE", "ID CLIENTE", "GRUPO", "CICLO", "DIAS DE PAGO", "ASESOR", "VALOR FICHA", "PLAZOS", "MONTO OTORGADO", "INETERES", "TOTAL"],
+      ["1001", "2026-08-01", "MARIA GARCIA LOPEZ", "MGL001", "", "1", "LUNES", "CARLOS LOPEZ", "500", "16", "8000", "4800", "12800"],
+      ["2001", "2026-08-01", "", "", "LAS FLORES", "1", "MARTES", "LUIS HERNANDEZ", "450", "16", "25200", "10080", "35280"],
+    ]);
+    ws["!cols"] = Array.from({ length: 13 }, () => ({ wch: 18 }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Mora");
+    XLSX.writeFile(wb, "plantilla_cartera_mora.xlsx");
+    toast.success("Plantilla descargada");
+  };
+
+  const handleExportInfo = async () => {
+    setIsExporting(true);
+    try {
+      const [activaRes, muertaRes] = await Promise.all([
+        apiFetch("/cartera/mora-activa"),
+        apiFetch("/cartera/mora-muerta"),
+      ]);
+
+      if (!activaRes.ok || !muertaRes.ok) {
+        toast.error("Error al exportar cartera en mora");
+        return;
+      }
+
+      const activaData = await activaRes.json();
+      const muertaData = await muertaRes.json();
+
+      const activa = (activaData.creditos ?? []).map((c: any) => ({
+        "Folio": c.num_prog ?? "",
+        "Cliente / Grupo": c.cliente?.nombre_completo || c.grupo?.nombre_grupo || "",
+        "Tipo": c.tipo_credito ?? "",
+        "Ciclo": c.ciclo ?? "",
+        "Gestor": c.asesor?.nombre_asesor ?? "",
+        "Días mora": c.dias_mora ?? c.mora?.dias_mora ?? 0,
+        "Ficha semanal": Number(c.valor_ficha ?? 0),
+        "Total adeudo": Number(c.mora?.total_adeudo ?? c.mora?.saldo_actual ?? c.saldo_pendiente ?? 0),
+        "Saldo inversión": Number(c.saldo_inversion ?? c.mora?.saldo_inversion ?? 0),
+        "Clasificación": "Mora Activa",
+      }));
+
+      const muertaRows = (muertaData.creditos ?? []).map((c: any) => ({
+        "Folio": c.num_prog ?? "",
+        "Cliente / Grupo": c.cliente?.nombre_completo || c.grupo?.nombre_grupo || "",
+        "Tipo": c.tipo_credito ?? "",
+        "Ciclo": c.ciclo ?? "",
+        "Gestor": c.asesor?.nombre_asesor ?? "",
+        "Días mora": c.dias_mora ?? c.mora?.dias_mora ?? 0,
+        "Ficha semanal": Number(c.valor_ficha ?? 0),
+        "Total adeudo": Number(c.mora?.total_adeudo ?? c.mora?.saldo_actual ?? c.saldo_pendiente ?? 0),
+        "Saldo inversión": Number(c.saldo_inversion ?? c.mora?.saldo_inversion ?? 0),
+        "Clasificación": "Mora Muerta",
+      }));
+
+      const muertaIndividual = muertaRows.filter((row: any) => String(row["Tipo"]).toLowerCase() !== "grupal");
+      const muertaGrupal = muertaRows.filter((row: any) => String(row["Tipo"]).toLowerCase() === "grupal");
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(activa), "Mora Activa");
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(muertaIndividual), "Muerta Individual");
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(muertaGrupal), "Muerta Grupal");
+      XLSX.writeFile(wb, `cartera_mora_${new Date().toISOString().slice(0, 10)}.xlsx`);
+      toast.success("Información exportada");
+    } catch {
+      toast.error("Error al exportar cartera en mora");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight text-foreground/90">Cartera en Mora</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          Control de cartera vencida clasificada en mora activa y mora muerta (individual y grupal).
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight text-foreground/90">Cartera en Mora</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Control de cartera vencida clasificada en mora activa y mora muerta. Importa solo el Excel de mora.
+          </p>
+        </div>
+        {!isAsesor && (
+          <div className="flex items-center gap-2">
+            <input
+              ref={importInputRef}
+              type="file"
+              accept=".xlsx,.xls"
+              className="hidden"
+              onChange={handleImportFile}
+            />
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button variant="outline" size="sm" className="h-9 px-4" disabled={isImporting || isExporting}>
+                    Acciones
+                    <ChevronDown className="ml-2 h-4 w-4" />
+                  </Button>
+                }
+              />
+              <DropdownMenuContent align="end" className="min-w-52">
+                <DropdownMenuItem onClick={handleExportTemplate} disabled={isImporting || isExporting}>
+                  <FileDown className="mr-2 h-4 w-4" />
+                  Exportar plantilla
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleExportInfo} disabled={isImporting || isExporting}>
+                  <Download className="mr-2 h-4 w-4" />
+                  {isExporting ? "Exportando..." : "Exportar cartera"}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={() => importInputRef.current?.click()}
+                  disabled={isImporting || isExporting}
+                >
+                  <FileSpreadsheet className="mr-2 h-4 w-4" />
+                  {isImporting ? "Importando..." : "Importar Excel"}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        )}
       </div>
 
       <Tabs defaultValue="activa" className="space-y-4">

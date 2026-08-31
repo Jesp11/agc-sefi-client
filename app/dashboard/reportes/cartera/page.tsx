@@ -254,7 +254,7 @@ export default function ReporteCarteraPage() {
         "Estado": c.estado,
         "Cliente": c.cliente?.nombre_completo ?? "",
         "Grupo": c.grupo?.nombre_grupo ?? "",
-        "Asesor": c.asesor?.nombre_asesor ?? "",
+        "Gestor Cobranza": c.asesor?.nombre_asesor ?? "",
         "Monto otorgado": Number(c.monto_otorgado ?? 0),
         "Interes": Number(c.interes ?? 0),
         ...(showGroupFields ? {
@@ -395,7 +395,7 @@ export default function ReporteCarteraPage() {
                     setPage(1);
                   }}
                 >
-                  <option value="todos">— Todos los asesores —</option>
+                  <option value="todos">— Todos los gestores de cobranza —</option>
                   {asesoresList.map((a) => (
                     <option key={a.id} value={a.id}>
                       {a.nombre}
@@ -534,7 +534,7 @@ export default function ReporteCarteraPage() {
 
       {/* Barra de Búsqueda y Filtros Activos */}
       <div className="space-y-2">
-        <TableSearch placeholder="Buscar créditos por cliente, grupo, asesor, folio..." value={search} onChange={handleSearch} />
+        <TableSearch placeholder="Buscar créditos por cliente, grupo, gestor de cobranza, folio..." value={search} onChange={handleSearch} />
 
         {activeFiltersCount > 0 && (
           <div className="flex flex-wrap items-center gap-1.5 text-xs pt-1">
@@ -565,7 +565,7 @@ export default function ReporteCarteraPage() {
             <TableRow>
               <TableHead>Folio</TableHead>
               <TableHead>Cliente / Grupo</TableHead>
-              <TableHead>Asesor</TableHead>
+              <TableHead>Gestor Cobranza</TableHead>
               <TableHead>Tipo</TableHead>
               <TableHead>Estado</TableHead>
               <TableHead>Monto</TableHead>

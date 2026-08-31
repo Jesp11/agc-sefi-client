@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,12 +10,21 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { fmtFecha } from "@/lib/utils";
-import { ArrowDownCircle, ArrowUpCircle, Plus } from "lucide-react";
+import { ArrowDownCircle, ArrowUpCircle, Plus, FileSpreadsheet, Download, FileDown, ChevronDown } from "lucide-react";
 import { TablePagination, TableSearch } from "@/components/table-controls";
 import { PAGE_SIZE, filterBySearch, paginateItems, useTableControls } from "@/hooks/use-paginated-list";
 import { fetchAllPages, movimientoCajaSearchFields } from "@/lib/table-utils";
+import { parseFlujoCajaImportFile } from "@/lib/flujo-caja-xlsx";
+import * as XLSX from "xlsx";
 
 const MESES = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -59,6 +68,9 @@ export default function FlujoCajaPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [tab, setTab] = useState("todos");
   const listControls = useTableControls();
+  const importInputRef = useRef<HTMLInputElement>(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -128,16 +140,127 @@ export default function FlujoCajaPage() {
     return num < 0 ? `-$${formatted}` : `$${formatted}`;
   };
 
+  const handleImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    setIsImporting(true);
+    try {
+      const buffer = await file.arrayBuffer();
+      const { rows, errores: parseErrors, sheetName } = parseFlujoCajaImportFile(buffer, mes, anio);
+
+      if (parseErrors.length > 0 && rows.length === 0) {
+        toast.error(parseErrors[0]);
+        return;
+      }
+
+      const res = await apiFetch("/flujo-caja/import", {
+        method: "POST",
+        body: JSON.stringify({ anio, mes, rows, reemplazar: true }),
+      });
+      const data = await res.json();
+
+      if ((data.created ?? 0) > 0 || (data.deleted ?? 0) > 0) {
+        toast.success(
+          sheetName
+            ? `Importación aplicada en ${sheetName}: ${data.created ?? 0} movimiento(s) creados.`
+            : "Flujo de caja importado."
+        );
+        fetchData();
+      }
+
+      if (data.warnings?.length) {
+        const detail = data.warnings
+          .slice(0, 3)
+          .map((item: { fila: number; mensaje: string }) => `Fila ${item.fila}: ${item.mensaje}`)
+          .join(" · ");
+        toast.warning(`${data.warnings.length} advertencia(s). ${detail}`);
+      }
+
+      if (data.errors?.length) {
+        const detail = data.errors
+          .slice(0, 3)
+          .map((item: { fila: number; mensaje: string }) => `Fila ${item.fila}: ${item.mensaje}`)
+          .join(" · ");
+        toast.error(`${data.errors.length} error(es). ${detail}`);
+      } else if (!res.ok && !(data.created > 0 || data.deleted > 0)) {
+        toast.error(data.message || "Error al importar flujo de caja");
+      }
+
+      if (parseErrors.length > 0) {
+        toast.warning(parseErrors.join(" "));
+      }
+    } catch {
+      toast.error("Error al importar flujo de caja");
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  const handleExportTemplate = () => {
+    const ws = XLSX.utils.aoa_to_sheet([
+      [],
+      [],
+      [],
+      ["", "FECHA", "VENDEDOR", "MOTIVO", "DESEMBOLSO", "INGRESOS", "SALDO"],
+      ["", "2026-08-01", "CARLOS LOPEZ", "PAGO 1/16 MARIA GARCIA", "", "500", "500"],
+      ["", "2026-08-01", "", "RENTA OFICINA", "2500", "", "-2000"],
+    ]);
+    ws["!cols"] = [{ wch: 4 }, { wch: 14 }, { wch: 22 }, { wch: 38 }, { wch: 16 }, { wch: 16 }, { wch: 16 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "AGOSTO");
+    XLSX.writeFile(wb, "plantilla_flujo_caja.xlsx");
+    toast.success("Plantilla descargada");
+  };
+
+  const handleExportInfo = () => {
+    setIsExporting(true);
+    try {
+      if (filtered.length === 0) {
+        toast.error("No hay movimientos para exportar");
+        return;
+      }
+
+      const rows = filtered.map((m) => ({
+        "Fecha": m.fecha ?? "",
+        "Empleado": m.asesor?.nombre_asesor ?? "",
+        "Motivo": m.motivo ?? "",
+        "Categoría": m.categoria ?? "",
+        "Cuenta": m.cuenta ?? "",
+        "Tipo": m.tipo ?? "",
+        "Egreso": m.tipo === "Egreso" ? Number(m.monto ?? 0) : 0,
+        "Ingreso": m.tipo === "Ingreso" ? Number(m.monto ?? 0) : 0,
+        "Saldo": Number(m.saldo_resultante ?? 0),
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Flujo Caja");
+      XLSX.writeFile(wb, `flujo_caja_${anio}_${String(mes).padStart(2, "0")}.xlsx`);
+      toast.success("Información exportada");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap justify-between items-start gap-4">
         <div>
           <h1 className="text-3xl font-bold">Ingresos y Egresos</h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Control de caja — movimientos diarios con saldo acumulado (como el Excel de contabilidad).
+            Control de caja — movimientos diarios con saldo acumulado. Importa solo el mes seleccionado de este módulo.
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          <input
+            ref={importInputRef}
+            type="file"
+            accept=".xlsx,.xls"
+            className="hidden"
+            onChange={handleImportFile}
+          />
           <div className="flex items-center gap-2">
             <Label htmlFor="mes">Mes</Label>
             <select
@@ -155,6 +278,34 @@ export default function FlujoCajaPage() {
             <Label htmlFor="anio">Año</Label>
             <Input id="anio" type="number" className="w-24 h-9" value={anio} onChange={(e) => setAnio(parseInt(e.target.value) || anio)} />
           </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button variant="outline" className="h-9 px-4" disabled={isImporting || isExporting}>
+                  Acciones
+                  <ChevronDown className="ml-2 h-4 w-4" />
+                </Button>
+              }
+            />
+            <DropdownMenuContent align="end" className="min-w-52">
+              <DropdownMenuItem onClick={handleExportTemplate} disabled={isImporting || isExporting}>
+                <FileDown className="mr-2 h-4 w-4" />
+                Exportar plantilla
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleExportInfo} disabled={isImporting || isExporting}>
+                <Download className="mr-2 h-4 w-4" />
+                {isExporting ? "Exportando..." : "Exportar movimientos"}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => importInputRef.current?.click()}
+                disabled={isImporting || isExporting}
+              >
+                <FileSpreadsheet className="mr-2 h-4 w-4" />
+                {isImporting ? "Importando..." : "Importar Excel"}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger render={<Button><Plus className="size-4 mr-1" />Registrar movimiento</Button>} />
             <DialogContent className="max-w-md">
@@ -293,13 +444,13 @@ export default function FlujoCajaPage() {
           <TabsTrigger value="egresos">Egresos</TabsTrigger>
         </TabsList>
         <TabsContent value={tab} className="mt-4 space-y-4">
-          <TableSearch placeholder="Buscar por motivo, asesor, cuenta..." value={listControls.search} onChange={listControls.handleSearch} />
+          <TableSearch placeholder="Buscar por motivo, empleado, cuenta..." value={listControls.search} onChange={listControls.handleSearch} />
           <Card>
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Fecha</TableHead>
-                  <TableHead>Asesor</TableHead>
+                  <TableHead>Empleado</TableHead>
                   <TableHead>Motivo</TableHead>
                   <TableHead>Categoría</TableHead>
                   <TableHead>Cuenta</TableHead>

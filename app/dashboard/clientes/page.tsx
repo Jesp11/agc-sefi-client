@@ -98,7 +98,7 @@ export default function ClientesPage() {
         "Ocupación": c.ocupacion ?? "",
         "Dirección trabajo": c.direccion_trabajo ?? "",
         "Teléfono trabajo": c.telefono_trabajo ?? "",
-        "Asesor": c.nombre_asesor ?? "",
+        "Gestor Cobranza": c.nombre_asesor ?? "",
         "Grupo": c.nombre_grupo ?? "",
         "Estatus": c.estatus ?? "",
         "Fecha de alta": c.created_at ? fmtFecha(c.created_at.split("T")[0]) : "",
@@ -288,7 +288,7 @@ export default function ClientesPage() {
               <TableHead>Grupo</TableHead>
               <TableHead>Ciclo</TableHead>
               <TableHead>Día de Pago</TableHead>
-              <TableHead>Asesor</TableHead>
+              <TableHead>Gestor Cobranza</TableHead>
               <TableHead className="text-right">Acciones</TableHead>
             </TableRow>
           </TableHeader>

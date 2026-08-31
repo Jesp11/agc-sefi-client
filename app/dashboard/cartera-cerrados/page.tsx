@@ -70,7 +70,7 @@ function CerradosTable({ tipo }: { tipo: "individual" | "grupal" }) {
               <TableHead>Folio</TableHead>
               <TableHead>{tipo === "individual" ? "Cliente" : "Grupo"}</TableHead>
               <TableHead>Ciclo</TableHead>
-              <TableHead>Asesor</TableHead>
+              <TableHead>Gestor Cobranza</TableHead>
               <TableHead>Estado</TableHead>
               <TableHead className="text-right">Acciones</TableHead>
             </TableRow>

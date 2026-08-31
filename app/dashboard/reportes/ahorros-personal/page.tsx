@@ -42,7 +42,7 @@ export default function ReporteAhorrosPersonalPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Asesor</TableHead>
+                <TableHead>Gestor Cobranza</TableHead>
                 <TableHead>ID</TableHead>
                 {(data.meses || []).map((m: string) => (
                   <TableHead key={m} className="text-right text-xs">{m}/{String(anio).slice(2)}</TableHead>

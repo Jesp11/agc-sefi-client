@@ -90,13 +90,17 @@ export function downloadAhorroWorkbook(
   XLSX.writeFile(wb, filename);
 }
 
-export function parseAhorroImportFile(buffer: ArrayBuffer, anio: number): { filas: Array<{ codigo: string; meses: Record<string, number> }>; errores: string[] } {
+export function parseAhorroImportFile(
+  buffer: ArrayBuffer,
+  anio: number
+): { filas: Array<{ codigo: string; nombre: string; meses: Record<string, number> }>; errores: string[] } {
   const workbook = XLSX.read(buffer, { type: "array" });
   const sheet = workbook.Sheets[workbook.SheetNames[0]];
   const raw: unknown[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
 
   let headerRowIdx = -1;
   let idCol = -1;
+  let nombreCol = -1;
   const monthCols: Record<string, number> = {};
 
   for (let r = 0; r < raw.length; r++) {
@@ -107,11 +111,12 @@ export function parseAhorroImportFile(buffer: ArrayBuffer, anio: number): { fila
     for (let c = 0; c < row.length; c++) {
       const cell = normalizeHeader(String(row[c] ?? ""));
       if (cell === "id" || cell === "id asesor" || cell === "id empleado") foundId = c;
+      if (cell === "asesor" || cell === "empleado" || cell === "nombre" || cell === "nombre asesor") nombreCol = c;
       const mes = monthFromHeader(String(row[c] ?? ""), anio);
       if (mes) foundMonths[mes] = c;
     }
 
-    if (foundId >= 0 && Object.keys(foundMonths).length > 0) {
+    if ((foundId >= 0 || nombreCol >= 0) && Object.keys(foundMonths).length > 0) {
       headerRowIdx = r;
       idCol = foundId;
       Object.assign(monthCols, foundMonths);
@@ -120,17 +125,17 @@ export function parseAhorroImportFile(buffer: ArrayBuffer, anio: number): { fila
   }
 
   const errores: string[] = [];
-  if (headerRowIdx < 0 || idCol < 0) {
-    return { filas: [], errores: ["No se encontró fila de encabezados con columnas ID y meses (ENE, FEB, …)."] };
+  if (headerRowIdx < 0 || (idCol < 0 && nombreCol < 0)) {
+    return { filas: [], errores: ["No se encontró fila de encabezados con columnas de asesor o ID y meses (ENE, FEB, …)."] };
   }
 
-  const filas: Array<{ codigo: string; meses: Record<string, number> }> = [];
+  const filas: Array<{ codigo: string; nombre: string; meses: Record<string, number> }> = [];
 
   for (let r = headerRowIdx + 1; r < raw.length; r++) {
     const row = raw[r] as unknown[];
-    const codigo = String(row[idCol] ?? "").trim();
-    const nombre = String(row[0] ?? "").trim();
-    if (!codigo || isTotalsLabel(codigo) || isTotalsLabel(nombre)) continue;
+    const codigo = idCol >= 0 ? String(row[idCol] ?? "").trim() : "";
+    const nombre = String((nombreCol >= 0 ? row[nombreCol] : row[0]) ?? "").trim();
+    if ((!codigo && !nombre) || isTotalsLabel(codigo) || isTotalsLabel(nombre)) continue;
 
     const meses: Record<string, number> = {};
     for (const [mes, col] of Object.entries(monthCols)) {
@@ -154,7 +159,7 @@ export function parseAhorroImportFile(buffer: ArrayBuffer, anio: number): { fila
     }
 
     if (Object.keys(meses).length > 0) {
-      filas.push({ codigo, meses });
+      filas.push({ codigo, nombre, meses });
     }
   }
 

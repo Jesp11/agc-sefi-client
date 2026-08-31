@@ -41,7 +41,7 @@ export default function ReporteAsesorDiarioPage() {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">Detalle Diario por Asesor</h1>
+        <h1 className="text-3xl font-bold">Detalle Diario por Gestor Cobranza</h1>
         <div className="flex items-end gap-3">
           <div>
             <Label>Fecha</Label>

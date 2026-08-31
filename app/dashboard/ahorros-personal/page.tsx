@@ -329,7 +329,7 @@ export default function AhorrosPersonalPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Asesor</TableHead>
+                    <TableHead>Gestor Cobranza</TableHead>
                     <TableHead>ID</TableHead>
                     {resumen.meses.map((m) => (
                       <TableHead key={m} className="text-right text-xs">{m}/{String(anio).slice(2)}</TableHead>
@@ -366,15 +366,15 @@ export default function AhorrosPersonalPage() {
 
         <TabsContent value="movimientos" className="mt-4">
           <Card>
-            <CardHeader><CardTitle>Movimientos por Asesor</CardTitle></CardHeader>
+            <CardHeader><CardTitle>Movimientos por Gestor Cobranza</CardTitle></CardHeader>
             <CardContent className="p-0 space-y-4">
               <div className="px-6 pt-4">
-                <TableSearch placeholder="Buscar asesores..." value={listControls.search} onChange={listControls.handleSearch} />
+                <TableSearch placeholder="Buscar gestores de cobranza..." value={listControls.search} onChange={listControls.handleSearch} />
               </div>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Asesor</TableHead>
+                    <TableHead>Gestor Cobranza</TableHead>
                     <TableHead>ID</TableHead>
                     <TableHead className="text-right">Saldo</TableHead>
                     <TableHead>Acciones</TableHead>
@@ -382,7 +382,7 @@ export default function AhorrosPersonalPage() {
                 </TableHeader>
                 <TableBody>
                   {listFiltered.length === 0 ? (
-                    <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-8">{listControls.search ? "No se encontraron asesores." : "No hay asesores. Regístralos en Catálogos → Asesores."}</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-8">{listControls.search ? "No se encontraron gestores de cobranza." : "No hay gestores de cobranza. Regístralos en Catálogos → Empleados."}</TableCell></TableRow>
                   ) : listPaginated.map((a) => (
                     <TableRow key={a.id}>
                       <TableCell className="font-medium">{a.nombre}</TableCell>
@@ -424,7 +424,7 @@ export default function AhorrosPersonalPage() {
             <CardContent className="space-y-4">
               <div className="flex flex-wrap gap-4 items-end">
                 <div className="grid gap-1.5 min-w-[220px]">
-                  <Label htmlFor="historial-asesor">Asesor</Label>
+                  <Label htmlFor="historial-asesor">Gestor Cobranza</Label>
                   <select
                     id="historial-asesor"
                     className="border rounded-md px-3 py-2 text-sm bg-background h-9"
@@ -434,7 +434,7 @@ export default function AhorrosPersonalPage() {
                       historialControls.setPage(1);
                     }}
                   >
-                    <option value="all">Todos los asesores</option>
+                    <option value="all">Todos los gestores de cobranza</option>
                     {data.asesores.map((a) => (
                       <option key={a.id} value={a.id}>
                         {a.nombre} ({a.codigo})
@@ -493,7 +493,7 @@ export default function AhorrosPersonalPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Fecha</TableHead>
-                      {!historialAsesor && <TableHead>Asesor</TableHead>}
+                      {!historialAsesor && <TableHead>Gestor Cobranza</TableHead>}
                       {!historialAsesor && <TableHead>ID</TableHead>}
                       <TableHead>Tipo</TableHead>
                       <TableHead>Notas</TableHead>

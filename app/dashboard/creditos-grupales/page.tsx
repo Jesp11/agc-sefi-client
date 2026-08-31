@@ -1,10 +1,17 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useAuth } from "@/context/auth-context";
 import { isFieldRoleName } from "@/lib/authz";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Table,
   TableBody,
@@ -19,7 +26,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Users, PlusCircle, CalendarDays, DollarSign, TrendingUp } from "lucide-react";
+import { Users, PlusCircle, CalendarDays, DollarSign, TrendingUp, FileSpreadsheet, Download, FileDown, ChevronDown } from "lucide-react";
 import { CustomLoanForm } from "@/components/custom-loan-form";
 import { CarteraAcciones } from "@/components/cartera-acciones";
 import { toast } from "sonner";
@@ -28,6 +35,8 @@ import { Badge } from "@/components/ui/badge";
 import { TablePagination, TableSearch } from "@/components/table-controls";
 import { PAGE_SIZE, filterBySearch, paginateItems, useTableControls } from "@/hooks/use-paginated-list";
 import { creditoSearchFields, creditoTotal, fetchAllPages, onlyCarteraActiva } from "@/lib/table-utils";
+import { apiUpload } from "@/lib/api";
+import * as XLSX from "xlsx";
 
 export default function CreditosGrupalesPage() {
   const router = useRouter();
@@ -37,6 +46,9 @@ export default function CreditosGrupalesPage() {
   const [loading, setLoading] = useState(true);
   const { search, handleSearch, page, setPage } = useTableControls();
   const [isCustomModalOpen, setIsCustomModalOpen] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const importInputRef = useRef<HTMLInputElement>(null);
 
   const fetchCreditos = async () => {
     setLoading(true);
@@ -53,6 +65,81 @@ export default function CreditosGrupalesPage() {
   useEffect(() => {
     fetchCreditos();
   }, []);
+
+  const handleImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    setIsImporting(true);
+    try {
+      const formData = new FormData();
+      formData.append("archivo", file);
+
+      const res = await apiUpload("/cartera/import/grupal", formData);
+      const data = await res.json();
+
+      if (!res.ok) {
+        const detail = [...(data.error ?? []), ...(data.output ?? [])].slice(0, 4).join(" · ");
+        toast.error(detail || data.message || "Error al importar cartera grupal");
+        return;
+      }
+
+      toast.success("Cartera grupal importada");
+      fetchCreditos();
+    } catch {
+      toast.error("Error al importar cartera grupal");
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  const handleExportTemplate = () => {
+    const ws = XLSX.utils.aoa_to_sheet([
+      ["NUM. PROG", "FECHA", "CLIENTE", "CURP", "CLAVE DE ELECTOR", "DIA", "MES", "ID CLIENTE", "GRUPO", "CICLO", "DIAS DE PAGO", "ASESOR", "VALOR", "PLAZOS", "MONTO OTORGADO", "INTERES", "TOTAL", "SALDO TOTAL", "SALDO INVERSION", "SEMANAS FALTANTES", "CREDITO TOTAL", "SALDO GRUPAL", "P-1", "P-2", "P-3", "P-4"],
+      ["2001", "2026-08-01", "JUANA PEREZ", "PEPJ900101MTSRNN08", "ABC1234567890", "1", "AGOSTO", "JP001", "LAS FLORES", "1", "MARTES", "LUIS HERNANDEZ", "450", "16", "6000", "2400", "8400", "6300", "4500", "12", "25200", "18900", "450", "450", "", ""],
+    ]);
+    ws["!cols"] = Array.from({ length: 26 }, () => ({ wch: 18 }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Cartera Grupal");
+    XLSX.writeFile(wb, "plantilla_cartera_grupal.xlsx");
+    toast.success("Plantilla descargada");
+  };
+
+  const handleExportInfo = () => {
+    setIsExporting(true);
+    try {
+      if (filtered.length === 0) {
+        toast.error("No hay créditos para exportar");
+        return;
+      }
+
+      const rows = filtered.map((c: any) => ({
+        "Folio": c.num_prog ?? "",
+        "Fecha": c.fecha_otorgacion ?? "",
+        "Grupo": c.grupo?.nombre_grupo ?? "",
+        "Ciclo": c.ciclo ?? "",
+        "Días de pago": c.dias_pago ?? "",
+        "Gestor Cobranza": c.asesor?.nombre_asesor ?? "",
+        "Valor ficha": Number(c.valor_ficha ?? 0),
+        "Plazos": Number(c.plazos ?? 0),
+        "Monto otorgado": Number(c.monto_otorgado ?? 0),
+        "Interés": Number(c.interes ?? 0),
+        "Total": Number(creditoTotal(c) ?? 0),
+        "Saldo pendiente": Number(c.saldo_pendiente ?? c.saldo_total ?? 0),
+        "Saldo inversión": Number(c.saldo_inversion ?? 0),
+        "Estado": c.estado ?? "",
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Créditos Grupales");
+      XLSX.writeFile(wb, `creditos_grupales_${new Date().toISOString().slice(0, 10)}.xlsx`);
+      toast.success("Información exportada");
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   const filtered = filterBySearch(creditos, search, creditoSearchFields);
   const paginated = paginateItems(filtered, page);
@@ -92,14 +179,51 @@ export default function CreditosGrupalesPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-foreground/90">Préstamo Grupal</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Gestión y seguimiento de créditos grupales activos.
+            Gestión y seguimiento de créditos grupales activos. Importa solo el Excel de esta pantalla.
           </p>
         </div>
         {!isAsesor && (
-          <Button size="sm" className="h-9 px-4" onClick={() => setIsCustomModalOpen(true)}>
-            <PlusCircle className="mr-2 h-4 w-4" />
-            Crear Préstamo
-          </Button>
+          <div className="flex items-center gap-2">
+            <input
+              ref={importInputRef}
+              type="file"
+              accept=".xlsx,.xls"
+              className="hidden"
+              onChange={handleImportFile}
+            />
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button variant="outline" size="sm" className="h-9 px-4" disabled={isImporting || isExporting}>
+                    Acciones
+                    <ChevronDown className="ml-2 h-4 w-4" />
+                  </Button>
+                }
+              />
+              <DropdownMenuContent align="end" className="min-w-52">
+                <DropdownMenuItem onClick={handleExportTemplate} disabled={isImporting || isExporting}>
+                  <FileDown className="mr-2 h-4 w-4" />
+                  Exportar plantilla
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleExportInfo} disabled={isImporting || isExporting}>
+                  <Download className="mr-2 h-4 w-4" />
+                  {isExporting ? "Exportando..." : "Exportar cartera"}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={() => importInputRef.current?.click()}
+                  disabled={isImporting || isExporting}
+                >
+                  <FileSpreadsheet className="mr-2 h-4 w-4" />
+                  {isImporting ? "Importando..." : "Importar Excel"}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button size="sm" className="h-9 px-4" onClick={() => setIsCustomModalOpen(true)}>
+              <PlusCircle className="mr-2 h-4 w-4" />
+              Crear Préstamo
+            </Button>
+          </div>
         )}
       </div>
 
@@ -171,7 +295,7 @@ export default function CreditosGrupalesPage() {
       {/* Barra de Búsqueda */}
       <div className="flex items-center justify-between gap-3">
         <TableSearch
-          placeholder="Buscar por grupo, asesor o folio..."
+          placeholder="Buscar por grupo, gestor de cobranza o folio..."
           value={search}
           onChange={handleSearch}
           className="flex-1 max-w-md"
@@ -206,7 +330,7 @@ export default function CreditosGrupalesPage() {
               <TableHead>Nombre Grupo</TableHead>
               <TableHead className="text-center">Ciclo</TableHead>
               <TableHead>Día Pago</TableHead>
-              <TableHead>Asesor</TableHead>
+              <TableHead>Gestor Cobranza</TableHead>
               <TableHead className="text-center">Plazos</TableHead>
               <TableHead>Monto</TableHead>
               <TableHead>Interés</TableHead>

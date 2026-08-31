@@ -68,7 +68,7 @@ export default function CarteraGeneralPage() {
               <TableHead className="text-center">Tipo</TableHead>
               <TableHead className="text-center">Ciclo</TableHead>
               <TableHead>Día Pago</TableHead>
-              <TableHead>Asesor</TableHead>
+              <TableHead>Gestor Cobranza</TableHead>
               <TableHead className="text-center">Plazos</TableHead>
               <TableHead>Monto</TableHead>
               <TableHead>Interés</TableHead>
