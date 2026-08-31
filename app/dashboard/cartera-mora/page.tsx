@@ -31,9 +31,10 @@ import {
 } from "lucide-react";
 import { TablePagination, TableSearch } from "@/components/table-controls";
 import { PAGE_SIZE, filterBySearch, paginateItems, useTableControls } from "@/hooks/use-paginated-list";
-import { apiFetch, apiUpload } from "@/lib/api";
+import { apiFetch } from "@/lib/api";
 import { creditoSearchFields } from "@/lib/table-utils";
 import { CarteraAcciones } from "@/components/cartera-acciones";
+import { parseCarteraMoraImportFile } from "@/lib/cartera-mora-xlsx";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 
@@ -310,10 +311,19 @@ export default function CarteraMoraPage() {
 
     setIsImporting(true);
     try {
-      const formData = new FormData();
-      formData.append("archivo", file);
+      const buffer = await file.arrayBuffer();
+      const parsed = parseCarteraMoraImportFile(buffer);
+      if (parsed.errores.length > 0 && parsed.rows.length === 0) {
+        toast.error(parsed.errores[0] || "No se pudo leer el Excel de mora");
+        return;
+      }
 
-      const res = await apiUpload("/cartera/import/mora", formData);
+      const res = await apiFetch("/cartera/import/mora", {
+        method: "POST",
+        body: JSON.stringify({
+          rows: parsed.rows,
+        }),
+      });
       const data = await res.json();
 
       if (!res.ok) {
@@ -322,7 +332,10 @@ export default function CarteraMoraPage() {
         return;
       }
 
-      toast.success("Mora conciliada e importada");
+      const warning = Array.isArray(parsed.errores) && parsed.errores.length > 0
+        ? ` Se omitieron ${parsed.errores.length} fila(s).`
+        : "";
+      toast.success(`Mora importada desde la web.${warning}`);
       window.location.reload();
     } catch {
       toast.error("Error al importar mora");
