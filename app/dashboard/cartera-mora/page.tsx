@@ -20,7 +20,6 @@ import {
   User,
   Users,
   AlertTriangle,
-  CalendarDays,
   DollarSign,
   TrendingUp,
   UserX,
@@ -81,13 +80,6 @@ function MoraTable({ endpoint, tipoFiltro = "todos", badgeLabel, badgeVariant = 
   const paginated = paginateItems(filtered, page);
 
   // KPIs de Cartera en Mora
-  const totalRecuperacionSemanal = useMemo(() => {
-    return filtered.reduce((sum, c) => {
-      const ficha = Number(c.valor_ficha ?? (c.plazos ? Number(c.total) / Number(c.plazos) : 0));
-      return sum + (isNaN(ficha) ? 0 : ficha);
-    }, 0);
-  }, [filtered]);
-
   const totalSaldo = useMemo(() => {
     return filtered.reduce((sum, c) => {
       const saldo = Number(c.mora?.total_adeudo ?? c.mora?.saldo_actual ?? c.saldo_pendiente ?? c.total ?? 0);
@@ -111,21 +103,7 @@ function MoraTable({ endpoint, tipoFiltro = "todos", badgeLabel, badgeVariant = 
   return (
     <div className="space-y-5">
       {/* Tarjetas KPI de Cartera en Mora */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-        <Card className="p-4 border shadow-sm bg-card hover:border-emerald-200 transition-colors">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
-              Recuperación Semanal
-            </span>
-            <div className="p-2 rounded-lg bg-emerald-50 text-emerald-700">
-              <CalendarDays className="h-4 w-4" />
-            </div>
-          </div>
-          <div className="text-2xl font-extrabold text-emerald-700 mt-2">
-            ${totalRecuperacionSemanal.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </div>
-          <p className="text-[11px] text-muted-foreground mt-1">Suma valor fichas semanales</p>
-        </Card>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
 
         <Card className="p-4 border shadow-sm bg-card hover:border-rose-200 transition-colors">
           <div className="flex items-center justify-between">

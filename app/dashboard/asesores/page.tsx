@@ -12,7 +12,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
-import { fmtFecha, extractBirthdateFromCurp } from "@/lib/utils";
+import { fmtFecha, extractBirthdateFromCurp, fmtTelefono, cleanTelefono } from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -32,7 +32,6 @@ import * as XLSX from "xlsx";
 
 import { apiFetch } from "@/lib/api";
 import { toast } from "sonner";
-import { Badge } from "@/components/ui/badge";
 import { TablePagination, TableSearch } from "@/components/table-controls";
 import { PAGE_SIZE, filterBySearch, paginateItems, useTableControls } from "@/hooks/use-paginated-list";
 import { asesorSearchFields, fetchAllPages } from "@/lib/table-utils";
@@ -255,7 +254,7 @@ export default function AsesoresPage() {
       } else if (h === "curp") {
         mapped.curp = val.toUpperCase();
       } else if (h === "telefono" || h === "tel" || h === "celular") {
-        mapped.telefono = val;
+        mapped.telefono = cleanTelefono(val) || val;
       } else if (h === "rol" || h === "puesto" || h === "cargo" || h === "rol_laboral") {
         mapped.rol_laboral = val;
       } else if (h === "correo" || h === "email" || h === "correo electronico" || h === "correo_electronico") {
@@ -622,7 +621,7 @@ export default function AsesoresPage() {
                   <TableCell className="font-medium">{asesor.nombre_asesor}</TableCell>
                   <TableCell>{asesor.rol_laboral ?? "Gestor de Cobranza"}</TableCell>
                   <TableCell className="font-mono text-xs">{asesor.curp ?? "—"}</TableCell>
-                  <TableCell className="text-xs">{asesor.telefono || "—"}</TableCell>
+                  <TableCell className="text-xs">{fmtTelefono(asesor.telefono)}</TableCell>
                   <TableCell className="text-sm">{asesor.created_at ? fmtFecha(asesor.created_at.split("T")[0]) : "—"}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">

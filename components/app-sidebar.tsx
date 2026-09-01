@@ -20,7 +20,7 @@ import type React from "react";
 import {
   Users, UserCircle, User, Component, ClipboardList, LayoutList,
   AlertTriangle, UserX, FileText, BarChart3, TrendingUp,
-  Receipt, Banknote, PiggyBank, CalendarDays, ArrowLeftRight,
+  Receipt, Banknote, PiggyBank, CalendarDays, ArrowLeftRight, Cake,
 } from "lucide-react";
 
 const catalogItems = [
@@ -54,6 +54,7 @@ const reporteItems = [
   { title: "Gestor Mensual", url: "/dashboard/reportes/gestor-mensual", icon: CalendarDays },
   { title: "Estado Financiero", url: "/dashboard/reportes/inversionistas-estado", icon: TrendingUp },
   { title: "Cierre Mensual", url: "/dashboard/reportes/cierre-mensual", icon: BarChart3 },
+  { title: "Cumpleaños", url: "/dashboard/reportes/cumpleanos", icon: Cake },
 ];
 
 export function AppSidebar() {
@@ -65,7 +66,8 @@ export function AppSidebar() {
     (item) =>
       item.url === "/dashboard/reportes/diario" ||
       item.url === "/dashboard/reportes/gestor-mensual" ||
-      item.url === "/dashboard/reportes/por-cerrar"
+      item.url === "/dashboard/reportes/por-cerrar" ||
+      item.url === "/dashboard/reportes/cumpleanos"
   );
 
   const groups = [

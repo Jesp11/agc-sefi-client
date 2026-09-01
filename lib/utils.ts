@@ -53,3 +53,31 @@ export function extractBirthdateFromCurp(curp: string | null | undefined): strin
   return `${fullYear}-${monthStr}-${dayStr}`;
 }
 
+/** Limpia un teléfono extrayendo solo los dígitos */
+export function cleanTelefono(phone: string | null | undefined): string {
+  if (!phone) return "";
+  const s = String(phone).trim();
+  if (s.toUpperCase() === "S/N" || s.toUpperCase() === "N/A" || s === "-") return "";
+  const noFloat = s.replace(/\.0+$/, "");
+  return noFloat.replace(/\D/g, "");
+}
+
+/** Formatea un teléfono de 10 dígitos al formato estándar legible: (833) 206-8746 */
+export function fmtTelefono(phone: string | null | undefined): string {
+  if (!phone) return "—";
+  const s = String(phone).trim();
+  if (s.toUpperCase() === "S/N" || s.toUpperCase() === "N/A" || s === "-") return "—";
+
+  const digits = cleanTelefono(s);
+  if (digits.length === 10) {
+    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+  }
+  if (digits.length === 12 && digits.startsWith("52")) {
+    const d = digits.slice(2);
+    return `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}`;
+  }
+
+  return s.replace(/\.0+$/, "");
+}
+
+

@@ -48,7 +48,7 @@ import { Badge } from "@/components/ui/badge";
 import { TablePagination, TableSearch } from "@/components/table-controls";
 import { PAGE_SIZE, filterBySearch, paginateItems, useTableControls } from "@/hooks/use-paginated-list";
 import { creditoSearchFields } from "@/lib/table-utils";
-import { fmtFecha, extractBirthdateFromCurp } from "@/lib/utils";
+import { fmtFecha, extractBirthdateFromCurp, fmtTelefono } from "@/lib/utils";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
 
@@ -785,7 +785,7 @@ export default function AsesorDetallePage() {
               ) : (
                 <div className="flex items-center gap-2">
                   <Phone className="h-3 w-3 shrink-0 text-muted-foreground" />
-                  <span>{asesor.telefono || <span className="text-muted-foreground italic">Sin registro</span>}</span>
+                  <span>{asesor.telefono ? fmtTelefono(asesor.telefono) : <span className="text-muted-foreground italic">Sin registro</span>}</span>
                   <Button size="icon" variant="ghost" className="h-6 w-6 text-muted-foreground hover:text-foreground ml-auto" onClick={() => setEditingTel(true)}>
                     <Pencil className="h-3 w-3" />
                   </Button>

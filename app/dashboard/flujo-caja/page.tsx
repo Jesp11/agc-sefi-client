@@ -385,56 +385,17 @@ export default function FlujoCajaPage() {
       )}
 
       {resumen && (
-        <div className="grid gap-4 md:grid-cols-2">
-          <Card>
-            <CardHeader><CardTitle className="text-base">Resumen de cartera</CardTitle></CardHeader>
-            <CardContent className="grid grid-cols-2 gap-3 text-sm">
-              <div><p className="text-muted-foreground text-xs">Cartera individual</p><p className="font-semibold">{fmt(resumen.cartera_individual)}</p></div>
-              <div><p className="text-muted-foreground text-xs">Cartera grupal</p><p className="font-semibold">{fmt(resumen.cartera_grupal)}</p></div>
-              <div><p className="text-muted-foreground text-xs">Mora</p><p className="font-semibold text-red-600">{fmt(resumen.mora)}</p></div>
-              <div><p className="text-muted-foreground text-xs">Gastos operativos</p><p className="font-semibold">{fmt(resumen.gastos_operativos)}</p></div>
-              <div><p className="text-muted-foreground text-xs">Ahorro personal</p><p className="font-semibold">{fmt(resumen.ahorro_personal)}</p></div>
-              <div><p className="text-muted-foreground text-xs">Ahorro grupal (socios)</p><p className="font-semibold">{fmt(resumen.ahorro_grupal)}</p></div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader><CardTitle className="text-base">Distribución por cuenta</CardTitle></CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div>
-                  <p className="text-sm font-medium mb-2">Ingresos</p>
-                  {Object.keys(resumen.distribucion_cuentas?.ingresos || {}).length === 0 ? (
-                    <p className="text-sm text-muted-foreground">Sin ingresos con cuenta asignada este mes.</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {Object.entries(resumen.distribucion_cuentas.ingresos).map(([cuenta, monto]) => (
-                        <div key={`ing-${cuenta}`} className="flex justify-between text-sm">
-                          <span>{cuenta}</span>
-                          <span className="font-semibold">{fmt(monto as number)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <div>
-                  <p className="text-sm font-medium mb-2">Egresos</p>
-                  {Object.keys(resumen.distribucion_cuentas?.egresos || {}).length === 0 ? (
-                    <p className="text-sm text-muted-foreground">Sin egresos con cuenta asignada este mes.</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {Object.entries(resumen.distribucion_cuentas.egresos).map(([cuenta, monto]) => (
-                        <div key={`egr-${cuenta}`} className="flex justify-between text-sm">
-                          <span>{cuenta}</span>
-                          <span className="font-semibold">{fmt(monto as number)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+        <Card>
+          <CardHeader><CardTitle className="text-base">Resumen de cartera</CardTitle></CardHeader>
+          <CardContent className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 text-sm">
+            <div><p className="text-muted-foreground text-xs">Cartera individual</p><p className="font-semibold">{fmt(resumen.cartera_individual)}</p></div>
+            <div><p className="text-muted-foreground text-xs">Cartera grupal</p><p className="font-semibold">{fmt(resumen.cartera_grupal)}</p></div>
+            <div><p className="text-muted-foreground text-xs">Mora</p><p className="font-semibold text-red-600">{fmt(resumen.mora)}</p></div>
+            <div><p className="text-muted-foreground text-xs">Gastos operativos</p><p className="font-semibold">{fmt(resumen.gastos_operativos)}</p></div>
+            <div><p className="text-muted-foreground text-xs">Ahorro personal</p><p className="font-semibold">{fmt(resumen.ahorro_personal)}</p></div>
+            <div><p className="text-muted-foreground text-xs">Ahorro grupal (socios)</p><p className="font-semibold">{fmt(resumen.ahorro_grupal)}</p></div>
+          </CardContent>
+        </Card>
       )}
 
       <Tabs value={tab} onValueChange={(v) => { setTab(v); listControls.setPage(1); }}>

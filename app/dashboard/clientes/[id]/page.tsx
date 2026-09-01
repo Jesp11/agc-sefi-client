@@ -14,7 +14,7 @@ import { ArrowLeft, User, Phone, MapPin, Briefcase, ShieldCheck, ClipboardList, 
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "../../../../components/ui/badge";
-import { fmtFecha } from "@/lib/utils";
+import { fmtFecha, fmtTelefono } from "@/lib/utils";
 import { HistorialUnificadoModal } from "@/components/historial-unificado-modal";
 import { apiUpload } from "@/lib/api";
 import { EXPEDIENTE_ACCEPT, EXPEDIENTE_DOCUMENTOS, type ExpedienteTipo } from "@/lib/expediente-documentos";
@@ -217,7 +217,7 @@ export default function ClienteDetallePage() {
               </div>
               <div className="flex flex-col gap-1">
                 <span className="text-xs text-muted-foreground font-medium">Teléfono</span>
-                <span className="flex items-center gap-2"><Phone className="h-3 w-3" /> {cliente.telefono}</span>
+                <span className="flex items-center gap-2"><Phone className="h-3 w-3" /> {fmtTelefono(cliente.telefono)}</span>
               </div>
               <div className="flex flex-col gap-1">
                 <span className="text-xs text-muted-foreground font-medium">CURP</span>
@@ -272,7 +272,7 @@ export default function ClienteDetallePage() {
               </div>
               <div className="flex flex-col gap-1">
                 <span className="text-xs text-muted-foreground font-medium">Teléfono de Trabajo</span>
-                <span className="flex items-center gap-2"><Phone className="h-3 w-3" /> {cliente.telefono_trabajo}</span>
+                <span className="flex items-center gap-2"><Phone className="h-3 w-3" /> {fmtTelefono(cliente.telefono_trabajo)}</span>
               </div>
               <div className="flex flex-col gap-1 col-span-2">
                 <span className="text-xs text-muted-foreground font-medium">Dirección de Trabajo</span>
@@ -520,7 +520,7 @@ export default function ClienteDetallePage() {
                       </div>
                       <div className="flex flex-col gap-0.5">
                         <span className="text-xs text-muted-foreground">Teléfono</span>
-                        <span>{a.telefono || "—"}</span>
+                        <span>{fmtTelefono(a.telefono)}</span>
                       </div>
                       <div className="flex flex-col gap-0.5 col-span-2">
                         <span className="text-xs text-muted-foreground">Dirección</span>
@@ -572,7 +572,7 @@ export default function ClienteDetallePage() {
                       </div>
                       <div className="flex flex-col gap-0.5">
                         <span className="text-xs text-muted-foreground">Teléfono</span>
-                        <span>{r.telefono || "—"}</span>
+                        <span>{fmtTelefono(r.telefono)}</span>
                       </div>
                       <div className="flex flex-col gap-0.5 col-span-2">
                         <span className="text-xs text-muted-foreground">Dirección</span>

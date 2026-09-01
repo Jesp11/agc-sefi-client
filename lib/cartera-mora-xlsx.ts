@@ -57,6 +57,26 @@ const buildColumnMap = (headerRow: unknown[]) => {
     if (header === "FECHA") map.set("fecha", index);
     else if (header === "CLIENTE") map.set("cliente", index);
     else if (header === "ID CLIENTE" || header === "ID" || header === "CODIGO CLIENTE") map.set("id_cliente", index);
+    else if (
+      header === "CLAVE DE ELECTOR" ||
+      header === "CLAVE ELECTOR" ||
+      header === "CLEVE ELECTOR" ||
+      header === "CLAVE_ELECTOR" ||
+      header === "INE"
+    )
+      map.set("clave_elector", index);
+    else if (header === "CURP") map.set("curp", index);
+    else if (header === "DOMICILIO" || header === "DIRECCION" || header === "DIRECCIO") map.set("domicilio", index);
+    else if (header === "CIUDAD/ESTADO" || header === "CIUDAD / ESTADO" || header === "CIUDAD" || header === "ESTADO")
+      map.set("ciudad_estado", index);
+    else if (header === "ENTRE CALLES") map.set("entre_calles", index);
+    else if (header === "TELEFONO" || header === "TEL" || header === "CELULAR" || header === "TELEFONO_CLIENTE")
+      map.set("telefono", index);
+    else if (header === "OCUPACION" || header === "PUESTO" || header === "TRABAJO") map.set("ocupacion", index);
+    else if (header === "DIRECCION TRABAJO" || header === "DOMICILIO TRABAJO" || header === "DIRECCION_TRABAJO")
+      map.set("direccion_trabajo", index);
+    else if (header === "TELEFONO TRABAJO" || header === "TEL TRABAJO" || header === "TELEFONO_TRABAJO")
+      map.set("telefono_trabajo", index);
     else if (header.startsWith("GRUPO")) map.set("grupo", index);
     else if (header === "CICLO") map.set("ciclo", index);
     else if (header === "DIAS DE PAGO") map.set("dias_pago", index);
@@ -88,6 +108,14 @@ export type CarteraMoraImportRow = {
   cliente: string;
   id_cliente: string;
   grupo: string;
+  curp?: string;
+  clave_elector?: string;
+  telefono?: string;
+  direccion?: string;
+  entre_calles?: string;
+  ocupacion?: string;
+  direccion_trabajo?: string;
+  telefono_trabajo?: string;
   ciclo: number;
   dias_pago: string;
   asesor: string;
@@ -138,6 +166,17 @@ export function parseCarteraMoraImportFile(buffer: ArrayBuffer): {
       if (!isGroupSheet && !cliente) continue;
       if (isGroupSheet && (!cliente || !grupo)) continue;
 
+      const domicilio = String(getCell(row, map, "domicilio") ?? "").trim();
+      const ciudadEstado = String(getCell(row, map, "ciudad_estado") ?? "").trim();
+      let direccion = "";
+      if (domicilio && ciudadEstado) {
+        direccion = `${domicilio}, ${ciudadEstado}`;
+      } else if (domicilio) {
+        direccion = domicilio;
+      } else if (ciudadEstado) {
+        direccion = ciudadEstado;
+      }
+
       rows.push({
         tipo_credito: isGroupSheet ? "Grupal" : "Individual",
         sheet_name: sheetName,
@@ -147,6 +186,14 @@ export function parseCarteraMoraImportFile(buffer: ArrayBuffer): {
         cliente,
         id_cliente: idCliente,
         grupo,
+        curp: String(getCell(row, map, "curp") ?? "").trim(),
+        clave_elector: String(getCell(row, map, "clave_elector") ?? "").trim(),
+        telefono: String(getCell(row, map, "telefono") ?? "").trim(),
+        direccion,
+        entre_calles: String(getCell(row, map, "entre_calles") ?? "").trim(),
+        ocupacion: String(getCell(row, map, "ocupacion") ?? "").trim(),
+        direccion_trabajo: String(getCell(row, map, "direccion_trabajo") ?? "").trim(),
+        telefono_trabajo: String(getCell(row, map, "telefono_trabajo") ?? "").trim(),
         ciclo: Math.trunc(parseMoney(getCell(row, map, "ciclo"))),
         dias_pago: String(getCell(row, map, "dias_pago") ?? "").trim(),
         asesor: String(getCell(row, map, "asesor") ?? "").trim(),
