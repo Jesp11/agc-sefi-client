@@ -189,6 +189,11 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-2xl font-bold tracking-tight text-foreground/90">Detalle del Préstamo</h1>
               <Badge className={estadoStyles[credito.estado] ?? "bg-muted text-muted-foreground"}>{credito.estado}</Badge>
+              {credito.dias_pago && (
+                <Badge variant="outline" className="border-primary/30 bg-primary/10 text-primary font-semibold gap-1">
+                  <Calendar className="h-3 w-3" /> Día de pago: {credito.dias_pago}
+                </Badge>
+              )}
               {credito.es_adicional && <Badge variant="outline">Adicional</Badge>}
               {credito.es_personalizado && (
                 <Badge variant="outline" className="border-amber-300 text-amber-700 bg-amber-50 gap-1">
@@ -340,7 +345,7 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
                 </div>
               </div>
               {isGrupal ? (
-                <div className="space-y-1 col-span-2">
+                <div className="space-y-1">
                   <p className="text-[10px] font-bold text-muted-foreground uppercase">Grupo</p>
                   <div className="flex items-center gap-2 flex-wrap">
                     <p className="text-sm font-semibold">{credito.grupo?.nombre_grupo ?? "—"}</p>
@@ -357,7 +362,7 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
                   </div>
                 </div>
               ) : (
-                <div className="space-y-1 col-span-2">
+                <div className="space-y-1">
                   <p className="text-[10px] font-bold text-muted-foreground uppercase">Cliente</p>
                   <div className="flex items-center gap-2 flex-wrap">
                     <p className="text-sm font-semibold">{credito.cliente?.nombre_completo ?? "—"}</p>
@@ -374,6 +379,15 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
                   </div>
                 </div>
               )}
+              <div className="space-y-1">
+                <p className="text-[10px] font-bold text-muted-foreground uppercase">Día de Pago</p>
+                <div className="flex items-center gap-1.5 text-sm font-semibold">
+                  <Calendar className="h-4 w-4 text-primary" />
+                  <Badge variant="outline" className="font-bold border-primary/30 bg-primary/10 text-primary">
+                    {credito.dias_pago || "No especificado"}
+                  </Badge>
+                </div>
+              </div>
               <div className="space-y-1">
                 <p className="text-[10px] font-bold text-muted-foreground uppercase">Ciclo</p>
                 <Badge variant="outline" className="font-bold">{credito.ciclo}</Badge>
@@ -425,6 +439,15 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
                   </span>
                 </div>
               </div>
+              <div className="space-y-1">
+                <p className="text-[10px] font-bold text-muted-foreground uppercase">Gestor / Asesor</p>
+                <div className="flex items-center gap-1.5 text-xs">
+                  <User className="h-3.5 w-3.5 text-primary flex-shrink-0" />
+                  <span className="font-semibold truncate">
+                    {credito.asesor?.nombre_asesor || <span className="text-muted-foreground italic font-normal">Sin asignar</span>}
+                  </span>
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -444,6 +467,10 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
               <div className="flex justify-between items-center">
                 <span className="text-xs text-muted-foreground uppercase flex items-center gap-1"><CreditCard className="h-3 w-3" /> Pago Semanal</span>
                 <span className="text-sm font-bold">${Number(credito.valor_ficha ?? 0).toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-xs text-muted-foreground uppercase flex items-center gap-1"><Calendar className="h-3 w-3" /> Día de pago</span>
+                <span className="text-sm font-bold text-primary">{credito.dias_pago || "—"}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-xs text-muted-foreground uppercase">Cuota actual</span>

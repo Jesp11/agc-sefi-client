@@ -624,23 +624,13 @@ export default function AsesoresPage() {
                   <TableCell className="text-xs">{fmtTelefono(asesor.telefono)}</TableCell>
                   <TableCell className="text-sm">{asesor.created_at ? fmtFecha(asesor.created_at.split("T")[0]) : "—"}</TableCell>
                   <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleOpenEdit(asesor)}
-                      >
-                        <Pencil className="h-3.5 w-3.5 mr-1" />
-                        Editar
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => router.push(`/dashboard/empleados/${asesor.id}`)}
-                      >
-                        Ver perfil
-                      </Button>
-                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => router.push(`/dashboard/empleados/${asesor.id}`)}
+                    >
+                      Ver perfil
+                    </Button>
                   </TableCell>
                 </TableRow>
               ))

@@ -1,232 +1,271 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import { apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import { fmtFecha } from "@/lib/utils";
-import { TablePagination, TableSearch } from "@/components/table-controls";
-import { PAGE_SIZE, filterBySearch, paginateItems, useTableControls } from "@/hooks/use-paginated-list";
-import { fetchAllPages, nominaSearchFields } from "@/lib/table-utils";
+import { PlusCircle, Save, Trash2 } from "lucide-react";
+import { generarNominaHtml, NominaEmployeeData } from "@/lib/nomina-template";
+import { imprimirDocumentoHtml } from "@/lib/document-templates";
+import { fetchAllPages } from "@/lib/table-utils";
 
-function parseConceptoMontoLines(value: string) {
-  return value
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => {
-      const [concepto, monto] = line.split(":");
-      return { concepto: (concepto || "").trim(), monto: Number((monto || "").trim()) || 0 };
-    })
-    .filter((item) => item.concepto && item.monto >= 0);
-}
+type EmpleadoCatalogo = {
+  id: number | string;
+  nombre_asesor: string;
+  cumpleanos?: string | null;
+  curp?: string | null;
+  rfc?: string | null;
+  nss?: string | null;
+  banco?: string | null;
+  cuenta_bancaria?: string | null;
+  sueldo_base?: number | string | null;
+  despensa?: number | string | null;
+  apoyo_transporte?: number | string | null;
+  activo?: boolean;
+};
 
-function formatConceptoMontoLines(items?: Array<{ concepto: string; monto: number }>) {
-  return (items ?? []).map((item) => `${item.concepto}: ${item.monto}`).join("\n");
-}
+type CampoImporteNomina = "pago_base" | "despensa" | "apoyo_transporte" | "ahorro";
 
-export default function NominaPage() {
-  const [periodos, setPeriodos] = useState<any[]>([]);
-  const [empleados, setEmpleados] = useState<any[]>([]);
+export default function NominaBuilderPage() {
+  const [empleadosCatalog, setEmpleadosCatalog] = useState<EmpleadoCatalogo[]>([]);
   const [loading, setLoading] = useState(true);
-  const { search, handleSearch, page, setPage } = useTableControls();
-  const [form, setForm] = useState({ fecha_inicio: "", fecha_fin: "" });
-  const [procesando, setProcesando] = useState(false);
-  const [catalogoOpen, setCatalogoOpen] = useState(false);
-  const [editingEmpleado, setEditingEmpleado] = useState<any | null>(null);
-  const [empleadoForm, setEmpleadoForm] = useState({ sueldo_base: "", porcentaje_ahorro: "", percepciones: "", deducciones: "" });
-  const [ajustesPeriodo, setAjustesPeriodo] = useState<Record<string, { percepciones: string; deducciones: string }>>({});
 
-  const fetchData = async () => {
-    setLoading(true);
+  const [fechaInicio, setFechaInicio] = useState("");
+  const [fechaFin, setFechaFin] = useState("");
+  const [referencia, setReferencia] = useState("");
+  const [firmaDirAdmin, setFirmaDirAdmin] = useState("");
+  const [firmaDirOperativo, setFirmaDirOperativo] = useState("");
+
+  const [selectedEmpleados, setSelectedEmpleados] = useState<NominaEmployeeData[]>([]);
+  const [empleadoToAdd, setEmpleadoToAdd] = useState<string>("");
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const asesores = await fetchAllPages("/asesores") as EmpleadoCatalogo[];
+        setEmpleadosCatalog(asesores.filter((asesor) => asesor.activo !== false));
+
+      } catch {
+        toast.error("Error al cargar el catálogo de empleados");
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, []);
+
+  const handleAddEmpleado = () => {
+    if (!empleadoToAdd) return;
+    if (selectedEmpleados.some(e => e.empleado_id === empleadoToAdd)) {
+      toast.error("El empleado ya está en la nómina");
+      return;
+    }
+
+    const emp = empleadosCatalog.find(e => e.id.toString() === empleadoToAdd);
+    if (!emp) return;
+
+    const pb = Number(emp.sueldo_base) || 0;
+    const desp = Number(emp.despensa) || 0;
+    const at = Number(emp.apoyo_transporte) || 0;
+
+    const newEmp: NominaEmployeeData & { empleado_id: string } = {
+      empleado_id: emp.id.toString(),
+      nombre: emp.nombre_asesor,
+      fecha_nacimiento: emp.cumpleanos ?? undefined,
+      rfc: emp.rfc ?? undefined,
+      curp: emp.curp ?? undefined,
+      nss: emp.nss ?? undefined,
+      banco: emp.banco ?? undefined,
+      cuenta_bancaria: emp.cuenta_bancaria ?? undefined,
+      pago_base: pb,
+      despensa: desp,
+      apoyo_transporte: at,
+      ahorro: 0,
+      bruto: pb + desp + at,
+      neto: pb + desp + at
+    };
+
+    setSelectedEmpleados([...selectedEmpleados, newEmp]);
+    setEmpleadoToAdd("");
+  };
+
+  const updateEmpField = (id: string, field: CampoImporteNomina, val: string) => {
+    setSelectedEmpleados(prev => prev.map(emp => {
+      if (emp.empleado_id !== id) return emp;
+      const parsed = Number(val) || 0;
+      const updated = { ...emp, [field]: parsed };
+      updated.bruto = updated.pago_base + updated.despensa + updated.apoyo_transporte;
+      updated.neto = updated.bruto - updated.ahorro;
+      return updated;
+    }));
+  };
+
+  const removeEmp = (id: string) => {
+    setSelectedEmpleados(prev => prev.filter(e => e.empleado_id !== id));
+  };
+
+  const totalNeto = selectedEmpleados.reduce((acc, curr) => acc + curr.neto, 0);
+
+  const handleSaveAndPrint = async () => {
+    if (selectedEmpleados.length === 0) {
+      toast.error("Agrega al menos un empleado");
+      return;
+    }
+    if (!fechaInicio || !fechaFin) {
+      toast.error("Las fechas son requeridas");
+      return;
+    }
+
     try {
-      const [rows, empleadosRows] = await Promise.all([
-        fetchAllPages("/nomina"),
-        fetchAllPages("/empleados"),
-      ]);
-      setPeriodos(rows);
-      setEmpleados(empleadosRows);
+      const payload = {
+        fecha_inicio: fechaInicio,
+        fecha_fin: fechaFin,
+        referencia,
+        firma_director_administrativo: firmaDirAdmin,
+        firma_director_operativo: firmaDirOperativo,
+        empleados: selectedEmpleados.map((e) => ({
+          asesor_id: Number(e.empleado_id),
+          pago_base: e.pago_base,
+          despensa: e.despensa,
+          apoyo_transporte: e.apoyo_transporte,
+          ahorro: e.ahorro,
+        }))
+      };
+
+      const res = await apiFetch("/nomina", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        toast.error(err.message || "Error al guardar la nómina");
+        return;
+      }
+
+      toast.success("Nómina guardada exitosamente");
+
+      // Generate HTML and Print
+      const html = generarNominaHtml({
+        fecha_inicio: fechaInicio,
+        fecha_fin: fechaFin,
+        referencia,
+        firma_director_administrativo: firmaDirAdmin,
+        firma_director_operativo: firmaDirOperativo,
+        empleados: selectedEmpleados
+      });
+      imprimirDocumentoHtml(html);
+
     } catch {
-      toast.error("Error al cargar nómina");
-    } finally {
-      setLoading(false);
+      toast.error("Error de conexión");
     }
   };
 
-  useEffect(() => { fetchData(); }, []);
-
-  const procesar = async () => {
-    setProcesando(true);
-    const ajustes = Object.entries(ajustesPeriodo)
-      .map(([empleado_id, ajustesItem]) => ({
-        empleado_id: Number(empleado_id),
-        percepciones: parseConceptoMontoLines(ajustesItem.percepciones),
-        deducciones: parseConceptoMontoLines(ajustesItem.deducciones),
-      }))
-      .filter((item) => item.percepciones.length || item.deducciones.length);
-
-    const res = await apiFetch("/nomina", { method: "POST", body: JSON.stringify({ ...form, ajustes }) });
-    if (res.ok) {
-      toast.success("Nómina procesada");
-      setAjustesPeriodo({});
-      fetchData();
-    } else {
-      toast.error("Error al procesar nómina");
-    }
-    setProcesando(false);
-  };
-
-  const openEditEmpleado = (empleado: any) => {
-    setEditingEmpleado(empleado);
-    setEmpleadoForm({
-      sueldo_base: String(empleado.sueldo_base ?? ""),
-      porcentaje_ahorro: String(empleado.porcentaje_ahorro ?? ""),
-      percepciones: formatConceptoMontoLines(empleado.percepciones_config),
-      deducciones: formatConceptoMontoLines(empleado.deducciones_config),
-    });
-  };
-
-  const guardarEmpleado = async () => {
-    if (!editingEmpleado) return;
-    const res = await apiFetch(`/empleados/${editingEmpleado.id}`, {
-      method: "PUT",
-      body: JSON.stringify({
-        sueldo_base: Number(empleadoForm.sueldo_base),
-        porcentaje_ahorro: empleadoForm.porcentaje_ahorro === "" ? null : Number(empleadoForm.porcentaje_ahorro),
-        percepciones_config: parseConceptoMontoLines(empleadoForm.percepciones),
-        deducciones_config: parseConceptoMontoLines(empleadoForm.deducciones),
-      }),
-    });
-    if (res.ok) {
-      toast.success("Empleado actualizado");
-      setEditingEmpleado(null);
-      fetchData();
-    } else {
-      toast.error("No se pudo actualizar el empleado");
-    }
-  };
-
-  const filtered = filterBySearch(periodos, search, nominaSearchFields);
-  const paginated = paginateItems(filtered, page);
+  if (loading) return <div className="p-8 text-center">Cargando...</div>;
 
   return (
-    <div className="space-y-6">
+    <div className="p-6 max-w-7xl mx-auto space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">Nómina de Personal</h1>
-        <div className="flex items-center gap-2">
-        <Dialog open={catalogoOpen} onOpenChange={setCatalogoOpen}>
-          <DialogTrigger render={<Button variant="outline">Configurar empleados</Button>} />
-          <DialogContent className="max-w-4xl">
-            <DialogHeader><DialogTitle>Configuración de nómina</DialogTitle></DialogHeader>
-            <Table>
-              <TableHeader><TableRow><TableHead>Empleado</TableHead><TableHead>Puesto</TableHead><TableHead>Sueldo base</TableHead><TableHead>% ahorro</TableHead><TableHead /></TableRow></TableHeader>
-              <TableBody>
-                {empleados.length === 0 ? (
-                  <TableRow><TableCell colSpan={5} className="h-24 text-center text-muted-foreground">Sin empleados.</TableCell></TableRow>
-                ) : empleados.map((empleado) => (
-                  <TableRow key={empleado.id}>
-                    <TableCell>{empleado.nombre}</TableCell>
-                    <TableCell>{empleado.puesto || "—"}</TableCell>
-                    <TableCell>${Number(empleado.sueldo_base).toLocaleString()}</TableCell>
-                    <TableCell>{empleado.porcentaje_ahorro ?? 0}%</TableCell>
-                    <TableCell className="text-right"><Button size="sm" variant="outline" onClick={() => openEditEmpleado(empleado)}>Editar</Button></TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </DialogContent>
-        </Dialog>
-        <Dialog>
-          <DialogTrigger render={<Button>Procesar Nómina</Button>} />
-          <DialogContent>
-            <DialogHeader><DialogTitle>Periodo de Nómina</DialogTitle></DialogHeader>
-            <div className="grid gap-3 max-h-[70vh] overflow-auto">
-              <div><Label>Inicio</Label><Input type="date" value={form.fecha_inicio} onChange={(e) => setForm({ ...form, fecha_inicio: e.target.value })} /></div>
-              <div><Label>Fin</Label><Input type="date" value={form.fecha_fin} onChange={(e) => setForm({ ...form, fecha_fin: e.target.value })} /></div>
-              {empleados.length > 0 && (
-                <div className="space-y-3">
-                  <p className="text-sm font-medium">Ajustes por periodo</p>
-                  {empleados.map((empleado) => {
-                    const current = ajustesPeriodo[String(empleado.id)] ?? { percepciones: "", deducciones: "" };
-                    return (
-                      <div key={empleado.id} className="rounded-md border p-3 space-y-2">
-                        <p className="text-sm font-semibold">{empleado.nombre}</p>
-                        <div>
-                          <Label>Percepciones extraordinarias</Label>
-                          <textarea
-                            className="mt-1 min-h-20 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                            placeholder="Bono puntualidad: 250"
-                            value={current.percepciones}
-                            onChange={(e) => setAjustesPeriodo((prev) => ({ ...prev, [empleado.id]: { ...current, percepciones: e.target.value } }))}
-                          />
-                        </div>
-                        <div>
-                          <Label>Deducciones extraordinarias</Label>
-                          <textarea
-                            className="mt-1 min-h-20 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                            placeholder="Préstamo interno: 300"
-                            value={current.deducciones}
-                            onChange={(e) => setAjustesPeriodo((prev) => ({ ...prev, [empleado.id]: { ...current, deducciones: e.target.value } }))}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-              <Button onClick={procesar} disabled={procesando}>{procesando ? "Procesando..." : "Dispersar"}</Button>
-            </div>
-          </DialogContent>
-        </Dialog>
-        </div>
+        <h1 className="text-2xl font-bold">Constructor de Nómina</h1>
+        <Button onClick={handleSaveAndPrint} className="gap-2" size="lg">
+          <Save className="h-4 w-4" /> Guardar y Exportar PDF
+        </Button>
       </div>
-      <TableSearch placeholder="Buscar periodos..." value={search} onChange={handleSearch} />
-      <Card>
-        <Table>
-          <TableHeader><TableRow><TableHead>Periodo</TableHead><TableHead>Total Dispersado</TableHead><TableHead>Percepciones</TableHead><TableHead>Deducciones</TableHead><TableHead>Empleados</TableHead></TableRow></TableHeader>
-          <TableBody>
-            {loading ? (
-              <TableRow><TableCell colSpan={5} className="h-24 text-center text-muted-foreground">Cargando...</TableCell></TableRow>
-            ) : filtered.length === 0 ? (
-              <TableRow><TableCell colSpan={5} className="h-24 text-center text-muted-foreground">{search ? "No se encontraron periodos." : "Sin periodos registrados."}</TableCell></TableRow>
-            ) : paginated.map((p) => (
-              <TableRow key={p.id}>
-                <TableCell>{fmtFecha(p.fecha_inicio)} — {fmtFecha(p.fecha_fin)}</TableCell>
-                <TableCell className="font-semibold">${Number(p.total_dispersado).toLocaleString()}</TableCell>
-                <TableCell>${Number((p.detalles ?? []).reduce((sum: number, item: any) => sum + Number(item.total_percepciones ?? 0), 0)).toLocaleString()}</TableCell>
-                <TableCell>${Number((p.detalles ?? []).reduce((sum: number, item: any) => sum + Number(item.total_deducciones ?? 0) + Number(item.retencion_ahorro ?? 0), 0)).toLocaleString()}</TableCell>
-                <TableCell>{p.detalles?.length ?? 0}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </Card>
-      <Dialog open={Boolean(editingEmpleado)} onOpenChange={(open) => !open && setEditingEmpleado(null)}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Editar configuración de nómina</DialogTitle></DialogHeader>
-          <div className="grid gap-3">
-            <div><Label>Sueldo base</Label><Input type="number" value={empleadoForm.sueldo_base} onChange={(e) => setEmpleadoForm((prev) => ({ ...prev, sueldo_base: e.target.value }))} /></div>
-            <div><Label>% ahorro</Label><Input type="number" value={empleadoForm.porcentaje_ahorro} onChange={(e) => setEmpleadoForm((prev) => ({ ...prev, porcentaje_ahorro: e.target.value }))} /></div>
-            <div>
-              <Label>Percepciones fijas</Label>
-              <textarea className="min-h-24 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={empleadoForm.percepciones} onChange={(e) => setEmpleadoForm((prev) => ({ ...prev, percepciones: e.target.value }))} placeholder="Bono puntualidad: 250" />
+
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+        <Card className="md:col-span-12">
+          <CardHeader className="pb-3"><CardTitle className="text-sm">Datos del Periodo</CardTitle></CardHeader>
+          <CardContent className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <div className="space-y-1">
+              <label className="text-xs font-semibold">Fecha Inicio</label>
+              <Input type="date" value={fechaInicio} onChange={e => setFechaInicio(e.target.value)} />
             </div>
-            <div>
-              <Label>Deducciones fijas</Label>
-              <textarea className="min-h-24 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={empleadoForm.deducciones} onChange={(e) => setEmpleadoForm((prev) => ({ ...prev, deducciones: e.target.value }))} placeholder="Préstamo interno: 300" />
+            <div className="space-y-1">
+              <label className="text-xs font-semibold">Fecha Fin</label>
+              <Input type="date" value={fechaFin} onChange={e => setFechaFin(e.target.value)} />
             </div>
-            <Button onClick={guardarEmpleado}>Guardar</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-      {!loading && (
-        <TablePagination page={page} totalItems={filtered.length} pageSize={PAGE_SIZE} onPageChange={setPage} label="periodos" />
-      )}
+            <div className="space-y-1">
+              <label className="text-xs font-semibold">Referencia (ej. 51/25)</label>
+              <Input value={referencia} onChange={e => setReferencia(e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-semibold">Firma Dir. Administrativo</label>
+              <Input value={firmaDirAdmin} onChange={e => setFirmaDirAdmin(e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-semibold">Firma Dir. Operativo</label>
+              <Input value={firmaDirOperativo} onChange={e => setFirmaDirOperativo(e.target.value)} />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="md:col-span-12">
+          <CardHeader className="pb-3 flex flex-row items-center justify-between">
+            <CardTitle className="text-sm">Empleados en Nómina</CardTitle>
+            <div className="flex items-center gap-2">
+              <select
+                className="flex h-10 w-[250px] items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                value={empleadoToAdd}
+                onChange={(e) => setEmpleadoToAdd(e.target.value)}
+              >
+                <option value="">Seleccionar empleado...</option>
+                {empleadosCatalog.map(e => <option key={e.id} value={e.id.toString()}>{e.nombre_asesor}</option>)}
+              </select>
+              <Button onClick={handleAddEmpleado} variant="secondary"><PlusCircle className="h-4 w-4 mr-1"/> Agregar</Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {selectedEmpleados.length === 0 ? (
+              <div className="text-center p-8 text-muted-foreground border border-dashed rounded-xl">
+                Ningún empleado agregado al periodo.
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {selectedEmpleados.map((emp) => (
+                  <div key={emp.empleado_id} className="p-4 border rounded-xl bg-card shadow-sm relative">
+                    <Button variant="ghost" size="icon" className="absolute top-2 right-2 text-destructive" onClick={() => removeEmp(emp.empleado_id)}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                    <h3 className="font-bold text-lg mb-4">{emp.nombre}</h3>
+
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      <div className="space-y-1">
+                        <label className="text-xs text-muted-foreground">Pago Base</label>
+                        <Input type="number" min="0" value={emp.pago_base} onChange={e => updateEmpField(emp.empleado_id, 'pago_base', e.target.value)} />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs text-muted-foreground">Despensa</label>
+                        <Input type="number" min="0" value={emp.despensa} onChange={e => updateEmpField(emp.empleado_id, 'despensa', e.target.value)} />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs text-muted-foreground">Apoyo Transporte</label>
+                        <Input type="number" min="0" value={emp.apoyo_transporte} onChange={e => updateEmpField(emp.empleado_id, 'apoyo_transporte', e.target.value)} />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs font-bold text-destructive">Ahorro (-)</label>
+                        <Input type="number" min="0" value={emp.ahorro} onChange={e => updateEmpField(emp.empleado_id, 'ahorro', e.target.value)} className="border-primary" />
+                      </div>
+                    </div>
+
+                    <div className="mt-4 pt-3 border-t flex justify-end gap-6 text-sm">
+                      <div><span className="text-muted-foreground">Bruto:</span> <span className="font-bold">${emp.bruto.toFixed(2)}</span></div>
+                      <div><span className="text-muted-foreground">Deducciones:</span> <span className="font-bold text-destructive">-${emp.ahorro.toFixed(2)}</span></div>
+                      <div className="text-lg"><span className="text-muted-foreground">Neto:</span> <span className="font-black text-primary">${emp.neto.toFixed(2)}</span></div>
+                    </div>
+                  </div>
+                ))}
+
+                <div className="flex justify-between items-center p-4 bg-primary/10 rounded-xl border border-primary/20">
+                  <div className="font-bold text-lg">Total Dispersión Nómina</div>
+                  <div className="text-2xl font-black text-primary">${totalNeto.toLocaleString('es-MX', {minimumFractionDigits: 2})}</div>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

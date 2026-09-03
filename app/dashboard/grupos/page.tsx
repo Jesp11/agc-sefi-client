@@ -350,6 +350,7 @@ export default function GruposPage() {
               <TableHead className="w-[80px]">ID</TableHead>
               <TableHead>Nombre del Grupo</TableHead>
               <TableHead>Gestor Cobranza</TableHead>
+              <TableHead className="text-center">Día de Pago</TableHead>
               <TableHead className="text-center">Integrantes</TableHead>
               <TableHead className="text-center">Socio Preferencial</TableHead>
               <TableHead className="text-right">Acción</TableHead>
@@ -358,7 +359,7 @@ export default function GruposPage() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={6} className="h-32 text-center">
+                <TableCell colSpan={7} className="h-32 text-center">
                   <div className="flex flex-col items-center gap-2">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
                     <p className="text-sm text-muted-foreground">Cargando grupos...</p>
@@ -367,45 +368,60 @@ export default function GruposPage() {
               </TableRow>
             ) : filtered.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
+                <TableCell colSpan={7} className="h-32 text-center text-muted-foreground">
                   {search ? "No se encontraron grupos con ese nombre." : "No hay grupos registrados."}
                 </TableCell>
               </TableRow>
             ) : (
-              paginated.map((grupo: any) => (
-                <TableRow key={grupo.id_grupo || grupo.id} className="hover:bg-muted/30 transition-colors">
-                  <TableCell className="font-mono text-xs font-semibold text-primary/80">
-                    #{grupo.id_grupo || grupo.id}
-                  </TableCell>
-                  <TableCell className="font-medium">
-                    <div className="flex items-center gap-2">
-                      <Users className="h-4 w-4 text-primary/70" />
-                      {grupo.nombre_grupo}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-sm">{grupo.asesor?.nombre_asesor ?? "—"}</TableCell>
-                  <TableCell className="text-center">
-                    <Badge variant="secondary" className="font-bold">
-                      {grupo.clientes?.length ?? 0}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <Badge variant={grupo.es_socio_preferencial ? "default" : "outline"} className="text-xs">
-                      {grupo.es_socio_preferencial ? "Sí" : "No"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-8 text-xs font-medium"
-                      onClick={() => router.push(`/dashboard/grupos/${grupo.id_grupo || grupo.id}`)}
-                    >
-                      Ver / Editar
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))
+              paginated.map((grupo: any) => {
+                const creditosOrdenados = [...(grupo.creditos || [])].sort((a: any, b: any) => (b.num_prog || 0) - (a.num_prog || 0));
+                const creditoActivo = creditosOrdenados.find((c: any) => c.estado === "Activo" || c.estado === "EnMora") || creditosOrdenados[0] || null;
+                const diaPago = creditoActivo?.dias_pago;
+
+                return (
+                  <TableRow key={grupo.id_grupo || grupo.id} className="hover:bg-muted/30 transition-colors">
+                    <TableCell className="font-mono text-xs font-semibold text-primary/80">
+                      #{grupo.id_grupo || grupo.id}
+                    </TableCell>
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-2">
+                        <Users className="h-4 w-4 text-primary/70" />
+                        {grupo.nombre_grupo}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-sm">{grupo.asesor?.nombre_asesor ?? "—"}</TableCell>
+                    <TableCell className="text-center">
+                      {diaPago ? (
+                        <Badge variant="outline" className="text-xs font-semibold">
+                          {diaPago}
+                        </Badge>
+                      ) : (
+                        <span className="text-muted-foreground text-xs">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <Badge variant="secondary" className="font-bold">
+                        {grupo.clientes?.length ?? 0}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <Badge variant={grupo.es_socio_preferencial ? "default" : "outline"} className="text-xs">
+                        {grupo.es_socio_preferencial ? "Sí" : "No"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 text-xs font-medium"
+                        onClick={() => router.push(`/dashboard/grupos/${grupo.id_grupo || grupo.id}`)}
+                      >
+                        Ver / Editar
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })
             )}
           </TableBody>
         </Table>

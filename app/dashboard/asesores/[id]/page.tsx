@@ -35,7 +35,7 @@ import {
   Check,
   X,
   Upload,
-  Trash2,
+  Trash2, Wallet, Percent, Car, TrendingUp, Building2,
   KeyRound,
   Copy,
   Download,
@@ -45,6 +45,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TablePagination, TableSearch } from "@/components/table-controls";
 import { PAGE_SIZE, filterBySearch, paginateItems, useTableControls } from "@/hooks/use-paginated-list";
 import { creditoSearchFields } from "@/lib/table-utils";
@@ -74,13 +75,24 @@ export default function AsesorDetallePage() {
   const creditosControls = useTableControls();
   const [creditoEstadoFilter, setCreditoEstadoFilter] = useState<"todos" | "activo" | "mora" | "finalizado">("todos");
 
-  // edit empleado dialog
-  const [showEditDialog, setShowEditDialog] = useState(false);
+  // edit dialogs (separados para personal y nómina)
+  const [showEditPersonalDialog, setShowEditPersonalDialog] = useState(false);
+  const [savingEditPersonal, setSavingEditPersonal] = useState(false);
+  const [showEditNominaDialog, setShowEditNominaDialog] = useState(false);
+  const [savingEditNomina, setSavingEditNomina] = useState(false);
+
   const [editNombre, setEditNombre] = useState("");
   const [editCurp, setEditCurp] = useState("");
   const [editTelefono, setEditTelefono] = useState("");
   const [editRolLaboral, setEditRolLaboral] = useState("Gestor de Cobranza");
-  const [savingEdit, setSavingEdit] = useState(false);
+
+  const [editSueldoBase, setEditSueldoBase] = useState<string>("");
+  const [editDespensa, setEditDespensa] = useState<string>("");
+  const [editApoyoTransporte, setEditApoyoTransporte] = useState<string>("");
+  const [editRfc, setEditRfc] = useState("");
+  const [editNss, setEditNss] = useState("");
+  const [editBanco, setEditBanco] = useState("");
+  const [editCuentaBancaria, setEditCuentaBancaria] = useState("");
 
   const [accesoEmail, setAccesoEmail] = useState("");
   const [accesoPassword, setAccesoPassword] = useState("");
@@ -177,16 +189,16 @@ export default function AsesorDetallePage() {
 
   useEffect(() => { fetchAsesor(); }, [id]);
 
-  const handleOpenEdit = () => {
+  const handleOpenEditPersonal = () => {
     if (!asesor) return;
     setEditNombre(asesor.nombre_asesor ?? "");
     setEditCurp(asesor.curp ?? "");
     setEditTelefono(asesor.telefono ?? "");
     setEditRolLaboral(asesor.rol_laboral ?? "Gestor de Cobranza");
-    setShowEditDialog(true);
+    setShowEditPersonalDialog(true);
   };
 
-  const handleSaveEdit = async (e: React.FormEvent) => {
+  const handleSaveEditPersonal = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editNombre.trim()) {
       toast.error("El nombre es requerido");
@@ -197,7 +209,7 @@ export default function AsesorDetallePage() {
       return;
     }
 
-    setSavingEdit(true);
+    setSavingEditPersonal(true);
     try {
       const res = await apiFetch(`/asesores/${id}`, {
         method: "PUT",
@@ -211,31 +223,94 @@ export default function AsesorDetallePage() {
 
       const data = await res.json();
       if (res.ok) {
-        toast.success(data.message || "Información actualizada exitosamente");
+        toast.success(data.message || "Información personal actualizada exitosamente");
         const updated = data.data ?? {};
         setAsesor((prev: any) => ({
           ...prev,
           ...updated,
           nombre_asesor: updated.nombre_asesor ?? editNombre.trim(),
           curp: updated.curp ?? editCurp.trim().toUpperCase(),
-          cumpleanos: updated.cumpleanos ?? prev.cumpleanos,
-          telefono: updated.telefono ?? (editTelefono.trim() || null),
+          telefono: updated.telefono ?? editTelefono.trim(),
           rol_laboral: updated.rol_laboral ?? editRolLaboral,
         }));
         setTelValue(editTelefono.trim());
-        setShowEditDialog(false);
+        setShowEditPersonalDialog(false);
       } else {
         const errorMsg =
           data.errors?.curp?.[0] ||
           data.errors?.nombre_asesor?.[0] ||
           data.message ||
-          "Error al actualizar empleado";
+          "Error al actualizar información personal";
         toast.error(errorMsg);
       }
     } catch {
       toast.error("Error de conexión");
     } finally {
-      setSavingEdit(false);
+      setSavingEditPersonal(false);
+    }
+  };
+
+  const handleOpenEditNomina = () => {
+    if (!asesor) return;
+    setEditSueldoBase(asesor.sueldo_base != null && Number(asesor.sueldo_base) > 0 ? String(asesor.sueldo_base) : "");
+    setEditDespensa(asesor.despensa != null && Number(asesor.despensa) > 0 ? String(asesor.despensa) : "");
+    setEditApoyoTransporte(asesor.apoyo_transporte != null && Number(asesor.apoyo_transporte) > 0 ? String(asesor.apoyo_transporte) : "");
+    setEditRfc(asesor.rfc ?? "");
+    setEditNss(asesor.nss ?? "");
+    setEditBanco(asesor.banco ?? "");
+    setEditCuentaBancaria(asesor.cuenta_bancaria ?? "");
+    setShowEditNominaDialog(true);
+  };
+
+  const handleSaveEditNomina = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingEditNomina(true);
+    const sBase = editSueldoBase === "" ? 0 : parseFloat(editSueldoBase) || 0;
+    const sDesp = editDespensa === "" ? 0 : parseFloat(editDespensa) || 0;
+    const sTrans = editApoyoTransporte === "" ? 0 : parseFloat(editApoyoTransporte) || 0;
+
+    try {
+      const res = await apiFetch(`/asesores/${id}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          rfc: editRfc.trim().toUpperCase() || null,
+          nss: editNss.trim() || null,
+          banco: editBanco.trim() || null,
+          cuenta_bancaria: editCuentaBancaria.trim() || null,
+          sueldo_base: sBase,
+          despensa: sDesp,
+          apoyo_transporte: sTrans,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        toast.success(data.message || "Datos de nómina actualizados exitosamente");
+        const updated = data.data ?? {};
+        setAsesor((prev: any) => ({
+          ...prev,
+          ...updated,
+          rfc: updated.rfc ?? (editRfc.trim().toUpperCase() || null),
+          nss: updated.nss ?? (editNss.trim() || null),
+          banco: updated.banco ?? (editBanco.trim() || null),
+          cuenta_bancaria: updated.cuenta_bancaria ?? (editCuentaBancaria.trim() || null),
+          sueldo_base: updated.sueldo_base ?? sBase,
+          despensa: updated.despensa ?? sDesp,
+          apoyo_transporte: updated.apoyo_transporte ?? sTrans,
+        }));
+        setShowEditNominaDialog(false);
+      } else {
+        const errorMsg =
+          data.errors?.rfc?.[0] ||
+          data.errors?.nss?.[0] ||
+          data.message ||
+          "Error al actualizar datos de nómina";
+        toast.error(errorMsg);
+      }
+    } catch {
+      toast.error("Error de conexión");
+    } finally {
+      setSavingEditNomina(false);
     }
   };
 
@@ -244,7 +319,7 @@ export default function AsesorDetallePage() {
     try {
       const fd = new FormData();
       fd.append("telefono", telValue.trim());
-      const res = await patchAsesor(String(id), fd);      
+      const res = await patchAsesor(String(id), fd);
       if (res.ok) {
         const data = await res.json();
         setAsesor((prev: any) => ({ ...prev, telefono: data.data?.telefono ?? telValue.trim() }));
@@ -268,7 +343,7 @@ export default function AsesorDetallePage() {
     try {
       const fd = new FormData();
       fd.append(slot === 1 ? "ine" : "ine_2", file);
-      const res = await patchAsesor(String(id), fd);      
+      const res = await patchAsesor(String(id), fd);
       if (res.ok) {
         const data = await res.json();
         setAsesor((prev: any) => ({
@@ -295,7 +370,7 @@ export default function AsesorDetallePage() {
     try {
       const fd = new FormData();
       fd.append(slot === 1 ? "delete_ine" : "delete_ine_2", "1");
-      const res = await patchAsesor(String(id), fd);      
+      const res = await patchAsesor(String(id), fd);
       if (res.ok) {
         setAsesor((prev: any) => ({
           ...prev,
@@ -456,7 +531,7 @@ export default function AsesorDetallePage() {
           </div>
         </div>
         <div className="ml-auto flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={handleOpenEdit}>
+          <Button variant="outline" size="sm" onClick={handleOpenEditPersonal}>
             <Pencil className="h-4 w-4 mr-1.5" />
             Editar Datos
           </Button>
@@ -565,16 +640,16 @@ export default function AsesorDetallePage() {
         </DialogContent>
       </Dialog>
 
-      {/* Modal para editar información general del empleado */}
-      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
-        <DialogContent className="sm:max-w-md">
+      {/* Modal para editar Información Personal */}
+      <Dialog open={showEditPersonalDialog} onOpenChange={setShowEditPersonalDialog}>
+        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Editar Empleado</DialogTitle>
+            <DialogTitle>Editar Información Personal</DialogTitle>
             <DialogDescription>
-              Modifica los datos del empleado. La fecha de nacimiento se extrae automáticamente a partir de la CURP.
+              Modifica los datos generales y el rol operativo del empleado.
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleSaveEdit} className="grid gap-4 py-2">
+          <form onSubmit={handleSaveEditPersonal} className="grid gap-4 py-2">
             <div className="grid gap-2">
               <label htmlFor="edit-nombre" className="text-sm font-medium">Nombre Completo</label>
               <Input
@@ -582,7 +657,7 @@ export default function AsesorDetallePage() {
                 placeholder="Ej. Carlos López"
                 value={editNombre}
                 onChange={(e) => setEditNombre(e.target.value)}
-                disabled={savingEdit}
+                disabled={savingEditPersonal}
                 required
               />
             </div>
@@ -594,7 +669,7 @@ export default function AsesorDetallePage() {
                 value={editCurp}
                 onChange={(e) => setEditCurp(e.target.value.toUpperCase())}
                 maxLength={18}
-                disabled={savingEdit}
+                disabled={savingEditPersonal}
                 className="font-mono uppercase"
                 required
               />
@@ -618,7 +693,7 @@ export default function AsesorDetallePage() {
                 value={editTelefono}
                 onChange={(e) => setEditTelefono(e.target.value)}
                 maxLength={20}
-                disabled={savingEdit}
+                disabled={savingEditPersonal}
               />
             </div>
             <div className="grid gap-2">
@@ -628,7 +703,7 @@ export default function AsesorDetallePage() {
                 value={editRolLaboral}
                 onChange={(e) => setEditRolLaboral(e.target.value)}
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                disabled={savingEdit}
+                disabled={savingEditPersonal}
               >
                 <option value="Gestor de Cobranza">Gestor de Cobranza (GC)</option>
                 <option value="Asesor Financiero">Asesor Financiero (AF)</option>
@@ -637,12 +712,104 @@ export default function AsesorDetallePage() {
                 <option value="Contabilidad">Contabilidad (CO)</option>
               </select>
             </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <Button type="button" variant="outline" onClick={() => setShowEditDialog(false)} disabled={savingEdit}>
+
+            <div className="flex justify-end gap-2 pt-4 border-t mt-2">
+              <Button type="button" variant="outline" onClick={() => setShowEditPersonalDialog(false)} disabled={savingEditPersonal}>
                 Cancelar
               </Button>
-              <Button type="submit" disabled={savingEdit}>
-                {savingEdit ? "Guardando..." : "Guardar Cambios"}
+              <Button type="submit" disabled={savingEditPersonal}>
+                {savingEditPersonal ? "Guardando..." : "Guardar Cambios"}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal para editar Datos de Nómina y Fiscales */}
+      <Dialog open={showEditNominaDialog} onOpenChange={setShowEditNominaDialog}>
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Editar Datos de Nómina y Fiscales</DialogTitle>
+            <DialogDescription>
+              Configura los datos fiscales, bancarios y las percepciones fijas de nómina.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSaveEditNomina} className="grid gap-4 py-2">
+            <div>
+              <h4 className="text-sm font-semibold text-primary mb-3">Datos Fiscales y Bancarios</h4>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <label htmlFor="edit-rfc" className="text-xs font-medium">RFC</label>
+                  <Input
+                    id="edit-rfc"
+                    placeholder="RFC (13 caracteres)"
+                    value={editRfc}
+                    onChange={e => setEditRfc(e.target.value.toUpperCase())}
+                    maxLength={13}
+                    className="font-mono uppercase"
+                    disabled={savingEditNomina}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <label htmlFor="edit-nss" className="text-xs font-medium">NSS (Seguro Social)</label>
+                  <Input
+                    id="edit-nss"
+                    placeholder="Número de Seguro Social"
+                    value={editNss}
+                    onChange={e => setEditNss(e.target.value)}
+                    maxLength={20}
+                    className="font-mono"
+                    disabled={savingEditNomina}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <label htmlFor="edit-banco" className="text-xs font-medium">Banco</label>
+                  <Input
+                    id="edit-banco"
+                    placeholder="Ej. BBVA, BANORTE"
+                    value={editBanco}
+                    onChange={e => setEditBanco(e.target.value)}
+                    disabled={savingEditNomina}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <label htmlFor="edit-cuenta-bancaria" className="text-xs font-medium">Cuenta Banco / CLABE</label>
+                  <Input
+                    id="edit-cuenta-bancaria"
+                    placeholder="Cuenta o CLABE"
+                    value={editCuentaBancaria}
+                    onChange={e => setEditCuentaBancaria(e.target.value)}
+                    className="font-mono"
+                    disabled={savingEditNomina}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="border-t pt-3 mt-1">
+              <h4 className="text-sm font-semibold text-primary mb-3">Percepciones de Nómina</h4>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="grid gap-2">
+                  <label className="text-xs font-medium">Sueldo Base ($)</label>
+                  <Input type="number" min="0" step="0.01" value={editSueldoBase} onChange={e => setEditSueldoBase(e.target.value)} disabled={savingEditNomina} />
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-xs font-medium">Despensa ($)</label>
+                  <Input type="number" min="0" step="0.01" value={editDespensa} onChange={e => setEditDespensa(e.target.value)} disabled={savingEditNomina} />
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-xs font-medium">Transporte ($)</label>
+                  <Input type="number" min="0" step="0.01" value={editApoyoTransporte} onChange={e => setEditApoyoTransporte(e.target.value)} disabled={savingEditNomina} />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-4 border-t mt-2">
+              <Button type="button" variant="outline" onClick={() => setShowEditNominaDialog(false)} disabled={savingEditNomina}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={savingEditNomina}>
+                {savingEditNomina ? "Guardando..." : "Guardar Cambios"}
               </Button>
             </div>
           </form>
@@ -708,7 +875,7 @@ export default function AsesorDetallePage() {
               <User className="h-5 w-5 text-primary" />
               Información Personal
             </CardTitle>
-            <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={handleOpenEdit}>
+            <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={handleOpenEditPersonal}>
               <Pencil className="h-3.5 w-3.5 mr-1" />
               Editar
             </Button>
@@ -740,13 +907,15 @@ export default function AsesorDetallePage() {
                   size="icon"
                   variant="ghost"
                   className="h-6 w-6 text-muted-foreground hover:text-foreground"
-                  onClick={handleOpenEdit}
-                  title="Editar CURP / Información"
+                  onClick={handleOpenEditPersonal}
+                  title="Editar Información"
                 >
                   <Pencil className="h-3 w-3" />
                 </Button>
               </div>
             </div>
+
+
 
             <div className="flex flex-col gap-1">
               <span className="text-muted-foreground font-medium">Fecha de Nacimiento / Cumpleaños</span>
@@ -847,161 +1016,292 @@ export default function AsesorDetallePage() {
           </CardContent>
         </Card>
 
-        {/* Préstamos Asignados */}
-        <Card className="md:col-span-2">
-          <CardHeader>
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <CreditCard className="h-5 w-5 text-primary" />
+        {/* Pestañas: Préstamos Asignados y Datos Nómina */}
+        <div className="md:col-span-2">
+          <Tabs defaultValue="prestamos" className="space-y-4">
+            <TabsList className="grid grid-cols-2 w-full max-w-md h-10">
+              <TabsTrigger value="prestamos" className="text-xs sm:text-sm font-medium">
+                <CreditCard className="h-4 w-4 mr-2 text-primary" />
                 Préstamos Asignados
-              </CardTitle>
-              <div className="flex items-center gap-2 text-xs">
-                <span className="text-muted-foreground">Total:</span>
-                <Badge variant="secondary" className="font-semibold">
+                <Badge variant="secondary" className="ml-2 font-semibold">
                   {totalCreditosCount}
                 </Badge>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Status Filters */}
-            <div className="flex flex-wrap items-center gap-1.5 border-b pb-3 text-xs">
-              <span className="text-muted-foreground mr-1 font-medium hidden sm:inline">Filtrar:</span>
-              {[
-                { id: "todos", label: "Todos", count: totalCreditosCount, badgeColor: "bg-gray-100 text-gray-700" },
-                { id: "activo", label: "Activos", count: activosCreditosCount, badgeColor: "bg-emerald-100 text-emerald-800" },
-                { id: "mora", label: "En Mora", count: moraCreditosCount, badgeColor: "bg-rose-100 text-rose-800" },
-                { id: "finalizado", label: "Finalizados / Cerrados", count: finalizadosCreditosCount, badgeColor: "bg-gray-100 text-gray-700" },
-              ].map((f) => {
-                const isActive = creditoEstadoFilter === f.id;
-                return (
-                  <button
-                    key={f.id}
-                    type="button"
-                    onClick={() => {
-                      setCreditoEstadoFilter(f.id as any);
-                      creditosControls.setPage(1);
-                    }}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium transition-all cursor-pointer ${
-                      isActive
-                        ? "bg-primary text-primary-foreground shadow-xs"
-                        : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground"
-                    }`}
-                  >
-                    <span>{f.label}</span>
-                    <span
-                      className={`px-1.5 py-0.2 rounded-full text-[10px] font-semibold ${
-                        isActive ? "bg-white/20 text-white" : f.badgeColor
-                      }`}
-                    >
-                      {f.count}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
+              </TabsTrigger>
+              <TabsTrigger value="nomina" className="text-xs sm:text-sm font-medium">
+                <Wallet className="h-4 w-4 mr-2 text-emerald-600" />
+                Datos Nómina
+              </TabsTrigger>
+            </TabsList>
 
-            <TableSearch placeholder="Buscar por titular, folio o monto..." value={creditosControls.search} onChange={creditosControls.handleSearch} />
-
-            <div className="overflow-x-auto rounded-lg border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[100px]">Folio</TableHead>
-                    <TableHead>Titular / Acreditado</TableHead>
-                    <TableHead>Tipo / Ciclo</TableHead>
-                    <TableHead>Monto</TableHead>
-                    <TableHead>Total</TableHead>
-                    <TableHead>Estado</TableHead>
-                    <TableHead className="text-right">Acción</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {creditosFiltered.length > 0 ? (
-                    creditosPaginated.map((c: any, i: number) => {
-                      const normEstado = normalizeEstado(c.estado);
-                      const titular =
-                        c.cliente?.nombre_completo ||
-                        c.grupo?.nombre_grupo ||
-                        (c.id_cliente ? `Cliente #${c.id_cliente}` : c.id_grupo ? `Grupo #${c.id_grupo}` : "—");
-                      const tipo = c.tipo_credito || (c.id_grupo ? "Grupal" : "Individual");
-                      const folio = c.num_prog || c.id_credito || c.id;
-
+            <TabsContent value="prestamos" className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                      <CreditCard className="h-5 w-5 text-primary" />
+                      Préstamos Asignados
+                    </CardTitle>
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="text-muted-foreground">Total:</span>
+                      <Badge variant="secondary" className="font-semibold">
+                        {totalCreditosCount}
+                      </Badge>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Status Filters */}
+                  <div className="flex flex-wrap items-center gap-1.5 border-b pb-3 text-xs">
+                    <span className="text-muted-foreground mr-1 font-medium hidden sm:inline">Filtrar:</span>
+                    {[
+                      { id: "todos", label: "Todos", count: totalCreditosCount, badgeColor: "bg-gray-100 text-gray-700" },
+                      { id: "activo", label: "Activos", count: activosCreditosCount, badgeColor: "bg-emerald-100 text-emerald-800" },
+                      { id: "mora", label: "En Mora", count: moraCreditosCount, badgeColor: "bg-rose-100 text-rose-800" },
+                      { id: "finalizado", label: "Finalizados / Cerrados", count: finalizadosCreditosCount, badgeColor: "bg-gray-100 text-gray-700" },
+                    ].map((f) => {
+                      const isActive = creditoEstadoFilter === f.id;
                       return (
-                        <TableRow key={folio ?? i} className="hover:bg-muted/40 transition-colors">
-                          <TableCell className="font-mono text-xs font-semibold text-primary">
-                            <Link href={`/dashboard/creditos/${folio}`} className="underline underline-offset-2 hover:opacity-80">
-                              #{folio}
-                            </Link>
-                          </TableCell>
-                          <TableCell>
-                            <div className="font-medium text-foreground truncate max-w-[180px]" title={titular}>
-                              {titular}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-xs text-muted-foreground">
-                            <div>{tipo}</div>
-                            <div className="text-[11px]">Ciclo {c.ciclo ?? 1}</div>
-                          </TableCell>
-                          <TableCell className="font-medium">
-                            ${Number(c.monto_otorgado || 0).toLocaleString("es-MX")}
-                          </TableCell>
-                          <TableCell>
-                            ${Number(c.total || 0).toLocaleString("es-MX")}
-                          </TableCell>
-                          <TableCell>
-                            {normEstado === "activo" && (
-                              <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 hover:bg-emerald-100">
-                                Activo
-                              </Badge>
-                            )}
-                            {normEstado === "mora" && (
-                              <Badge className="bg-rose-100 text-rose-800 border-rose-200 hover:bg-rose-100 flex items-center gap-1 w-fit">
-                                <AlertTriangle className="size-3" />
-                                En Mora
-                              </Badge>
-                            )}
-                            {normEstado === "finalizado" && (
-                              <Badge variant="secondary">
-                                {c.estado || "Liquidado"}
-                              </Badge>
-                            )}
-                            {normEstado === "otro" && (
-                              <Badge variant="outline">
-                                {c.estado ?? "—"}
-                              </Badge>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <Link
-                              href={`/dashboard/creditos/${folio}`}
-                              className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline hover:opacity-80"
-                            >
-                              <ExternalLink className="size-3.5" />
-                              Ver
-                            </Link>
-                          </TableCell>
-                        </TableRow>
+                        <button
+                          key={f.id}
+                          type="button"
+                          onClick={() => {
+                            setCreditoEstadoFilter(f.id as any);
+                            creditosControls.setPage(1);
+                          }}
+                          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium transition-all cursor-pointer ${
+                            isActive
+                              ? "bg-primary text-primary-foreground shadow-xs"
+                              : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground"
+                          }`}
+                        >
+                          <span>{f.label}</span>
+                          <span
+                            className={`px-1.5 py-0.2 rounded-full text-[10px] font-semibold ${
+                              isActive ? "bg-white/20 text-white" : f.badgeColor
+                            }`}
+                          >
+                            {f.count}
+                          </span>
+                        </button>
                       );
-                    })
-                  ) : (
-                    <TableRow>
-                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                        {creditosControls.search
-                          ? `No se encontraron préstamos para "${creditosControls.search}".`
-                          : "No hay préstamos asignados en esta categoría."}
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </div>
+                    })}
+                  </div>
 
-            {creditosFiltered.length > 0 && (
-              <TablePagination page={creditosControls.page} totalItems={creditosFiltered.length} pageSize={PAGE_SIZE} onPageChange={creditosControls.setPage} label="préstamos" />
-            )}
-          </CardContent>
-        </Card>
+                  <TableSearch placeholder="Buscar por titular, folio o monto..." value={creditosControls.search} onChange={creditosControls.handleSearch} />
+
+                  <div className="overflow-x-auto rounded-lg border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-[100px]">Folio</TableHead>
+                          <TableHead>Titular / Acreditado</TableHead>
+                          <TableHead>Tipo / Ciclo</TableHead>
+                          <TableHead>Monto</TableHead>
+                          <TableHead>Total</TableHead>
+                          <TableHead>Estado</TableHead>
+                          <TableHead className="text-right">Acción</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {creditosFiltered.length > 0 ? (
+                          creditosPaginated.map((c: any, i: number) => {
+                            const normEstado = normalizeEstado(c.estado);
+                            const titular =
+                              c.cliente?.nombre_completo ||
+                              c.grupo?.nombre_grupo ||
+                              (c.id_cliente ? `Cliente #${c.id_cliente}` : c.id_grupo ? `Grupo #${c.id_grupo}` : "—");
+                            const tipo = c.tipo_credito || (c.id_grupo ? "Grupal" : "Individual");
+                            const folio = c.num_prog || c.id_credito || c.id;
+
+                            return (
+                              <TableRow key={folio ?? i} className="hover:bg-muted/40 transition-colors">
+                                <TableCell className="font-mono text-xs font-semibold text-primary">
+                                  <Link href={`/dashboard/creditos/${folio}`} className="underline underline-offset-2 hover:opacity-80">
+                                    #{folio}
+                                  </Link>
+                                </TableCell>
+                                <TableCell>
+                                  <div className="font-medium text-foreground truncate max-w-[180px]" title={titular}>
+                                    {titular}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-xs text-muted-foreground">
+                                  <div>{tipo}</div>
+                                  <div className="text-[11px]">Ciclo {c.ciclo ?? 1}</div>
+                                </TableCell>
+                                <TableCell className="font-medium">
+                                  ${Number(c.monto_otorgado || 0).toLocaleString("es-MX")}
+                                </TableCell>
+                                <TableCell>
+                                  ${Number(c.total || 0).toLocaleString("es-MX")}
+                                </TableCell>
+                                <TableCell>
+                                  {normEstado === "activo" && (
+                                    <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 hover:bg-emerald-100">
+                                      Activo
+                                    </Badge>
+                                  )}
+                                  {normEstado === "mora" && (
+                                    <Badge className="bg-rose-100 text-rose-800 border-rose-200 hover:bg-rose-100 flex items-center gap-1 w-fit">
+                                      <AlertTriangle className="size-3" />
+                                      En Mora
+                                    </Badge>
+                                  )}
+                                  {normEstado === "finalizado" && (
+                                    <Badge variant="secondary">
+                                      {c.estado || "Liquidado"}
+                                    </Badge>
+                                  )}
+                                  {normEstado === "otro" && (
+                                    <Badge variant="outline">
+                                      {c.estado ?? "—"}
+                                    </Badge>
+                                  )}
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <Link
+                                    href={`/dashboard/creditos/${folio}`}
+                                    className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline hover:opacity-80"
+                                  >
+                                    <ExternalLink className="size-3.5" />
+                                    Ver
+                                  </Link>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })
+                        ) : (
+                          <TableRow>
+                            <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                              {creditosControls.search
+                                ? `No se encontraron préstamos para "${creditosControls.search}".`
+                                : "No hay préstamos asignados en esta categoría."}
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+
+                  {creditosFiltered.length > 0 && (
+                    <TablePagination page={creditosControls.page} totalItems={creditosFiltered.length} pageSize={PAGE_SIZE} onPageChange={creditosControls.setPage} label="préstamos" />
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="nomina" className="space-y-4">
+              <Card className="border-primary/20 bg-primary/5">
+                <CardHeader className="pb-3 border-b border-primary/10">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="text-lg flex items-center gap-2 text-primary">
+                        <Wallet className="h-5 w-5" />
+                        Datos de Nómina
+                      </CardTitle>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Percepciones salariales y configuración fiscal/bancaria del empleado.
+                      </p>
+                    </div>
+                    <Button size="sm" variant="outline" className="h-8 gap-1.5" onClick={handleOpenEditNomina}>
+                      <Pencil className="h-3 w-3" /> Editar Nómina
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-6 space-y-6">
+                  {/* Percepciones Fijas */}
+                  <div>
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+                      Percepciones Fijas
+                    </h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div className="space-y-1 bg-background p-3.5 rounded-lg border shadow-xs">
+                        <span className="text-xs text-muted-foreground font-semibold flex items-center gap-1.5 uppercase tracking-wider">
+                          <Wallet className="h-3.5 w-3.5 text-emerald-600"/> Sueldo Base
+                        </span>
+                        <p className="text-2xl font-bold text-emerald-600">
+                          ${Number(asesor.sueldo_base || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                        </p>
+                      </div>
+                      <div className="space-y-1 bg-background p-3.5 rounded-lg border shadow-xs">
+                        <span className="text-xs text-muted-foreground font-semibold flex items-center gap-1.5 uppercase tracking-wider">
+                          <Percent className="h-3.5 w-3.5 text-blue-600"/> Despensa
+                        </span>
+                        <p className="text-2xl font-bold text-foreground">
+                          ${Number(asesor.despensa || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                        </p>
+                      </div>
+                      <div className="space-y-1 bg-background p-3.5 rounded-lg border shadow-xs">
+                        <span className="text-xs text-muted-foreground font-semibold flex items-center gap-1.5 uppercase tracking-wider">
+                          <Car className="h-3.5 w-3.5 text-amber-600"/> Transporte
+                        </span>
+                        <p className="text-2xl font-bold text-foreground">
+                          ${Number(asesor.apoyo_transporte || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Datos Bancarios y Fiscales */}
+                  <div>
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+                      Datos Fiscales y Bancarios
+                    </h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-1 bg-background p-3.5 rounded-lg border shadow-xs">
+                        <span className="text-xs text-muted-foreground font-semibold flex items-center gap-1.5 uppercase tracking-wider">
+                          <FileText className="h-3.5 w-3.5 text-primary"/> RFC
+                        </span>
+                        <p className="text-base font-mono font-medium text-foreground">
+                          {asesor.rfc || <span className="text-muted-foreground italic text-sm">Sin registro</span>}
+                        </p>
+                      </div>
+                      <div className="space-y-1 bg-background p-3.5 rounded-lg border shadow-xs">
+                        <span className="text-xs text-muted-foreground font-semibold flex items-center gap-1.5 uppercase tracking-wider">
+                          <IdCard className="h-3.5 w-3.5 text-primary"/> NSS (Seguridad Social)
+                        </span>
+                        <p className="text-base font-mono font-medium text-foreground">
+                          {asesor.nss || <span className="text-muted-foreground italic text-sm">Sin registro</span>}
+                        </p>
+                      </div>
+                      <div className="space-y-1 bg-background p-3.5 rounded-lg border shadow-xs">
+                        <span className="text-xs text-muted-foreground font-semibold flex items-center gap-1.5 uppercase tracking-wider">
+                          <Building2 className="h-3.5 w-3.5 text-primary"/> Banco
+                        </span>
+                        <p className="text-base font-medium text-foreground">
+                          {asesor.banco || <span className="text-muted-foreground italic text-sm">Sin registro</span>}
+                        </p>
+                      </div>
+                      <div className="space-y-1 bg-background p-3.5 rounded-lg border shadow-xs">
+                        <span className="text-xs text-muted-foreground font-semibold flex items-center gap-1.5 uppercase tracking-wider">
+                          <CreditCard className="h-3.5 w-3.5 text-primary"/> Cuenta Banco / CLABE
+                        </span>
+                        <p className="text-base font-mono font-medium text-foreground">
+                          {asesor.cuenta_bancaria || <span className="text-muted-foreground italic text-sm">Sin registro</span>}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Resumen Total */}
+                  <div className="bg-background p-4 rounded-lg border shadow-xs flex items-center justify-between">
+                    <div>
+                      <span className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
+                        Total Percepciones Fijas Mensuales
+                      </span>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Sueldo base + despensa + apoyo transporte
+                      </p>
+                    </div>
+                    <p className="text-2xl font-black text-emerald-600">
+                      ${(Number(asesor.sueldo_base || 0) + Number(asesor.despensa || 0) + Number(asesor.apoyo_transporte || 0)).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
+        </div>
       </div>
     </div>
   );

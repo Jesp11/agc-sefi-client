@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowLeft, User, Users, CreditCard, Component, UserMinus, UserPlus } from "lucide-react";
+import { ArrowLeft, User, Users, CreditCard, Component, UserMinus, UserPlus, Calendar } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { fmtFecha } from "@/lib/utils";
@@ -136,6 +136,15 @@ export default function GrupoDetallePage() {
   const creditosFiltered = filterBySearch(creditosList, creditosControls.search, creditoSearchFields);
   const creditosPaginated = paginateItems(creditosFiltered, creditosControls.page);
 
+  const creditosOrdenados = [...(grupo?.creditos || [])].sort(
+    (a: any, b: any) => (b.num_prog || 0) - (a.num_prog || 0)
+  );
+  const creditoActivo =
+    creditosOrdenados.find((c: any) => c.estado === "Activo" || c.estado === "EnMora") ||
+    creditosOrdenados[0] ||
+    null;
+  const diaPago = creditoActivo?.dias_pago || null;
+
   if (loading) return <div className="p-8 text-center">Cargando detalles del grupo...</div>;
   if (!grupo) return null;
 
@@ -156,7 +165,13 @@ export default function GrupoDetallePage() {
         </div>
         <div className="flex items-center gap-2">
           <HistorialUnificadoModal tipo="grupo" id={id as string} />
-          <Badge variant="outline" className="text-lg px-4 py-1 border-primary/20 bg-primary/5">
+          {diaPago && (
+            <Badge variant="outline" className="text-base px-3 py-1 gap-1.5 border-primary/30 bg-primary/10 text-primary font-semibold">
+              <Calendar className="h-4 w-4" />
+              Día de pago: {diaPago}
+            </Badge>
+          )}
+          <Badge variant="outline" className="text-base px-4 py-1 border-primary/20 bg-primary/5">
             {grupo.clientes?.length || 0} Integrantes
           </Badge>
 
@@ -243,6 +258,67 @@ export default function GrupoDetallePage() {
           </Dialog>
 
         </div>
+      </div>
+
+      {/* Tarjetas informativas de resumen */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card className="p-4 flex items-center gap-3.5 shadow-sm">
+          <div className="bg-primary/10 p-3 rounded-lg text-primary">
+            <Calendar className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Día de Pago</p>
+            <p className="text-base font-bold text-foreground">{diaPago || "No especificado"}</p>
+          </div>
+        </Card>
+
+        <Card className="p-4 flex items-center gap-3.5 shadow-sm">
+          <div className="bg-primary/10 p-3 rounded-lg text-primary">
+            <User className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Gestor de Cobranza</p>
+            <p className="text-base font-bold text-foreground">{grupo.asesor?.nombre_asesor || "Sin asignar"}</p>
+          </div>
+        </Card>
+
+        <Card className="p-4 flex items-center gap-3.5 shadow-sm">
+          <div className="bg-primary/10 p-3 rounded-lg text-primary">
+            <Users className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Integrantes</p>
+            <p className="text-base font-bold text-foreground">{grupo.clientes?.length || 0} miembros</p>
+          </div>
+        </Card>
+
+        <Card className="p-4 flex items-center gap-3.5 shadow-sm">
+          <div className="bg-primary/10 p-3 rounded-lg text-primary">
+            <CreditCard className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Crédito del Grupo</p>
+            <div className="flex items-center gap-2 mt-0.5">
+              <p className="text-base font-bold text-foreground">
+                {creditoActivo ? `Ciclo ${creditoActivo.ciclo}` : "Sin créditos"}
+              </p>
+              {creditoActivo && (
+                <Badge
+                  variant={
+                    creditoActivo.estado === "Activo"
+                      ? "default"
+                      : creditoActivo.estado === "EnMora"
+                      ? "destructive"
+                      : "secondary"
+                  }
+                  className="text-xs"
+                >
+                  {creditoActivo.estado}
+                </Badge>
+              )}
+            </div>
+          </div>
+        </Card>
       </div>
 
       <Tabs defaultValue="integrantes" className="w-full">

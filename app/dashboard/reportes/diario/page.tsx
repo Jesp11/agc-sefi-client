@@ -242,27 +242,34 @@ function AdminPagosView({
       {data && (
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm">Total a recibir</CardTitle></CardHeader>
-            <CardContent className="text-xl font-bold text-primary">
-              {money(data.total_a_recibir ?? data.total_abonos)}
+            <CardHeader className="pb-2"><CardTitle className="text-sm">Ruta del Día (A recibir)</CardTitle></CardHeader>
+            <CardContent>
+              <div className="text-xl font-bold text-primary">
+                {money(data.total_programado_dia || 0)}
+              </div>
+              {Number(data.total_atrasado ?? 0) > 0 && (
+                <p className="text-xs text-muted-foreground font-normal mt-1">
+                  + {money(data.total_atrasado)} atrasados ({money(data.total_exigible)} exigible)
+                </p>
+              )}
             </CardContent>
           </Card>
           <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm">Total recibido</CardTitle></CardHeader>
+            <CardHeader className="pb-2"><CardTitle className="text-sm">Cobrado por Gestores</CardTitle></CardHeader>
+            <CardContent className="text-xl font-bold text-blue-600">
+              {money(data.total_abonos || 0)}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-sm">Efectivo Recibido (Caja)</CardTitle></CardHeader>
             <CardContent className="text-xl font-bold text-emerald-700">
               {money(data.total_recibido ?? 0)}
             </CardContent>
           </Card>
           <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm">Pendiente de entrega</CardTitle></CardHeader>
-            <CardContent className="text-xl font-bold text-amber-700">
+            <CardHeader className="pb-2"><CardTitle className="text-sm">Faltante por Entregar</CardTitle></CardHeader>
+            <CardContent className="text-xl font-bold text-red-600">
               {money(data.total_pendiente ?? data.total_a_recibir ?? 0)}
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm">Préstamos nuevos (monto)</CardTitle></CardHeader>
-            <CardContent className="text-xl font-bold">
-              {money(data.monto_colocado)}
             </CardContent>
           </Card>
         </div>
@@ -293,10 +300,10 @@ function AdminPagosView({
               <TableRow>
                 <TableHead className="w-10"></TableHead>
                 <TableHead>Gestor Cobranza</TableHead>
-                <TableHead className="text-center">Abonos</TableHead>
+                <TableHead className="text-right">Cobrado App</TableHead>
                 <TableHead className="text-right">A recibir</TableHead>
-                <TableHead className="text-right">Recibido</TableHead>
-                <TableHead className="text-right">Pendiente</TableHead>
+                <TableHead className="text-right">Entregó Caja</TableHead>
+                <TableHead className="text-right">Faltante</TableHead>
                 <TableHead className="text-center">Estado</TableHead>
                 <TableHead className="text-right">Acción</TableHead>
               </TableRow>
@@ -339,41 +346,39 @@ function AdminPagosView({
                           )}
                         </TableCell>
                         <TableCell>
-                          <div className="font-semibold text-foreground flex items-center gap-2">
-                            {a.nombre_asesor}
-                            <Badge variant="outline" className="text-[11px] font-normal py-0">
+                          <div className="font-semibold text-foreground flex flex-col gap-1">
+                            <div className="flex items-center gap-2">
+                              {a.nombre_asesor}
+                              {a.codigo_asesor && <Badge variant="outline" className="text-[10px] bg-background">#{a.codigo_asesor}</Badge>}
+                            </div>
+                            <Badge variant="outline" className="w-fit text-[11px] font-normal py-0">
                               {pagosAsesor.length > 0
                                 ? `${pagosAsesor.length} ${pagosAsesor.length === 1 ? "cobro registrado" : "cobros registrados"}`
                                 : `${(a.clientes_programados || []).length} programados`}
                             </Badge>
                           </div>
-                          {a.codigo_asesor && (
-                            <div className="text-xs text-muted-foreground font-mono">{a.codigo_asesor}</div>
-                          )}
                         </TableCell>
-                        <TableCell className="text-center">{a.num_abonos > 0 ? a.num_abonos : (a.clientes_programados?.length ?? 0)}</TableCell>
-                        <TableCell className="text-right font-semibold">{money(a.a_recibir)}</TableCell>
-                        <TableCell className="text-right">
-                          {a.recibido ? money(a.monto_recibido) : (a.total_cobrado > 0 ? money(a.total_cobrado) : "—")}
+                        <TableCell className="text-right font-medium text-blue-600">
+                          {a.total_cobrado > 0 ? money(a.total_cobrado) : "—"}
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-right font-semibold text-primary">
+                          {money(a.a_recibir)}
+                        </TableCell>
+                        <TableCell className="text-right font-medium text-emerald-700">
+                          {a.recibido ? money(a.monto_recibido) : "—"}
+                        </TableCell>
+                        <TableCell className="text-right font-medium">
                           {pendiente > 0.009 ? (
-                            <span className="font-medium text-amber-700">{money(pendiente)}</span>
-                          ) : a.recibido ? (
-                            <span className="text-emerald-700">{money(0)}</span>
+                            <span className="font-medium text-red-600">{money(pendiente)}</span>
                           ) : (
-                            money(a.a_recibir)
+                            <span className="text-muted-foreground">{money(0)}</span>
                           )}
                         </TableCell>
                         <TableCell className="text-center">
                           {completo ? (
-                            <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200">Recibido</Badge>
-                          ) : a.recibido ? (
-                            <Badge className="bg-amber-50 text-amber-800 border-amber-200">Parcial</Badge>
-                          ) : a.total_cobrado > 0 ? (
-                            <Badge className="bg-blue-50 text-blue-700 border-blue-200">Cobrando</Badge>
+                            <Badge variant="default" className="bg-emerald-600 hover:bg-emerald-700">Entregado</Badge>
                           ) : (
-                            <Badge variant="secondary">Pendiente</Badge>
+                            <Badge variant="secondary" className="bg-amber-100 text-amber-800 hover:bg-amber-100 border-amber-200">Pendiente</Badge>
                           )}
                         </TableCell>
                         <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
@@ -465,41 +470,53 @@ function AdminPagosView({
                                         <TableHead className="text-xs h-8">Cliente / Grupo</TableHead>
                                         <TableHead className="text-xs h-8">Día de pago</TableHead>
                                         <TableHead className="text-xs h-8">Estado</TableHead>
-                                        <TableHead className="text-xs h-8 text-right">Ficha / A cobrar</TableHead>
-                                        <TableHead className="text-xs h-8 text-right">Acción</TableHead>
+                                        <TableHead className="text-xs h-8 text-right">A cobrar</TableHead>
+                                        <TableHead className="text-xs h-8 text-center">Resultado</TableHead>
                                       </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                      {a.clientes_programados.map((c: any) => (
-                                        <TableRow key={c.num_prog} className="text-xs hover:bg-muted/30">
-                                          <TableCell className="font-mono font-medium">#{c.num_prog}</TableCell>
-                                          <TableCell className="font-medium text-foreground">
-                                            {c.cliente?.nombre_completo || c.grupo?.nombre_grupo || "—"}
-                                          </TableCell>
-                                          <TableCell className="text-muted-foreground">{c.dias_pago}</TableCell>
-                                          <TableCell>
-                                            <Badge
-                                              variant={c.categoria === "del_dia" ? "secondary" : "outline"}
-                                              className={`text-[10px] py-0 ${c.categoria === "del_dia" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-amber-50 text-amber-800 border-amber-200"}`}
-                                            >
-                                              {c.categoria === "del_dia" ? "Del día" : `Atrasado (${c.dias_atraso}d)`}
-                                            </Badge>
-                                          </TableCell>
-                                          <TableCell className="text-right font-bold text-primary">
-                                            {money(c.monto_a_cobrar)}
-                                          </TableCell>
-                                          <TableCell className="text-right">
-                                            <Button
-                                              size="sm"
-                                              variant="ghost"
-                                              className="h-7 text-xs text-primary hover:text-primary hover:bg-primary/10"
-                                              onClick={() => router.push(`/dashboard/creditos/${c.num_prog}`)}
-                                            >
-                                              Cobrar
-                                            </Button>
-                                          </TableCell>
-                                        </TableRow>
-                                      ))}
+                                      {a.clientes_programados.map((c: any) => {
+                                        const pagosCliente = pagosAsesor.filter((p: any) => p.credito?.num_prog === c.num_prog);
+                                        const totalPagado = pagosCliente.reduce((sum: number, p: any) => sum + Number(p.monto), 0);
+                                        const isCobrado = totalPagado >= (c.monto_a_cobrar - 0.01);
+                                        const hasPartial = totalPagado > 0 && !isCobrado;
+                                        
+                                        return (
+                                          <TableRow key={c.num_prog} className="text-xs hover:bg-muted/30">
+                                            <TableCell className="font-mono font-medium">#{c.num_prog}</TableCell>
+                                            <TableCell className="font-medium text-foreground">
+                                              {c.cliente?.nombre_completo || c.grupo?.nombre_grupo || "—"}
+                                            </TableCell>
+                                            <TableCell className="text-muted-foreground">{c.dias_pago}</TableCell>
+                                            <TableCell>
+                                              <Badge
+                                                variant={c.categoria === "del_dia" ? "secondary" : "outline"}
+                                                className={`text-[10px] py-0 ${c.categoria === "del_dia" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-amber-50 text-amber-800 border-amber-200"}`}
+                                              >
+                                                {c.categoria === "del_dia" ? "Del día" : `Atrasado`}
+                                              </Badge>
+                                            </TableCell>
+                                            <TableCell className="text-right font-bold text-primary">
+                                              {money(c.monto_a_cobrar)}
+                                            </TableCell>
+                                            <TableCell className="text-center">
+                                              {isCobrado ? (
+                                                <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 font-semibold">
+                                                  Cobrado {money(totalPagado)}
+                                                </Badge>
+                                              ) : hasPartial ? (
+                                                <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 font-semibold">
+                                                  Parcial {money(totalPagado)}
+                                                </Badge>
+                                              ) : (
+                                                <Badge variant="outline" className="bg-muted text-muted-foreground border-border font-semibold">
+                                                  Pendiente
+                                                </Badge>
+                                              )}
+                                            </TableCell>
+                                          </TableRow>
+                                        );
+                                      })}
                                     </TableBody>
                                   </Table>
                                 </div>
