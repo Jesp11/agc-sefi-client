@@ -247,11 +247,6 @@ function AdminPagosView({
               <div className="text-xl font-bold text-primary">
                 {money(data.total_programado_dia || 0)}
               </div>
-              {Number(data.total_atrasado ?? 0) > 0 && (
-                <p className="text-xs text-muted-foreground font-normal mt-1">
-                  + {money(data.total_atrasado)} atrasados ({money(data.total_exigible)} exigible)
-                </p>
-              )}
             </CardContent>
           </Card>
           <Card>
@@ -267,9 +262,9 @@ function AdminPagosView({
             </CardContent>
           </Card>
           <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm">Faltante por Entregar</CardTitle></CardHeader>
+            <CardHeader className="pb-2"><CardTitle className="text-sm">Diferencia por Entregar</CardTitle></CardHeader>
             <CardContent className="text-xl font-bold text-red-600">
-              {money(data.total_pendiente ?? data.total_a_recibir ?? 0)}
+              {money(data.diferencia_cobrado_recibido ?? ((data.total_abonos ?? 0) - (data.total_recibido ?? 0)))}
             </CardContent>
           </Card>
         </div>
