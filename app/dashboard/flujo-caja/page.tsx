@@ -82,7 +82,6 @@ export default function FlujoCajaPage() {
   const [mes, setMes] = useState(now.getMonth() + 1);
   const [movimientos, setMovimientos] = useState<any[]>([]);
   const [resumen, setResumen] = useState<any>(null);
-  const [capitalPasivo, setCapitalPasivo] = useState<number | null>(null);
   const [capitalInversionistas, setCapitalInversionistas] = useState<number | null>(null);
   const [asesores, setAsesores] = useState<any[]>([]);
   const [cuentas, setCuentas] = useState<string[]>([]);
@@ -109,7 +108,6 @@ export default function FlujoCajaPage() {
       if (resRes.ok) setResumen(await resRes.json());
       if (capitalRes.ok) {
         const capital = await capitalRes.json();
-        setCapitalPasivo(Number(capital.capital_pasivo));
         setCapitalInversionistas(Number(capital.total_aportaciones));
       }
     } catch {
@@ -223,7 +221,8 @@ export default function FlujoCajaPage() {
     return num < 0 ? `-$${formatted}` : `$${formatted}`;
   };
 
-  const totalBruto = amount(resumen?.cartera_individual) + amount(resumen?.cartera_grupal) + amount(capitalPasivo);
+  const capitalPasivoResumen = amount(resumen?.disponible);
+  const totalBruto = amount(resumen?.cartera_individual) + amount(resumen?.cartera_grupal) + capitalPasivoResumen;
   const totalNeto = totalBruto - amount(capitalInversionistas);
   const totalBrutoConMora = totalBruto + amount(resumen?.mora);
   const totalNetoConMora = totalBrutoConMora - amount(capitalInversionistas);
