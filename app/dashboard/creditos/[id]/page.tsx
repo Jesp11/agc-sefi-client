@@ -28,6 +28,7 @@ import { RefinanciarCreditoDialog } from "@/components/refinanciar-credito-dialo
 import { DocumentoAdeudoDialog, type TipoDocumentoAdeudo } from "@/components/documento-adeudo-dialog";
 import { ExpedienteCreditoCard } from "@/components/expediente-credito-card";
 import { GrupoDocumentoDialog } from "@/components/grupo-documento-dialog";
+import { EditarCreditoDialog } from "@/components/editar-credito-dialog";
 import { TablePagination, TableSearch } from "@/components/table-controls";
 import { PAGE_SIZE, filterBySearch, paginateItems, useTableControls } from "@/hooks/use-paginated-list";
 import { marcarEstadoCuotas, totalAbonadoFromPagos } from "@/lib/table-utils";
@@ -209,6 +210,7 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          {isAdmin && <EditarCreditoDialog credito={credito} onSuccess={fetchData} />}
           {credito.tipo_credito === "Individual" && saldoActual > 0 && (
             <DropdownMenu>
               <DropdownMenuTrigger
@@ -688,6 +690,7 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
         <TabsContent value="expediente" className="mt-4">
           <ExpedienteCreditoCard
             credito={credito}
+            canEdit={isAdmin}
             onUpdated={fetchData}
             onOpenGenerator={(tipo) => {
               setDocAdeudoTipo(tipo);

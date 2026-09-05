@@ -44,12 +44,14 @@ const STORAGE_BASE = API_BASE.replace("/api", "") + "/storage";
 
 interface ExpedienteCreditoCardProps {
   credito: any;
+  canEdit: boolean;
   onUpdated: () => void;
   onOpenGenerator?: (tipo: "pagare" | "carta_adeudo" | "tarjeta_cobro") => void;
 }
 
 export function ExpedienteCreditoCard({
   credito,
+  canEdit,
   onUpdated,
   onOpenGenerator,
 }: ExpedienteCreditoCardProps) {
@@ -156,19 +158,21 @@ export function ExpedienteCreditoCard({
               <FolderArchive className="h-5 w-5 text-primary" />
               <CardTitle className="text-base font-bold">Ubicación del Archivo Físico</CardTitle>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8 text-xs gap-1.5 font-medium"
-              onClick={() => {
-                setUbicacionInput(credito?.ubicacion_expediente || "");
-                setNotasInput(credito?.notas_expediente || "");
-                setEditingUbicacion(true);
-              }}
-            >
-              <Edit3 className="h-3.5 w-3.5" />
-              {credito?.ubicacion_expediente ? "Modificar Ubicación" : "Asignar Ubicación"}
-            </Button>
+            {canEdit && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 text-xs gap-1.5 font-medium"
+                onClick={() => {
+                  setUbicacionInput(credito?.ubicacion_expediente || "");
+                  setNotasInput(credito?.notas_expediente || "");
+                  setEditingUbicacion(true);
+                }}
+              >
+                <Edit3 className="h-3.5 w-3.5" />
+                {credito?.ubicacion_expediente ? "Modificar Ubicación" : "Asignar Ubicación"}
+              </Button>
+            )}
           </div>
           <CardDescription className="text-xs">
             Referencia física del fólder, archivero o gaveta donde se resguarda el pagaré y documentos originales de este ciclo.
@@ -291,13 +295,51 @@ export function ExpedienteCreditoCard({
                           <Eye className="h-3.5 w-3.5" /> Ver Respaldo
                         </Button>
 
+                        {canEdit && (
+                          <>
+                            <label
+                              htmlFor={`${inputId}-replace`}
+                              className="h-8 px-2.5 rounded-md border text-xs inline-flex items-center justify-center cursor-pointer hover:bg-muted transition-colors"
+                            >
+                              {isUploading ? "..." : "Reemplazar"}
+                              <input
+                                id={`${inputId}-replace`}
+                                type="file"
+                                accept={EXPEDIENTE_ACCEPT}
+                                className="hidden"
+                                disabled={isUploading}
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) handleUploadDocumento(docDef.tipo, file);
+                                  e.target.value = "";
+                                }}
+                              />
+                            </label>
+
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-destructive hover:bg-destructive/10"
+                              disabled={isDeleting}
+                              onClick={() => handleDeleteDocumento(docSubido.id)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mt-3 pt-3 border-t flex items-center gap-2">
+                      {canEdit && (
                         <label
-                          htmlFor={`${inputId}-replace`}
-                          className="h-8 px-2.5 rounded-md border text-xs inline-flex items-center justify-center cursor-pointer hover:bg-muted transition-colors"
+                          htmlFor={inputId}
+                          className="h-8 px-3 rounded-md bg-primary text-primary-foreground font-semibold text-xs inline-flex items-center justify-center gap-1.5 cursor-pointer hover:bg-primary/90 transition-colors flex-1"
                         >
-                          {isUploading ? "..." : "Reemplazar"}
+                          <Upload className="h-3.5 w-3.5" />
+                          {isUploading ? "Subiendo..." : "Subir Escaneo / Foto"}
                           <input
-                            id={`${inputId}-replace`}
+                            id={inputId}
                             type="file"
                             accept={EXPEDIENTE_ACCEPT}
                             className="hidden"
@@ -309,39 +351,7 @@ export function ExpedienteCreditoCard({
                             }}
                           />
                         </label>
-
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-destructive hover:bg-destructive/10"
-                          disabled={isDeleting}
-                          onClick={() => handleDeleteDocumento(docSubido.id)}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="mt-3 pt-3 border-t flex items-center gap-2">
-                      <label
-                        htmlFor={inputId}
-                        className="h-8 px-3 rounded-md bg-primary text-primary-foreground font-semibold text-xs inline-flex items-center justify-center gap-1.5 cursor-pointer hover:bg-primary/90 transition-colors flex-1"
-                      >
-                        <Upload className="h-3.5 w-3.5" />
-                        {isUploading ? "Subiendo..." : "Subir Escaneo / Foto"}
-                        <input
-                          id={inputId}
-                          type="file"
-                          accept={EXPEDIENTE_ACCEPT}
-                          className="hidden"
-                          disabled={isUploading}
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) handleUploadDocumento(docDef.tipo, file);
-                            e.target.value = "";
-                          }}
-                        />
-                      </label>
+                      )}
 
                       {tipoPlantilla && onOpenGenerator && (
                         <Button
