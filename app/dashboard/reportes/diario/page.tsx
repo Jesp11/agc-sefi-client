@@ -354,7 +354,7 @@ function AdminPagosView({
           </CardHeader>
           <CardContent>
             <Table>
-              <TableHeader><TableRow><TableHead>Cliente / Grupo</TableHead><TableHead>Crédito anterior</TableHead><TableHead>Crédito nuevo</TableHead><TableHead className="text-right">Saldo absorbido</TableHead><TableHead className="text-right">Efectivo neto</TableHead><TableHead>Plazo</TableHead><TableHead>Gestor</TableHead></TableRow></TableHeader>
+              <TableHeader><TableRow><TableHead>Cliente / Grupo</TableHead><TableHead>Crédito anterior</TableHead><TableHead>Crédito nuevo</TableHead><TableHead className="text-right">Saldo absorbido</TableHead><TableHead className="text-right">Comisión</TableHead><TableHead className="text-right">Efectivo neto</TableHead><TableHead>Plazo</TableHead><TableHead>Gestor</TableHead></TableRow></TableHeader>
               <TableBody>{data.renovaciones_del_dia.map((renovacion: any) => (
                 <TableRow key={renovacion.id}>
                   <TableCell className="font-medium">
@@ -367,6 +367,7 @@ function AdminPagosView({
                   <TableCell className="font-mono text-xs"><FolioLink folio={renovacion.num_prog_anterior} /></TableCell>
                   <TableCell className="font-mono text-xs"><FolioLink folio={renovacion.num_prog_nuevo} /></TableCell>
                   <TableCell className="text-right">{money(renovacion.saldo_absorbido)}</TableCell>
+                  <TableCell className="text-right text-amber-700">{money(renovacion.comision_apertura)}</TableCell>
                   <TableCell className="text-right">{money(renovacion.monto_neto)}</TableCell>
                   <TableCell>{renovacion.plazos} semanas</TableCell>
                   <TableCell>{renovacion.gestor || "—"}</TableCell>
@@ -404,6 +405,7 @@ function AdminPagosView({
                 <TableHead>Gestor Cobranza</TableHead>
                 <TableHead className="text-right">Cobrado App</TableHead>
                 <TableHead className="text-right">A recibir</TableHead>
+                <TableHead className="text-right">Ajuste comisión</TableHead>
                 <TableHead className="text-right">Entregó Caja</TableHead>
                 <TableHead className="text-right">Faltante</TableHead>
                 <TableHead className="text-center">Estado</TableHead>
@@ -413,11 +415,11 @@ function AdminPagosView({
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">Cargando...</TableCell>
+                  <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">Cargando...</TableCell>
                 </TableRow>
               ) : filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
+                  <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">
                     {search ? "No se encontraron gestores de cobranza." : "Sin movimientos del día."}
                   </TableCell>
                 </TableRow>
@@ -493,6 +495,9 @@ function AdminPagosView({
                         <TableCell className="text-right font-semibold text-primary">
                           {money(a.a_recibir)}
                         </TableCell>
+                        <TableCell className="text-right font-medium text-amber-700">
+                          {a.comisiones_renovacion > 0 ? `-${money(a.comisiones_renovacion)}` : "—"}
+                        </TableCell>
                         <TableCell className="text-right font-medium text-emerald-700">
                           {a.recibido ? money(a.monto_recibido) : "—"}
                         </TableCell>
@@ -525,7 +530,7 @@ function AdminPagosView({
                       {/* Subtabla de desglose de clientes que pagaron o programados */}
                       {isExpanded && (
                         <TableRow className="bg-muted/15 hover:bg-muted/15 border-b-2">
-                          <TableCell colSpan={8} className="p-3 pl-8">
+                          <TableCell colSpan={9} className="p-3 pl-8">
                             <div className="rounded-lg border bg-background p-4 shadow-sm space-y-4">
                               {/* Pagos registrados */}
                               {pagosMostrados.length > 0 && (
