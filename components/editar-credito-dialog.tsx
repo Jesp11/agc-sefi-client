@@ -222,7 +222,7 @@ export function EditarCreditoDialog({ credito, onSuccess }: EditarCreditoDialogP
               <Field label="Fecha de desembolso" type="date" value={form.fecha_otorgacion} onChange={(v) => setField("fecha_otorgacion", v)} required />
               <Field label="Primer pago" type="date" value={form.fecha_primer_pago} onChange={(v) => setField("fecha_primer_pago", v)} />
               <Field label="Día de pago" value={form.dias_pago} onChange={(v) => setField("dias_pago", v)} required />
-              <Field label="Ciclo" type="number" min="1" value={form.ciclo} onChange={(v) => setField("ciclo", v)} required />
+              <Field label="Ciclo" type="number" min="0" value={form.ciclo} onChange={(v) => setField("ciclo", v)} required />
               <Field label="Plazos" type="number" min="1" value={form.plazos} onChange={(v) => setField("plazos", v)} required />
               <div className="grid gap-1.5"><Label>Estado</Label><select className={selectClass} value={form.estado} onChange={(e) => setField("estado", e.target.value)}>{["Activo", "EnMora", "Finalizado", "Cancelado", "CerradoSinRenovacion"].map((estado) => <option key={estado}>{estado}</option>)}</select></div>
             </div>
