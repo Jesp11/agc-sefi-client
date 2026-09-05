@@ -16,7 +16,6 @@ import { inversionistaSearchFields } from "@/lib/table-utils";
 import {
   Download,
   Printer,
-  DollarSign,
   Landmark,
   TrendingDown,
   Users,
@@ -29,12 +28,6 @@ import {
 import { exportWorkbook } from "@/lib/report-export";
 import { exportarEstadoFinancieroInversionistasPdf } from "@/lib/reporte-inversionistas-pdf";
 import { toast } from "sonner";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 
 const fmt = (value: unknown) =>
   `$${Number(value ?? 0).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -56,17 +49,6 @@ export default function EstadoFinancieroInversionistasPage() {
     page: pageMovs,
     setPage: setPageMovs,
   } = useTableControls();
-
-  const [rendimientoOpen, setRendimientoOpen] = useState(false);
-  const [selectedInvForRendimiento, setSelectedInvForRendimiento] = useState<any>(null);
-  const [rendimientoForm, setRendimientoForm] = useState({
-    monto: "",
-    fecha: new Date().toISOString().split("T")[0],
-    cuenta: "Efectivo",
-    concepto: "",
-    notas: "",
-  });
-  const [savingRendimiento, setSavingRendimiento] = useState(false);
 
   const loadData = async () => {
     setLoading(true);
@@ -101,60 +83,6 @@ export default function EstadoFinancieroInversionistasPage() {
   const setRangoHistorico = () => {
     setFechaInicio("2025-01-01");
     setFechaFin(today);
-  };
-
-  const openPagarRendimiento = (inv?: any) => {
-    const target = inv || selected;
-    if (!target) {
-      toast.error("Selecciona una fuente de inversión primero");
-      return;
-    }
-    setSelectedInvForRendimiento(target);
-    setRendimientoForm({
-      monto: target.compromiso_mensual ? String(target.compromiso_mensual) : "",
-      fecha: new Date().toISOString().split("T")[0],
-      cuenta: "Efectivo",
-      concepto: `PAGO DE RENDIMIENTO — ${target.nombre}`,
-      notas: target.dia_pago ? `Programación habitual: ${target.dia_pago}` : "",
-    });
-    setRendimientoOpen(true);
-  };
-
-  const handleSaveRendimiento = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedInvForRendimiento) return;
-    const monto = parseFloat(rendimientoForm.monto);
-    if (!Number.isFinite(monto) || monto <= 0) {
-      toast.error("Indica un monto válido");
-      return;
-    }
-
-    setSavingRendimiento(true);
-    try {
-      const res = await apiFetch(`/inversionistas/${selectedInvForRendimiento.id}/rendimiento`, {
-        method: "POST",
-        body: JSON.stringify({
-          monto,
-          fecha: rendimientoForm.fecha,
-          cuenta: rendimientoForm.cuenta,
-          concepto: rendimientoForm.concepto,
-          notas: rendimientoForm.notas || null,
-        }),
-      });
-
-      const resData = await res.json().catch(() => ({}));
-      if (res.ok) {
-        toast.success(resData.message || "Pago de rendimiento registrado como egreso");
-        setRendimientoOpen(false);
-        loadData();
-      } else {
-        toast.error(resData.message || "Error al registrar el rendimiento");
-      }
-    } catch {
-      toast.error("Error de conexión");
-    } finally {
-      setSavingRendimiento(false);
-    }
   };
 
   const inversionistas = data?.inversionistas ?? [];
@@ -280,15 +208,6 @@ export default function EstadoFinancieroInversionistasPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button
-            variant="default"
-            className="bg-amber-600 hover:bg-amber-700 text-white h-9 text-xs"
-            onClick={() => openPagarRendimiento(selected)}
-            disabled={loading || !selected}
-          >
-            <DollarSign className="mr-1.5 h-4 w-4" />
-            Pagar Rendimiento
-          </Button>
           <Button variant="outline" className="h-9 text-xs" onClick={handleExport} disabled={loading || isExporting}>
             <Download className="mr-2 h-4 w-4" />
             {isExporting ? "Exportando..." : "Exportar Excel"}
@@ -491,15 +410,6 @@ export default function EstadoFinancieroInversionistasPage() {
                             <History className="mr-1 h-3.5 w-3.5 text-primary" />
                             Movs.
                           </Button>
-                          <Button
-                            size="sm"
-                            variant="default"
-                            className="h-8 text-xs bg-amber-600 hover:bg-amber-700 text-white"
-                            onClick={() => openPagarRendimiento(item)}
-                          >
-                            <DollarSign className="mr-1 h-3.5 w-3.5" />
-                            Pagar
-                          </Button>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -545,13 +455,12 @@ export default function EstadoFinancieroInversionistasPage() {
                   <TableHead className="text-right">Capital Fondeado</TableHead>
                   <TableHead className="text-center">Tasa Mensual</TableHead>
                   <TableHead className="text-right">Rendimiento Mensual</TableHead>
-                  <TableHead className="text-right">Acción</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="h-32 text-center text-muted-foreground">
+                    <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
                       <div className="flex flex-col items-center gap-2">
                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
                         <p className="text-sm">Cargando calendario de pagos...</p>
@@ -560,7 +469,7 @@ export default function EstadoFinancieroInversionistasPage() {
                   </TableRow>
                 ) : inversionistas.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="h-32 text-center text-muted-foreground">
+                    <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
                       Sin fuentes de fondeo configuradas.
                     </TableCell>
                   </TableRow>
@@ -599,17 +508,6 @@ export default function EstadoFinancieroInversionistasPage() {
                         <TableCell className="text-right font-extrabold text-amber-700 font-mono text-xs">
                           {fmt(inv.compromiso_mensual)}
                         </TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            size="sm"
-                            variant="default"
-                            className="h-8 text-xs bg-amber-600 hover:bg-amber-700 text-white"
-                            onClick={() => openPagarRendimiento(inv)}
-                          >
-                            <DollarSign className="mr-1 h-3.5 w-3.5" />
-                            Pagar
-                          </Button>
-                        </TableCell>
                       </TableRow>
                     ))
                 )}
@@ -629,7 +527,6 @@ export default function EstadoFinancieroInversionistasPage() {
                     <TableCell className="text-right text-amber-700 font-mono text-xs font-extrabold">
                       {fmt(data?.resumen?.compromiso_mensual_total)} / mes
                     </TableCell>
-                    <TableCell className="text-right"></TableCell>
                   </TableRow>
                 </tfoot>
               )}
@@ -664,15 +561,6 @@ export default function EstadoFinancieroInversionistasPage() {
                 <Badge variant="outline" className="text-xs font-semibold py-1">
                   Capital: {fmt(selected.saldo_capital)}
                 </Badge>
-                <Button
-                  size="sm"
-                  variant="default"
-                  className="h-8 text-xs bg-amber-600 hover:bg-amber-700 text-white"
-                  onClick={() => openPagarRendimiento(selected)}
-                >
-                  <DollarSign className="mr-1 h-3.5 w-3.5" />
-                  Pagar Rendimiento
-                </Button>
               </div>
             )}
           </div>
@@ -770,86 +658,6 @@ export default function EstadoFinancieroInversionistasPage() {
         </TabsContent>
       </Tabs>
 
-      {/* Dialog para registrar pago de rendimiento */}
-      <Dialog open={rendimientoOpen} onOpenChange={setRendimientoOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Registrar Pago de Rendimiento (Egreso)</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleSaveRendimiento} className="grid gap-4">
-            <div>
-              <Label>Inversionista</Label>
-              <Input value={selectedInvForRendimiento?.nombre || ""} disabled className="bg-muted font-medium" />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label htmlFor="ef-rend-monto">Monto ($)</Label>
-                <Input
-                  id="ef-rend-monto"
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  required
-                  placeholder="0.00"
-                  value={rendimientoForm.monto}
-                  onChange={(e) => setRendimientoForm({ ...rendimientoForm, monto: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label htmlFor="ef-rend-fecha">Fecha</Label>
-                <Input
-                  id="ef-rend-fecha"
-                  type="date"
-                  required
-                  value={rendimientoForm.fecha}
-                  onChange={(e) => setRendimientoForm({ ...rendimientoForm, fecha: e.target.value })}
-                />
-              </div>
-            </div>
-            <div>
-              <Label htmlFor="ef-rend-cuenta">Cuenta / Origen de Fondos</Label>
-              <select
-                id="ef-rend-cuenta"
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                value={rendimientoForm.cuenta}
-                onChange={(e) => setRendimientoForm({ ...rendimientoForm, cuenta: e.target.value })}
-              >
-                <option value="Efectivo">Efectivo</option>
-                <option value="Spin">Spin</option>
-                <option value="Bancomer">Bancomer / BBVA</option>
-                <option value="Banorte">Banorte</option>
-                <option value="Banamex">Banamex</option>
-                <option value="Otro">Otro</option>
-              </select>
-            </div>
-            <div>
-              <Label htmlFor="ef-rend-concepto">Concepto / Motivo</Label>
-              <Input
-                id="ef-rend-concepto"
-                value={rendimientoForm.concepto}
-                onChange={(e) => setRendimientoForm({ ...rendimientoForm, concepto: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label htmlFor="ef-rend-notas">Notas adicionales (opcional)</Label>
-              <Input
-                id="ef-rend-notas"
-                placeholder="Ej. Periodo agosto 2026, tasa 4%"
-                value={rendimientoForm.notas}
-                onChange={(e) => setRendimientoForm({ ...rendimientoForm, notas: e.target.value })}
-              />
-            </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <Button type="button" variant="outline" onClick={() => setRendimientoOpen(false)} disabled={savingRendimiento}>
-                Cancelar
-              </Button>
-              <Button type="submit" disabled={savingRendimiento}>
-                {savingRendimiento ? "Guardando..." : "Registrar Egreso"}
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

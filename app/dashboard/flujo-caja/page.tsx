@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -19,7 +20,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { fmtFecha } from "@/lib/utils";
-import { ArrowDownCircle, ArrowUpCircle, Plus, FileSpreadsheet, Download, FileDown, ChevronDown, Pencil } from "lucide-react";
+import { ArrowDownCircle, ArrowUpCircle, Plus, FileSpreadsheet, Download, FileDown, ChevronDown, Pencil, Trash2, CircleHelp } from "lucide-react";
 import { TablePagination, TableSearch } from "@/components/table-controls";
 import { PAGE_SIZE, filterBySearch, paginateItems, useTableControls } from "@/hooks/use-paginated-list";
 import { fetchAllPages, movimientoCajaSearchFields } from "@/lib/table-utils";
@@ -55,12 +56,44 @@ const emptyForm = () => ({
   cuenta: "Efectivo",
 });
 
+const isGastoGenerado = (movimiento: { referencia?: string | null } | null) => String(movimiento?.referencia ?? "").startsWith("GASTO-");
+type MovimientoGenerado = { id: number; motivo?: string | null; pago_id?: number | null; referencia?: string | null };
+
+const isMovimientoGenerado = (movimiento: MovimientoGenerado | null) => Boolean(movimiento?.pago_id)
+  || isGastoGenerado(movimiento)
+  || String(movimiento?.referencia ?? "").startsWith("DESEMBOLSO-");
+
+const amount = (value: unknown) => {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+};
+
+function IndicatorTitle({ title, calculation }: { title: string; calculation: string }) {
+  return (
+    <CardTitle className="flex items-center gap-1 text-sm text-muted-foreground">
+      {title}
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <button type="button" className="text-muted-foreground/70 hover:text-foreground" aria-label={`Cálculo de ${title}`}>
+              <CircleHelp className="size-3.5" />
+            </button>
+          }
+        />
+        <TooltipContent>{calculation}</TooltipContent>
+      </Tooltip>
+    </CardTitle>
+  );
+}
+
 export default function FlujoCajaPage() {
   const now = new Date();
   const [anio, setAnio] = useState(now.getFullYear());
   const [mes, setMes] = useState(now.getMonth() + 1);
   const [movimientos, setMovimientos] = useState<any[]>([]);
   const [resumen, setResumen] = useState<any>(null);
+  const [capitalPasivo, setCapitalPasivo] = useState<number | null>(null);
+  const [capitalInversionistas, setCapitalInversionistas] = useState<number | null>(null);
   const [asesores, setAsesores] = useState<any[]>([]);
   const [cuentas, setCuentas] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -72,16 +105,23 @@ export default function FlujoCajaPage() {
   const importInputRef = useRef<HTMLInputElement>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [movRows, resRes] = await Promise.all([
+      const [movRows, resRes, capitalRes] = await Promise.all([
         fetchAllPages(`/flujo-caja?mes=${mes}&anio=${anio}`),
         apiFetch(`/flujo-caja/resumen?mes=${mes}&anio=${anio}`),
+        apiFetch("/capital"),
       ]);
       setMovimientos(movRows);
       if (resRes.ok) setResumen(await resRes.json());
+      if (capitalRes.ok) {
+        const capital = await capitalRes.json();
+        setCapitalPasivo(Number(capital.capital_pasivo));
+        setCapitalInversionistas(Number(capital.total_aportaciones));
+      }
     } catch {
       toast.error("Error al cargar flujo de caja");
     } finally {
@@ -134,7 +174,7 @@ export default function FlujoCajaPage() {
   };
 
   const openEdit = (movimiento: any) => {
-    if (movimiento.pago_id || String(movimiento.referencia ?? "").startsWith("GASTO-") || String(movimiento.referencia ?? "").startsWith("DESEMBOLSO-")) {
+    if (movimiento.pago_id || String(movimiento.referencia ?? "").startsWith("DESEMBOLSO-")) {
       toast.error("Este movimiento se genera automáticamente. Corrige el pago, gasto o desembolso de origen.");
       return;
     }
@@ -149,6 +189,32 @@ export default function FlujoCajaPage() {
       cuenta: movimiento.cuenta ?? "Efectivo",
     });
     setDialogOpen(true);
+  };
+
+  const editandoGastoGenerado = isGastoGenerado(editingMovimiento);
+
+  const handleDelete = async (movimiento: MovimientoGenerado) => {
+    if (isMovimientoGenerado(movimiento)) {
+      toast.error("Este movimiento se genera automáticamente. Elimínalo desde el registro de origen.");
+      return;
+    }
+    if (!window.confirm(`¿Eliminar el movimiento “${movimiento.motivo}”? Esta acción no se puede deshacer.`)) return;
+
+    setDeletingId(movimiento.id);
+    try {
+      const res = await apiFetch(`/flujo-caja/${movimiento.id}`, { method: "DELETE" });
+      if (res.ok) {
+        toast.success("Movimiento eliminado");
+        fetchData();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.message || "No fue posible eliminar el movimiento");
+      }
+    } catch {
+      toast.error("No fue posible eliminar el movimiento");
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   const filteredByTab = movimientos.filter((m) => {
@@ -166,6 +232,11 @@ export default function FlujoCajaPage() {
     const formatted = Math.abs(num).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     return num < 0 ? `-$${formatted}` : `$${formatted}`;
   };
+
+  const totalBruto = amount(resumen?.cartera_individual) + amount(resumen?.cartera_grupal) + amount(capitalPasivo);
+  const totalNeto = totalBruto - amount(capitalInversionistas);
+  const totalBrutoConMora = totalBruto + amount(resumen?.mora);
+  const totalNetoConMora = totalBrutoConMora - amount(capitalInversionistas);
 
   const handleImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -251,7 +322,7 @@ export default function FlujoCajaPage() {
 
       const rows = filtered.map((m) => ({
         "Fecha": m.fecha ?? "",
-        "Empleado": m.asesor?.nombre_asesor ?? "",
+        "Empleado": m.asesor?.nombre_asesor ?? m.registrado_por?.name ?? "",
         "Motivo": m.motivo ?? "",
         "Categoría": m.categoria ?? "",
         "Cuenta": m.cuenta ?? "",
@@ -342,13 +413,17 @@ export default function FlujoCajaPage() {
           }}>
             <DialogTrigger render={<Button onClick={openCreate}><Plus className="size-4 mr-1" />Registrar movimiento</Button>} />
             <DialogContent className="max-w-md">
-              <DialogHeader><DialogTitle>{editingMovimiento ? "Editar movimiento de caja" : "Nuevo movimiento de caja"}</DialogTitle></DialogHeader>
+              <DialogHeader><DialogTitle>{editandoGastoGenerado ? "Editar empleado del gasto" : (editingMovimiento ? "Editar movimiento de caja" : "Nuevo movimiento de caja")}</DialogTitle></DialogHeader>
               <div className="grid gap-3">
+                {editandoGastoGenerado && (
+                  <p className="text-sm text-muted-foreground">Solo se puede ajustar el empleado; el resto de la información se administra desde Gastos Operativos.</p>
+                )}
                 <div className="grid grid-cols-2 gap-2">
                   <Button
                     type="button"
                     variant={form.tipo === "Ingreso" ? "default" : "outline"}
                     onClick={() => setForm({ ...form, tipo: "Ingreso" })}
+                    disabled={editandoGastoGenerado}
                   >
                     <ArrowDownCircle className="size-4 mr-1 text-green-600" /> Ingreso
                   </Button>
@@ -356,25 +431,26 @@ export default function FlujoCajaPage() {
                     type="button"
                     variant={form.tipo === "Egreso" ? "default" : "outline"}
                     onClick={() => setForm({ ...form, tipo: "Egreso" })}
+                    disabled={editandoGastoGenerado}
                   >
                     <ArrowUpCircle className="size-4 mr-1 text-red-600" /> Egreso
                   </Button>
                 </div>
-                <div><Label>Fecha</Label><Input type="date" value={form.fecha} onChange={(e) => setForm({ ...form, fecha: e.target.value })} /></div>
+                <div><Label>Fecha</Label><Input type="date" value={form.fecha} onChange={(e) => setForm({ ...form, fecha: e.target.value })} disabled={editandoGastoGenerado} /></div>
                 <div>
-                  <Label>Gestor de cobranza</Label>
+                  <Label>Empleado</Label>
                   <select className="w-full border rounded-md px-3 py-2 text-sm bg-background h-9" value={form.id_asesor} onChange={(e) => setForm({ ...form, id_asesor: e.target.value })}>
-                    <option value="">— Sin asesor —</option>
+                    <option value="">— Sin empleado —</option>
                     {asesores.map((a) => (
                       <option key={a.id} value={a.id}>{a.nombre_asesor}</option>
                     ))}
                   </select>
                 </div>
-                <div><Label>Motivo</Label><Input value={form.motivo} onChange={(e) => setForm({ ...form, motivo: e.target.value })} placeholder="Ej. PAGO 12/16 JUAN PEREZ" /></div>
-                <div><Label>Monto</Label><Input type="number" min="0.01" step="0.01" value={form.monto} onChange={(e) => setForm({ ...form, monto: e.target.value })} /></div>
+                <div><Label>Motivo</Label><Input value={form.motivo} onChange={(e) => setForm({ ...form, motivo: e.target.value })} placeholder="Ej. PAGO 12/16 JUAN PEREZ" disabled={editandoGastoGenerado} /></div>
+                <div><Label>Monto</Label><Input type="number" min="0.01" step="0.01" value={form.monto} onChange={(e) => setForm({ ...form, monto: e.target.value })} disabled={editandoGastoGenerado} /></div>
                 <div>
                   <Label>Categoría</Label>
-                  <select className="w-full border rounded-md px-3 py-2 text-sm bg-background h-9" value={form.categoria} onChange={(e) => setForm({ ...form, categoria: e.target.value })}>
+                  <select className="w-full border rounded-md px-3 py-2 text-sm bg-background h-9" value={form.categoria} onChange={(e) => setForm({ ...form, categoria: e.target.value })} disabled={editandoGastoGenerado}>
                     <option value="">Auto-detectar</option>
                     {CATEGORIAS.map((c) => (
                       <option key={c.value} value={c.value}>{c.label}</option>
@@ -383,13 +459,13 @@ export default function FlujoCajaPage() {
                 </div>
                 <div>
                   <Label>Cuenta / forma de pago</Label>
-                  <select className="w-full border rounded-md px-3 py-2 text-sm bg-background h-9" value={form.cuenta} onChange={(e) => setForm({ ...form, cuenta: e.target.value })}>
+                  <select className="w-full border rounded-md px-3 py-2 text-sm bg-background h-9" value={form.cuenta} onChange={(e) => setForm({ ...form, cuenta: e.target.value })} disabled={editandoGastoGenerado}>
                     {cuentas.map((c) => (
                       <option key={c} value={c}>{c}</option>
                     ))}
                   </select>
                 </div>
-                <Button onClick={handleSave}>{editingMovimiento ? "Guardar cambios" : "Guardar"}</Button>
+                <Button onClick={handleSave}>{editandoGastoGenerado ? "Guardar empleado" : (editingMovimiento ? "Guardar cambios" : "Guardar")}</Button>
               </div>
             </DialogContent>
           </Dialog>
@@ -399,20 +475,37 @@ export default function FlujoCajaPage() {
       {resumen && (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Saldo inicial del mes</CardTitle></CardHeader>
+            <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Saldo Inicial</CardTitle></CardHeader>
             <CardContent className="text-2xl font-bold">{fmt(resumen.saldo_inicial_mes)}</CardContent>
           </Card>
           <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Ingresos {MESES[mes - 1]}</CardTitle></CardHeader>
+            <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Ingresos</CardTitle></CardHeader>
             <CardContent className="text-2xl font-bold text-green-600">{fmt(resumen.total_ingresos)}</CardContent>
           </Card>
           <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Egresos {MESES[mes - 1]}</CardTitle></CardHeader>
+            <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Egresos</CardTitle></CardHeader>
             <CardContent className="text-2xl font-bold text-red-600">{fmt(resumen.total_egresos)}</CardContent>
           </Card>
           <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Disponible del mes</CardTitle></CardHeader>
-            <CardContent className="text-2xl font-bold text-primary">{fmt(resumen.disponible)}</CardContent>
+            <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Capital Pasivo</CardTitle></CardHeader>
+            <CardContent className="text-2xl font-bold text-primary">{fmt(capitalPasivo)}</CardContent>
+          </Card>
+        </div>
+      )}
+
+      {resumen && (
+        <div className="grid gap-4 md:grid-cols-3">
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Gastos Operativos</CardTitle></CardHeader>
+            <CardContent className="text-2xl font-bold text-red-600">{fmt(resumen.gastos_operativos)}</CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Rendimientos Inversionistas</CardTitle></CardHeader>
+            <CardContent className="text-2xl font-bold text-red-600">{fmt(resumen.rendimientos_inversionistas)}</CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Nómina</CardTitle></CardHeader>
+            <CardContent className="text-2xl font-bold text-red-600">{fmt(resumen.nomina)}</CardContent>
           </Card>
         </div>
       )}
@@ -420,15 +513,35 @@ export default function FlujoCajaPage() {
       {resumen && (
         <Card>
           <CardHeader><CardTitle className="text-base">Resumen de cartera</CardTitle></CardHeader>
-          <CardContent className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 text-sm">
-            <div><p className="text-muted-foreground text-xs">Cartera individual</p><p className="font-semibold">{fmt(resumen.cartera_individual)}</p></div>
-            <div><p className="text-muted-foreground text-xs">Cartera grupal</p><p className="font-semibold">{fmt(resumen.cartera_grupal)}</p></div>
-            <div><p className="text-muted-foreground text-xs">Mora</p><p className="font-semibold text-red-600">{fmt(resumen.mora)}</p></div>
-            <div><p className="text-muted-foreground text-xs">Gastos operativos</p><p className="font-semibold">{fmt(resumen.gastos_operativos)}</p></div>
-            <div><p className="text-muted-foreground text-xs">Ahorro personal</p><p className="font-semibold">{fmt(resumen.ahorro_personal)}</p></div>
-            <div><p className="text-muted-foreground text-xs">Ahorro grupal (socios)</p><p className="font-semibold">{fmt(resumen.ahorro_grupal)}</p></div>
+          <CardContent className="grid grid-cols-2 lg:grid-cols-5 gap-4 text-sm">
+            <div><p className="text-muted-foreground text-xs">Capital Pasivo</p><p className="font-semibold text-primary">{fmt(capitalPasivo)}</p></div>
+            <div><p className="text-muted-foreground text-xs">Cartera Individual</p><p className="font-semibold">{fmt(resumen.cartera_individual)}</p></div>
+            <div><p className="text-muted-foreground text-xs">Cartera Grupal</p><p className="font-semibold">{fmt(resumen.cartera_grupal)}</p></div>
+            <div><p className="text-muted-foreground text-xs">Mora Total</p><p className="font-semibold text-red-600">{fmt(resumen.mora)}</p></div>
+            <div><p className="text-muted-foreground text-xs">Inversionistas</p><p className="font-semibold">{fmt(capitalInversionistas)}</p></div>
           </CardContent>
         </Card>
+      )}
+
+      {resumen && (
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <Card>
+            <CardHeader className="pb-2"><IndicatorTitle title="Total Neto" calculation="Cartera individual + cartera grupal + capital pasivo − capital de inversionistas." /></CardHeader>
+            <CardContent className="text-2xl font-bold text-primary">{fmt(totalNeto)}</CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2"><IndicatorTitle title="Total Bruto" calculation="Cartera individual + cartera grupal + capital pasivo." /></CardHeader>
+            <CardContent className="text-2xl font-bold">{fmt(totalBruto)}</CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2"><IndicatorTitle title="Total Neto c/mora" calculation="Total bruto + mora total − capital de inversionistas." /></CardHeader>
+            <CardContent className="text-2xl font-bold text-primary">{fmt(totalNetoConMora)}</CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2"><IndicatorTitle title="Total Bruto c/mora" calculation="Total bruto + mora total." /></CardHeader>
+            <CardContent className="text-2xl font-bold">{fmt(totalBrutoConMora)}</CardContent>
+          </Card>
+        </div>
       )}
 
       <Tabs value={tab} onValueChange={(v) => { setTab(v); listControls.setPage(1); }}>
@@ -464,7 +577,7 @@ export default function FlujoCajaPage() {
                   return (
                     <TableRow key={m.id} className={isSaldoInicial ? "bg-muted/40 font-medium" : undefined}>
                       <TableCell>{fmtFecha(m.fecha)}</TableCell>
-                      <TableCell className="text-xs">{m.asesor?.nombre_asesor ?? "—"}</TableCell>
+                      <TableCell className="text-xs">{m.asesor?.nombre_asesor ?? m.registrado_por?.name ?? "—"}</TableCell>
                       <TableCell className="max-w-[280px] truncate text-sm" title={m.motivo}>
                         {m.motivo}
                       </TableCell>
@@ -489,6 +602,17 @@ export default function FlujoCajaPage() {
                       <TableCell className="text-right">
                         <Button variant="ghost" size="icon" className="size-8" onClick={() => openEdit(m)} aria-label={`Editar movimiento ${m.id}`}>
                           <Pencil className="size-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-8 text-destructive hover:text-destructive"
+                          onClick={() => handleDelete(m)}
+                          disabled={deletingId === m.id || isMovimientoGenerado(m)}
+                          aria-label={`Eliminar movimiento ${m.id}`}
+                          title={isMovimientoGenerado(m) ? "Movimiento generado automáticamente" : "Eliminar movimiento"}
+                        >
+                          <Trash2 className="size-4" />
                         </Button>
                       </TableCell>
                     </TableRow>

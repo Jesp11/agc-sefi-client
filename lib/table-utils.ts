@@ -192,6 +192,7 @@ export const movimientoCajaSearchFields = (m: any) => [
   m.cuenta,
   m.saldo_resultante,
   m.asesor?.nombre_asesor,
+  m.registrado_por?.name,
 ];
 
 export const empleadoAhorroSearchFields = (a: any) => [

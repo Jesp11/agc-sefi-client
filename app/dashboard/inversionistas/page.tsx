@@ -19,7 +19,6 @@ import {
 import { toast } from "sonner";
 import {
   FileText,
-  DollarSign,
   Landmark,
   TrendingDown,
   Users,
@@ -217,66 +216,6 @@ export default function InversionistasPage() {
     const cartera = Number(resumen?.cartera_activa_total ?? 875815);
     return totalCapitalFondeado > 0 ? (cartera / totalCapitalFondeado).toFixed(2) : "0.00";
   }, [totalCapitalFondeado, resumen]);
-
-  const [rendimientoOpen, setRendimientoOpen] = useState(false);
-  const [selectedInvForRendimiento, setSelectedInvForRendimiento] = useState<any>(null);
-  const [rendimientoForm, setRendimientoForm] = useState({
-    monto: "",
-    fecha: new Date().toISOString().split("T")[0],
-    cuenta: "Efectivo",
-    concepto: "",
-    notas: "",
-  });
-  const [savingRendimiento, setSavingRendimiento] = useState(false);
-
-  const openPagarRendimiento = (inv: any) => {
-    setSelectedInvForRendimiento(inv);
-    setRendimientoForm({
-      monto: "",
-      fecha: new Date().toISOString().split("T")[0],
-      cuenta: "Efectivo",
-      concepto: `PAGO DE RENDIMIENTO — ${inv.nombre}`,
-      notas: "",
-    });
-    setRendimientoOpen(true);
-  };
-
-  const handleSaveRendimiento = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedInvForRendimiento) return;
-    const monto = parseFloat(rendimientoForm.monto);
-    if (!Number.isFinite(monto) || monto <= 0) {
-      toast.error("Indica un monto válido");
-      return;
-    }
-
-    setSavingRendimiento(true);
-    try {
-      const res = await apiFetch(`/inversionistas/${selectedInvForRendimiento.id}/rendimiento`, {
-        method: "POST",
-        body: JSON.stringify({
-          monto,
-          fecha: rendimientoForm.fecha,
-          cuenta: rendimientoForm.cuenta,
-          concepto: rendimientoForm.concepto,
-          notas: rendimientoForm.notas || null,
-        }),
-      });
-
-      const data = await res.json().catch(() => ({}));
-      if (res.ok) {
-        toast.success(data.message || "Pago de rendimiento registrado como egreso");
-        setRendimientoOpen(false);
-        fetchData();
-      } else {
-        toast.error(data.message || "Error al registrar el rendimiento");
-      }
-    } catch {
-      toast.error("Error de conexión");
-    } finally {
-      setSavingRendimiento(false);
-    }
-  };
 
   return (
     <div className="space-y-6">
@@ -476,15 +415,6 @@ export default function InversionistasPage() {
                       <div className="flex items-center justify-end gap-1.5">
                         <Button
                           size="sm"
-                          variant="default"
-                          className="h-8 text-xs bg-amber-600 hover:bg-amber-700 text-white"
-                          onClick={() => openPagarRendimiento(inv)}
-                        >
-                          <DollarSign className="mr-1 h-3.5 w-3.5" />
-                          Pagar Rendimiento
-                        </Button>
-                        <Button
-                          size="sm"
                           variant="outline"
                           className="h-8 text-xs"
                           onClick={() => {
@@ -514,87 +444,6 @@ export default function InversionistasPage() {
           label="inversionistas"
         />
       )}
-
-      {/* Dialog para registrar pago de rendimiento */}
-      <Dialog open={rendimientoOpen} onOpenChange={setRendimientoOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Registrar Pago de Rendimiento (Egreso)</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleSaveRendimiento} className="grid gap-4">
-            <div>
-              <Label>Inversionista</Label>
-              <Input value={selectedInvForRendimiento?.nombre || ""} disabled className="bg-muted font-medium" />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label htmlFor="rend-monto">Monto ($)</Label>
-                <Input
-                  id="rend-monto"
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  required
-                  placeholder="0.00"
-                  value={rendimientoForm.monto}
-                  onChange={(e) => setRendimientoForm({ ...rendimientoForm, monto: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label htmlFor="rend-fecha">Fecha</Label>
-                <Input
-                  id="rend-fecha"
-                  type="date"
-                  required
-                  value={rendimientoForm.fecha}
-                  onChange={(e) => setRendimientoForm({ ...rendimientoForm, fecha: e.target.value })}
-                />
-              </div>
-            </div>
-            <div>
-              <Label htmlFor="rend-cuenta">Cuenta / Origen de Fondos</Label>
-              <select
-                id="rend-cuenta"
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                value={rendimientoForm.cuenta}
-                onChange={(e) => setRendimientoForm({ ...rendimientoForm, cuenta: e.target.value })}
-              >
-                <option value="Efectivo">Efectivo</option>
-                <option value="Spin">Spin</option>
-                <option value="Bancomer">Bancomer / BBVA</option>
-                <option value="Banorte">Banorte</option>
-                <option value="Banamex">Banamex</option>
-                <option value="Otro">Otro</option>
-              </select>
-            </div>
-            <div>
-              <Label htmlFor="rend-concepto">Concepto / Motivo</Label>
-              <Input
-                id="rend-concepto"
-                value={rendimientoForm.concepto}
-                onChange={(e) => setRendimientoForm({ ...rendimientoForm, concepto: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label htmlFor="rend-notas">Notas adicionales (opcional)</Label>
-              <Input
-                id="rend-notas"
-                placeholder="Ej. Periodo agosto 2026, tasa 4%"
-                value={rendimientoForm.notas}
-                onChange={(e) => setRendimientoForm({ ...rendimientoForm, notas: e.target.value })}
-              />
-            </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <Button type="button" variant="outline" onClick={() => setRendimientoOpen(false)} disabled={savingRendimiento}>
-                Cancelar
-              </Button>
-              <Button type="submit" disabled={savingRendimiento}>
-                {savingRendimiento ? "Guardando..." : "Registrar Egreso"}
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
 
       {selectedDoc && (
         <InversionistaDocumentoDialog
