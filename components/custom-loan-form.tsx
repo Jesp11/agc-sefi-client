@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { apiFetch } from "@/lib/api";
+import { fetchAllPages } from "@/lib/table-utils";
 import { toast } from "sonner";
 import {
   Check,
@@ -58,10 +59,8 @@ export function CustomLoanForm({ type, onSuccess, onClose }: CustomLoanFormProps
   useEffect(() => {
     const fetchItems = async () => {
       try {
-        const url = type === "individual" ? "/clientes?per_page=100" : "/grupos?per_page=100";
-        const res = await apiFetch(url);
-        const data = await res.json();
-        if (res.ok) setItems(data.data || data);
+        const endpoint = type === "individual" ? "/clientes" : "/grupos";
+        setItems(await fetchAllPages(endpoint));
       } catch {
         toast.error(`Error al cargar ${type === "individual" ? "clientes" : "grupos"}`);
       }
@@ -83,8 +82,11 @@ export function CustomLoanForm({ type, onSuccess, onClose }: CustomLoanFormProps
   }, [type]);
 
   const filtered = items.filter((item) => {
+    const query = searchTerm.toLowerCase();
     const name = type === "individual" ? item.nombre_completo : item.nombre_grupo;
-    return name?.toLowerCase().includes(searchTerm.toLowerCase());
+    const id = type === "individual" ? item.id_cliente : item.id;
+    const curp = type === "individual" ? item.curp : "";
+    return name?.toLowerCase().includes(query) || curp?.toLowerCase().includes(query) || String(id).includes(searchTerm);
   });
 
   const getDiaPago = (dateStr: string): string => {

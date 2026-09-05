@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { apiFetch } from "@/lib/api";
+import { fetchAllPages } from "@/lib/table-utils";
 import { toast } from "sonner";
 import { 
   Check, 
@@ -55,9 +56,7 @@ export function CustomCreditForm({ onSuccess, onClose }: CustomCreditFormProps) 
   useEffect(() => {
     const fetchClients = async () => {
       try {
-        const res = await apiFetch("/clientes?per_page=100");
-        const data = await res.json();
-        if (res.ok) setClients(data.data || data);
+        setClients(await fetchAllPages("/clientes"));
       } catch (error) {
         toast.error("Error al cargar clientes");
       }
