@@ -129,7 +129,10 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
   const mora = credito.mora || {};
   const fechaUltimoPago = calcFechaUltimoPago(credito.fecha_primer_pago, credito.plazos);
   const scheduleBase = generateSchedule(credito.fecha_primer_pago, credito.plazos, credito.valor_ficha);
-  const schedule = marcarEstadoCuotas(scheduleBase, totalAbonadoFromPagos(pagos));
+  const schedule = marcarEstadoCuotas(
+    scheduleBase,
+    totalAbonadoFromPagos(pagos) + (Number(credito.abonos_historicos) || 0),
+  );
   const scheduleFiltered = filterBySearch(schedule, scheduleControls.search, (r) => [
     r.semana, r.fecha, r.pago, r.estado_pago,
   ]);

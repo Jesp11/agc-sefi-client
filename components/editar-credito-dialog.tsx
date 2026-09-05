@@ -67,6 +67,7 @@ function buildForm(credito: CreditoEditable) {
     interes: stringValue(credito.interes),
     total: stringValue(credito.total),
     saldo_pendiente: stringValue(credito.saldo_pendiente),
+    abonos_historicos: stringValue(credito.abonos_historicos),
     plazos: stringValue(credito.plazos),
     valor_ficha: stringValue(credito.valor_ficha),
     dias_pago: stringValue(credito.dias_pago),
@@ -154,6 +155,7 @@ export function EditarCreditoDialog({ credito, onSuccess }: EditarCreditoDialogP
         interes: Number(form.interes),
         total: Number(form.total),
         saldo_pendiente: nullableNumber(form.saldo_pendiente),
+        abonos_historicos: nullableNumber(form.abonos_historicos),
         plazos: Number(form.plazos),
         valor_ficha: Number(form.valor_ficha),
         dias_pago: form.dias_pago,
@@ -223,6 +225,7 @@ export function EditarCreditoDialog({ credito, onSuccess }: EditarCreditoDialogP
               <Field label="Interés" type="number" min="0" step="0.01" value={form.interes} onChange={(v) => setField("interes", v)} required />
               <Field label="Total contrato" type="number" min="0" step="0.01" value={form.total} onChange={(v) => setField("total", v)} required />
               <Field label="Saldo pendiente" type="number" min="0" step="0.01" value={form.saldo_pendiente} onChange={(v) => setField("saldo_pendiente", v)} />
+              <Field label="Abonos históricos sin movimiento" type="number" min="0" step="0.01" value={form.abonos_historicos} onChange={(v) => setField("abonos_historicos", v)} />
               <Field label="Pago semanal" type="number" min="0" step="0.01" value={form.valor_ficha} onChange={(v) => setField("valor_ficha", v)} required />
               <Field label="Comisión apertura" type="number" min="0" step="0.01" value={form.comision_apertura} onChange={(v) => setField("comision_apertura", v)} />
               <Field label="Tasa asignada" value={form.tasa_asignada} onChange={(v) => setField("tasa_asignada", v)} />
