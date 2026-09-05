@@ -28,6 +28,7 @@ import {
   Download,
   FileDown,
   ChevronDown,
+  Pencil,
 } from "lucide-react";
 import { TablePagination, TableSearch } from "@/components/table-controls";
 import { PAGE_SIZE, filterBySearch, paginateItems, useTableControls } from "@/hooks/use-paginated-list";
@@ -36,19 +37,27 @@ import { InversionistaDocumentoDialog } from "@/components/inversionista-documen
 import * as XLSX from "xlsx";
 import { parseInversionistasImportFile } from "@/lib/inversionistas-xlsx";
 
+const emptyInversionistaForm = () => ({
+  nombre: "",
+  tipo_entidad: "Persona Fisica",
+  origen_fondeo: "",
+  contacto: "",
+  telefono: "",
+  email: "",
+});
+
+type InversionistaEditable = ReturnType<typeof emptyInversionistaForm> & { id: number };
+
 export default function InversionistasPage() {
   const [items, setItems] = useState<any[]>([]);
   const [resumen, setResumen] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const { search, handleSearch, page, setPage } = useTableControls();
-  const [form, setForm] = useState({
-    nombre: "",
-    tipo_entidad: "Persona Fisica",
-    origen_fondeo: "",
-    contacto: "",
-    telefono: "",
-    email: "",
-  });
+  const [form, setForm] = useState(emptyInversionistaForm);
+  const [editingInversionista, setEditingInversionista] = useState<InversionistaEditable | null>(null);
+  const [editForm, setEditForm] = useState(emptyInversionistaForm);
+  const [editOpen, setEditOpen] = useState(false);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [selectedDoc, setSelectedDoc] = useState<any>(null);
   const [docOpen, setDocOpen] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
@@ -84,16 +93,50 @@ export default function InversionistasPage() {
     if (res.ok) {
       toast.success("Fuente de fondeo creada");
       fetchData();
-      setForm({
-        nombre: "",
-        tipo_entidad: "Persona Fisica",
-        origen_fondeo: "",
-        contacto: "",
-        telefono: "",
-        email: "",
-      });
+      setForm(emptyInversionistaForm());
     } else {
       toast.error("Error al crear");
+    }
+  };
+
+  const openEdit = (inversionista: InversionistaEditable) => {
+    setEditingInversionista(inversionista);
+    setEditForm({
+      nombre: inversionista.nombre ?? "",
+      tipo_entidad: inversionista.tipo_entidad ?? "Persona Fisica",
+      origen_fondeo: inversionista.origen_fondeo ?? "",
+      contacto: inversionista.contacto ?? "",
+      telefono: inversionista.telefono ?? "",
+      email: inversionista.email ?? "",
+    });
+    setEditOpen(true);
+  };
+
+  const handleUpdate = async () => {
+    if (!editingInversionista || !editForm.nombre.trim()) {
+      toast.error("El nombre es obligatorio");
+      return;
+    }
+
+    setIsSavingEdit(true);
+    try {
+      const res = await apiFetch(`/inversionistas/${editingInversionista.id}`, {
+        method: "PUT",
+        body: JSON.stringify(editForm),
+      });
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        toast.error(error.message || "No fue posible actualizar la fuente de fondeo");
+        return;
+      }
+      toast.success("Información del inversionista actualizada");
+      setEditOpen(false);
+      setEditingInversionista(null);
+      fetchData();
+    } catch {
+      toast.error("No fue posible actualizar la fuente de fondeo");
+    } finally {
+      setIsSavingEdit(false);
     }
   };
 
@@ -417,6 +460,15 @@ export default function InversionistasPage() {
                           size="sm"
                           variant="outline"
                           className="h-8 text-xs"
+                          onClick={() => openEdit(inv)}
+                        >
+                          <Pencil className="mr-1 h-3.5 w-3.5" />
+                          Editar
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 text-xs"
                           onClick={() => {
                             setSelectedDoc(inv);
                             setDocOpen(true);
@@ -444,6 +496,31 @@ export default function InversionistasPage() {
           label="inversionistas"
         />
       )}
+
+      <Dialog open={editOpen} onOpenChange={(open) => {
+        setEditOpen(open);
+        if (!open) setEditingInversionista(null);
+      }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Editar inversionista y fondeo</DialogTitle></DialogHeader>
+          <div className="grid gap-3">
+            <div><Label>Nombre</Label><Input value={editForm.nombre} onChange={(event) => setEditForm({ ...editForm, nombre: event.target.value })} /></div>
+            <div>
+              <Label>Tipo</Label>
+              <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={editForm.tipo_entidad} onChange={(event) => setEditForm({ ...editForm, tipo_entidad: event.target.value })}>
+                <option value="Persona Fisica">Persona Fisica</option>
+                <option value="Persona Moral">Persona Moral</option>
+                <option value="Financiamiento Externo">Financiamiento Externo</option>
+              </select>
+            </div>
+            <div><Label>Origen / Plataforma</Label><Input value={editForm.origen_fondeo} onChange={(event) => setEditForm({ ...editForm, origen_fondeo: event.target.value })} /></div>
+            <div><Label>Contacto</Label><Input value={editForm.contacto} onChange={(event) => setEditForm({ ...editForm, contacto: event.target.value })} /></div>
+            <div><Label>Teléfono</Label><Input value={editForm.telefono} onChange={(event) => setEditForm({ ...editForm, telefono: event.target.value })} /></div>
+            <div><Label>Email</Label><Input type="email" value={editForm.email} onChange={(event) => setEditForm({ ...editForm, email: event.target.value })} /></div>
+            <Button onClick={handleUpdate} disabled={isSavingEdit}>{isSavingEdit ? "Guardando..." : "Guardar cambios"}</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {selectedDoc && (
         <InversionistaDocumentoDialog

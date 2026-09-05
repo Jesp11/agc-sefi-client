@@ -25,25 +25,12 @@ import { TablePagination, TableSearch } from "@/components/table-controls";
 import { PAGE_SIZE, filterBySearch, paginateItems, useTableControls } from "@/hooks/use-paginated-list";
 import { fetchAllPages, movimientoCajaSearchFields } from "@/lib/table-utils";
 import { parseFlujoCajaImportFile } from "@/lib/flujo-caja-xlsx";
+import { FLUJO_CAJA_CATEGORIAS } from "@/lib/flujo-caja-categorias";
 import * as XLSX from "xlsx";
 
 const MESES = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
   "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
-];
-
-const CATEGORIAS = [
-  { value: "CobroCartera", label: "Cobro cartera" },
-  { value: "Desembolso", label: "Desembolso / renovación" },
-  { value: "Nomina", label: "Nómina" },
-  { value: "RecuperacionMora", label: "Recuperación mora" },
-  { value: "InsumosSocios", label: "Insumos socios" },
-  { value: "ServicioTelefono", label: "Servicio telefónico" },
-  { value: "Rendimiento", label: "Rendimiento inversionista" },
-  { value: "GastoOperativo", label: "Gasto operativo" },
-  { value: "SaldoInicial", label: "Saldo inicial mes" },
-  { value: "OtroIngreso", label: "Otro ingreso" },
-  { value: "OtroEgreso", label: "Otro egreso" },
 ];
 
 const emptyForm = () => ({
@@ -57,10 +44,13 @@ const emptyForm = () => ({
 });
 
 const isGastoGenerado = (movimiento: { referencia?: string | null } | null) => String(movimiento?.referencia ?? "").startsWith("GASTO-");
-type MovimientoGenerado = { id: number; motivo?: string | null; pago_id?: number | null; referencia?: string | null };
+type MovimientoGenerado = { id: number; motivo?: string | null; pago_id?: number | null; referencia?: string | null; categoria?: string | null };
+
+const isRendimientoRegistradoComoGasto = (movimiento: MovimientoGenerado | null) => isGastoGenerado(movimiento)
+  && String(movimiento?.categoria ?? "").toUpperCase().startsWith("RENDIMIENTO");
 
 const isMovimientoGenerado = (movimiento: MovimientoGenerado | null) => Boolean(movimiento?.pago_id)
-  || isGastoGenerado(movimiento)
+  || (isGastoGenerado(movimiento) && !isRendimientoRegistradoComoGasto(movimiento))
   || String(movimiento?.referencia ?? "").startsWith("DESEMBOLSO-");
 
 const amount = (value: unknown) => {
@@ -452,7 +442,7 @@ export default function FlujoCajaPage() {
                   <Label>Categoría</Label>
                   <select className="w-full border rounded-md px-3 py-2 text-sm bg-background h-9" value={form.categoria} onChange={(e) => setForm({ ...form, categoria: e.target.value })} disabled={editandoGastoGenerado}>
                     <option value="">Auto-detectar</option>
-                    {CATEGORIAS.map((c) => (
+                    {FLUJO_CAJA_CATEGORIAS.map((c) => (
                       <option key={c.value} value={c.value}>{c.label}</option>
                     ))}
                   </select>
@@ -488,7 +478,7 @@ export default function FlujoCajaPage() {
           </Card>
           <Card>
             <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Capital Pasivo</CardTitle></CardHeader>
-            <CardContent className="text-2xl font-bold text-primary">{fmt(capitalPasivo)}</CardContent>
+            <CardContent className="text-2xl font-bold text-primary">{fmt(resumen.disponible)}</CardContent>
           </Card>
         </div>
       )}
@@ -514,7 +504,7 @@ export default function FlujoCajaPage() {
         <Card>
           <CardHeader><CardTitle className="text-base">Resumen de cartera</CardTitle></CardHeader>
           <CardContent className="grid grid-cols-2 lg:grid-cols-5 gap-4 text-sm">
-            <div><p className="text-muted-foreground text-xs">Capital Pasivo</p><p className="font-semibold text-primary">{fmt(capitalPasivo)}</p></div>
+            <div><p className="text-muted-foreground text-xs">Capital Pasivo</p><p className="font-semibold text-primary">{fmt(resumen.disponible)}</p></div>
             <div><p className="text-muted-foreground text-xs">Cartera Individual</p><p className="font-semibold">{fmt(resumen.cartera_individual)}</p></div>
             <div><p className="text-muted-foreground text-xs">Cartera Grupal</p><p className="font-semibold">{fmt(resumen.cartera_grupal)}</p></div>
             <div><p className="text-muted-foreground text-xs">Mora Total</p><p className="font-semibold text-red-600">{fmt(resumen.mora)}</p></div>

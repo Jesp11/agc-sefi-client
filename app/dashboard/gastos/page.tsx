@@ -17,10 +17,19 @@ import { BookOpen } from "lucide-react";
 
 type CatalogoGasto = {
   id: number;
-  concepto: string;
+  concepto?: string | null;
   categoria?: string | null;
-  monto_sugerido?: number | string | null;
   activo: boolean;
+};
+
+type GastoOperativo = {
+  id: number;
+  catalogo_gasto_id?: number | string | null;
+  concepto?: string | null;
+  monto?: number | string | null;
+  fecha?: string | null;
+  categoria?: string | null;
+  cuenta?: string | null;
 };
 
 const emptyForm = () => ({
@@ -28,18 +37,15 @@ const emptyForm = () => ({
   concepto: "",
   monto: "",
   fecha: new Date().toISOString().split("T")[0],
-  categoria: "",
   cuenta: "Efectivo",
 });
 
 const emptyCatalogoForm = () => ({
-  concepto: "",
   categoria: "",
-  monto_sugerido: "",
 });
 
 export default function GastosPage() {
-  const [items, setItems] = useState<any[]>([]);
+  const [items, setItems] = useState<GastoOperativo[]>([]);
   const [catalogo, setCatalogo] = useState<CatalogoGasto[]>([]);
   const [loading, setLoading] = useState(true);
   const { search, handleSearch, page, setPage } = useTableControls();
@@ -48,7 +54,7 @@ export default function GastosPage() {
   const [catalogoForm, setCatalogoForm] = useState(emptyCatalogoForm);
   const [gastoOpen, setGastoOpen] = useState(false);
   const [catalogoOpen, setCatalogoOpen] = useState(false);
-  const [editingGasto, setEditingGasto] = useState<any | null>(null);
+  const [editingGasto, setEditingGasto] = useState<GastoOperativo | null>(null);
 
   const fetchData = async () => {
     setLoading(true);
@@ -72,36 +78,39 @@ export default function GastosPage() {
   };
 
   useEffect(() => {
-    fetchData();
-    fetchCatalogo();
+    void Promise.resolve().then(() => {
+      fetchData();
+      fetchCatalogo();
+    });
   }, []);
 
   const activos = catalogo.filter((c) => c.activo);
+  const selectedCatalogo = catalogo.find((c) => String(c.id) === form.catalogo_gasto_id);
+  const conservarCatalogoInactivo = !!selectedCatalogo
+    && !selectedCatalogo.activo
+    && String(selectedCatalogo.id) === String(editingGasto?.catalogo_gasto_id);
+  const opcionesCatalogo: CatalogoGasto[] = conservarCatalogoInactivo && selectedCatalogo
+    ? [selectedCatalogo, ...activos]
+    : activos;
 
   const applyCatalogo = (id: string) => {
     if (!id) {
-      setForm((prev) => ({ ...prev, catalogo_gasto_id: "", concepto: "", categoria: "", monto: "" }));
+      setForm((prev) => ({ ...prev, catalogo_gasto_id: "" }));
       return;
     }
-    const item = catalogo.find((c) => String(c.id) === id);
-    if (!item) return;
     setForm((prev) => ({
       ...prev,
       catalogo_gasto_id: id,
-      concepto: item.concepto,
-      categoria: item.categoria ?? "",
-      monto: item.monto_sugerido != null ? String(item.monto_sugerido) : prev.monto,
     }));
   };
 
-  const openEditarGasto = (gasto: any) => {
+  const openEditarGasto = (gasto: GastoOperativo) => {
     setEditingGasto(gasto);
     setForm({
       catalogo_gasto_id: gasto.catalogo_gasto_id ? String(gasto.catalogo_gasto_id) : "",
       concepto: gasto.concepto ?? "",
       monto: String(gasto.monto ?? ""),
       fecha: String(gasto.fecha ?? "").slice(0, 10),
-      categoria: gasto.categoria ?? "",
       cuenta: gasto.cuenta ?? "",
     });
     setGastoOpen(true);
@@ -109,15 +118,12 @@ export default function GastosPage() {
 
   const handleSave = async () => {
     const payload: Record<string, unknown> = {
+      catalogo_gasto_id: Number(form.catalogo_gasto_id),
+      concepto: form.concepto.trim(),
       monto: parseFloat(form.monto),
       fecha: form.fecha,
-      concepto: form.concepto,
-      categoria: form.categoria || null,
       cuenta: form.cuenta || null,
     };
-    if (form.catalogo_gasto_id) {
-      payload.catalogo_gasto_id = Number(form.catalogo_gasto_id);
-    }
 
     const res = await apiFetch(editingGasto ? `/gastos/${editingGasto.id}` : "/gastos", {
       method: editingGasto ? "PUT" : "POST",
@@ -137,17 +143,15 @@ export default function GastosPage() {
 
   const handleCreateCatalogo = async () => {
     const payload = {
-      concepto: catalogoForm.concepto,
-      categoria: catalogoForm.categoria || null,
-      monto_sugerido: catalogoForm.monto_sugerido ? parseFloat(catalogoForm.monto_sugerido) : null,
+      categoria: catalogoForm.categoria,
     };
     const res = await apiFetch("/catalogo-gastos", { method: "POST", body: JSON.stringify(payload) });
     if (res.ok) {
-      toast.success("Gasto agregado al catálogo");
+      toast.success("Categoría agregada al catálogo");
       setCatalogoForm(emptyCatalogoForm());
       fetchCatalogo();
     } else {
-      toast.error("Error al guardar en catálogo");
+      toast.error("Error al guardar la categoría");
     }
   };
 
@@ -157,7 +161,7 @@ export default function GastosPage() {
       body: JSON.stringify({ activo: !item.activo }),
     });
     if (res.ok) {
-      toast.success(item.activo ? "Gasto desactivado" : "Gasto activado");
+      toast.success(item.activo ? "Categoría desactivada" : "Categoría activada");
       fetchCatalogo();
     } else {
       toast.error("Error al actualizar catálogo");
@@ -175,46 +179,25 @@ export default function GastosPage() {
         <div className="flex items-center gap-2">
           <Dialog open={catalogoOpen} onOpenChange={setCatalogoOpen}>
             <DialogTrigger render={<Button variant="outline"><BookOpen className="size-4" />Catálogo</Button>} />
-            <DialogContent className="sm:max-w-2xl">
-              <DialogHeader><DialogTitle>Catálogo de Gastos</DialogTitle></DialogHeader>
+            <DialogContent className="sm:max-w-xl">
+              <DialogHeader><DialogTitle>Catálogo de Categorías</DialogTitle></DialogHeader>
               <div className="grid gap-4">
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <div className="sm:col-span-1">
-                    <Label>Concepto</Label>
-                    <Input
-                      value={catalogoForm.concepto}
-                      onChange={(e) => setCatalogoForm({ ...catalogoForm, concepto: e.target.value })}
-                      placeholder="Ej. Renta oficina"
-                    />
-                  </div>
-                  <div>
-                    <Label>Categoría</Label>
-                    <Input
-                      value={catalogoForm.categoria}
-                      onChange={(e) => setCatalogoForm({ ...catalogoForm, categoria: e.target.value })}
-                      placeholder="Opcional"
-                    />
-                  </div>
-                  <div>
-                    <Label>Monto sugerido</Label>
-                    <Input
-                      type="number"
-                      value={catalogoForm.monto_sugerido}
-                      onChange={(e) => setCatalogoForm({ ...catalogoForm, monto_sugerido: e.target.value })}
-                      placeholder="Opcional"
-                    />
-                  </div>
+                <div>
+                  <Label>Categoría</Label>
+                  <Input
+                    value={catalogoForm.categoria}
+                    onChange={(e) => setCatalogoForm({ ...catalogoForm, categoria: e.target.value })}
+                    placeholder="Ej. Mantenimiento de vehículo"
+                  />
                 </div>
-                <Button onClick={handleCreateCatalogo} disabled={!catalogoForm.concepto.trim()}>
-                  Agregar al catálogo
+                <Button onClick={handleCreateCatalogo} disabled={!catalogoForm.categoria.trim()}>
+                  Agregar categoría
                 </Button>
                 <Card>
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Concepto</TableHead>
                         <TableHead>Categoría</TableHead>
-                        <TableHead className="text-right">Monto sug.</TableHead>
                         <TableHead>Estado</TableHead>
                         <TableHead />
                       </TableRow>
@@ -222,17 +205,13 @@ export default function GastosPage() {
                     <TableBody>
                       {catalogo.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={5} className="h-20 text-center text-muted-foreground">
-                            Sin gastos en el catálogo.
+                          <TableCell colSpan={3} className="h-20 text-center text-muted-foreground">
+                            Sin categorías en el catálogo.
                           </TableCell>
                         </TableRow>
                       ) : catalogo.map((c) => (
                         <TableRow key={c.id} className={!c.activo ? "opacity-60" : undefined}>
-                          <TableCell className="font-medium">{c.concepto}</TableCell>
-                          <TableCell>{c.categoria || "—"}</TableCell>
-                          <TableCell className="text-right">
-                            {c.monto_sugerido != null ? `$${Number(c.monto_sugerido).toLocaleString()}` : "—"}
-                          </TableCell>
+                          <TableCell className="font-medium">{c.categoria}</TableCell>
                           <TableCell>{c.activo ? "Activo" : "Inactivo"}</TableCell>
                           <TableCell className="text-right">
                             <Button size="sm" variant="outline" onClick={() => toggleCatalogoActivo(c)}>
@@ -262,31 +241,36 @@ export default function GastosPage() {
               <DialogHeader><DialogTitle>{editingGasto ? "Editar Gasto" : "Nuevo Gasto"}</DialogTitle></DialogHeader>
               <div className="grid gap-3">
                 <div>
-                  <Label>Gasto del catálogo</Label>
+                  <Label>Categoría</Label>
                   <select
                     className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
                     value={form.catalogo_gasto_id}
                     onChange={(e) => applyCatalogo(e.target.value)}
                   >
                     <option value="">Seleccionar...</option>
-                    {activos.map((c) => (
+                    {opcionesCatalogo.map((c) => (
                       <option key={c.id} value={c.id}>
-                        {c.concepto}{c.categoria ? ` (${c.categoria})` : ""}
+                        {c.categoria}{!c.activo ? " — inactiva" : ""}
                       </option>
                     ))}
                   </select>
                   {activos.length === 0 && (
                     <p className="mt-1 text-xs text-muted-foreground">
-                      No hay gastos activos en el catálogo. Agrégalos desde Catálogo o captura un concepto manual.
+                      Primero crea y activa una categoría en el Catálogo para poder registrar gastos.
                     </p>
                   )}
                 </div>
+                {selectedCatalogo && (
+                  <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm">
+                    <p><span className="text-muted-foreground">Categoría:</span> {selectedCatalogo.categoria}</p>
+                  </div>
+                )}
                 <div>
                   <Label>Concepto</Label>
                   <Input
                     value={form.concepto}
-                    onChange={(e) => setForm({ ...form, concepto: e.target.value, catalogo_gasto_id: "" })}
-                    placeholder="O captura un gasto no catalogado"
+                    onChange={(e) => setForm({ ...form, concepto: e.target.value })}
+                    placeholder="Ej. Reparación de llanta"
                   />
                 </div>
                 <div>
@@ -296,13 +280,6 @@ export default function GastosPage() {
                 <div>
                   <Label>Fecha</Label>
                   <Input type="date" value={form.fecha} onChange={(e) => setForm({ ...form, fecha: e.target.value })} />
-                </div>
-                <div>
-                  <Label>Categoría</Label>
-                  <Input
-                    value={form.categoria}
-                    onChange={(e) => setForm({ ...form, categoria: e.target.value })}
-                  />
                 </div>
                 <div>
                   <Label>Cuenta</Label>
@@ -323,7 +300,7 @@ export default function GastosPage() {
                 </div>
                 <Button
                   onClick={handleSave}
-                  disabled={!form.monto || (!form.catalogo_gasto_id && !form.concepto.trim())}
+                  disabled={!form.catalogo_gasto_id || !form.concepto.trim() || !form.monto}
                 >
                   {editingGasto ? "Guardar cambios" : "Guardar"}
                 </Button>
@@ -354,7 +331,7 @@ export default function GastosPage() {
             {loading ? (
               <TableRow><TableCell colSpan={6} className="h-24 text-center text-muted-foreground">Cargando...</TableCell></TableRow>
             ) : filtered.length === 0 ? (
-              <TableRow><TableCell colSpan={6} className="h-24 text-center text-muted-foreground">{search ? "No se encontraron gastos." : "Sin gastos registrados."}</TableCell></TableRow>
+              <TableRow><TableCell colSpan={6} className="h-24 text-center text-muted-foreground">{search ? "No se encontraron gastos." : "Sin gastos registrados. Primero crea una categoría en Catálogo para registrarlo."}</TableCell></TableRow>
             ) : paginated.map((g) => (
               <TableRow key={g.id}>
                 <TableCell>{fmtFecha(g.fecha)}</TableCell>
