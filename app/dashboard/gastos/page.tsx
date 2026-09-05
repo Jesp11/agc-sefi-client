@@ -13,7 +13,7 @@ import { fmtFecha } from "@/lib/utils";
 import { TablePagination, TableSearch } from "@/components/table-controls";
 import { PAGE_SIZE, filterBySearch, paginateItems, useTableControls } from "@/hooks/use-paginated-list";
 import { fetchAllPages, gastoSearchFields } from "@/lib/table-utils";
-import { BookOpen } from "lucide-react";
+import { BookOpen, Trash2 } from "lucide-react";
 
 type CatalogoGasto = {
   id: number;
@@ -55,6 +55,7 @@ export default function GastosPage() {
   const [gastoOpen, setGastoOpen] = useState(false);
   const [catalogoOpen, setCatalogoOpen] = useState(false);
   const [editingGasto, setEditingGasto] = useState<GastoOperativo | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   const fetchData = async () => {
     setLoading(true);
@@ -138,6 +139,26 @@ export default function GastosPage() {
     } else {
       const err = await res.json().catch(() => null);
       toast.error(err?.message || "Error al guardar gasto");
+    }
+  };
+
+  const handleDeleteGasto = async (gasto: GastoOperativo) => {
+    if (!window.confirm(`¿Eliminar el gasto “${gasto.concepto}”? También se eliminarán sus movimientos de Flujo de Caja y Capital Pasivo.`)) {
+      return;
+    }
+
+    setDeletingId(gasto.id);
+    try {
+      const res = await apiFetch(`/gastos/${gasto.id}`, { method: "DELETE" });
+      if (res.ok) {
+        toast.success("Gasto y movimientos relacionados eliminados");
+        fetchData();
+      } else {
+        const err = await res.json().catch(() => null);
+        toast.error(err?.message || "Error al eliminar gasto");
+      }
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -339,8 +360,18 @@ export default function GastosPage() {
                 <TableCell>{g.categoria}</TableCell>
                 <TableCell>{g.cuenta || "—"}</TableCell>
                 <TableCell className="text-right font-semibold">${Number(g.monto).toLocaleString()}</TableCell>
-                <TableCell className="text-right">
+                <TableCell className="text-right space-x-1">
                   <Button size="sm" variant="outline" onClick={() => openEditarGasto(g)}>Editar</Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-destructive hover:text-destructive"
+                    onClick={() => handleDeleteGasto(g)}
+                    disabled={deletingId === g.id}
+                  >
+                    <Trash2 className="size-4" />
+                    {deletingId === g.id ? "Eliminando..." : "Eliminar"}
+                  </Button>
                 </TableCell>
               </TableRow>
             ))}
