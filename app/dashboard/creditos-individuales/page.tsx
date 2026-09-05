@@ -442,7 +442,7 @@ export default function CreditosIndividualesPage() {
         <Card className="p-4 border shadow-sm bg-card hover:border-emerald-200 transition-colors">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
-              Recuperación Semanal
+              Recuperación
             </span>
             <div className="p-2 rounded-lg bg-emerald-50 text-emerald-700">
               <CalendarDays className="h-4 w-4" />
@@ -457,7 +457,7 @@ export default function CreditosIndividualesPage() {
         <Card className="p-4 border shadow-sm bg-card hover:border-primary/30 transition-colors">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
-              Saldo Total
+              Valor Total
             </span>
             <div className="p-2 rounded-lg bg-primary/10 text-primary">
               <DollarSign className="h-4 w-4" />
@@ -487,7 +487,7 @@ export default function CreditosIndividualesPage() {
         <Card className="p-4 border shadow-sm bg-card hover:border-muted-foreground/30 transition-colors">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
-              Créditos Activos
+              Clientes
             </span>
             <div className="p-2 rounded-lg bg-muted text-muted-foreground">
               <User className="h-4 w-4" />

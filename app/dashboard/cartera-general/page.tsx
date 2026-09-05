@@ -205,19 +205,18 @@ export default function CarteraGeneralPage() {
 
   // KPIs de Cartera General
   const {
-    saldoInd,
-    saldoGrup,
+    totalRecuperacion,
     totalSaldo,
     totalSaldoInvertido,
     montoInd,
     montoGrup,
-    totalMontoColocado,
     conteoInd,
     conteoGrup,
   } = useMemo(() => {
     let sInd = 0;
     let sGrup = 0;
     let sInvTotal = 0;
+    let recuperacion = 0;
     let mInd = 0;
     let mGrup = 0;
     let cInd = 0;
@@ -229,6 +228,8 @@ export default function CarteraGeneralPage() {
       // Saldo total
       const saldo = Number(c.saldo_pendiente ?? c.saldo_total ?? c.total ?? 0);
       const validSaldo = isNaN(saldo) ? 0 : saldo;
+      const ficha = Number(c.valor_ficha ?? (c.plazos ? Number(c.total) / Number(c.plazos) : 0));
+      recuperacion += isNaN(ficha) ? 0 : ficha;
       if (isGrupal) {
         sGrup += validSaldo;
         cGrup++;
@@ -253,13 +254,11 @@ export default function CarteraGeneralPage() {
     }
 
     return {
-      saldoInd: sInd,
-      saldoGrup: sGrup,
+      totalRecuperacion: recuperacion,
       totalSaldo: sInd + sGrup,
       totalSaldoInvertido: sInvTotal,
       montoInd: mInd,
       montoGrup: mGrup,
-      totalMontoColocado: mInd + mGrup,
       conteoInd: cInd,
       conteoGrup: cGrup,
     };
@@ -511,48 +510,30 @@ export default function CarteraGeneralPage() {
       </div>
 
       {/* Tarjetas KPI de Cartera General */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-        {/* KPI 1: Cartera Individual */}
-        <Card className="p-4 border shadow-sm bg-card hover:border-sky-200 transition-colors">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
+        {/* KPI 1: Recuperación */}
+        <Card className="p-4 border shadow-sm bg-card hover:border-emerald-200 transition-colors">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
-              Cartera Individual
+              Recuperación
             </span>
-            <div className="p-2 rounded-lg bg-sky-50 text-sky-700">
-              <User className="h-4 w-4" />
+            <div className="p-2 rounded-lg bg-emerald-50 text-emerald-700">
+              <DollarSign className="h-4 w-4" />
             </div>
           </div>
-          <div className="text-2xl font-extrabold text-foreground mt-2">
-            ${saldoInd.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          <div className="text-2xl font-extrabold text-emerald-700 mt-2">
+            ${totalRecuperacion.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
           <p className="text-[11px] text-muted-foreground mt-1">
-            {conteoInd} activos · Colocado: ${montoInd.toLocaleString("es-MX", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+            Suma del valor de fichas semanales
           </p>
         </Card>
 
-        {/* KPI 2: Cartera Grupal */}
-        <Card className="p-4 border shadow-sm bg-card hover:border-purple-200 transition-colors">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
-              Cartera Grupal
-            </span>
-            <div className="p-2 rounded-lg bg-purple-50 text-purple-700">
-              <Users className="h-4 w-4" />
-            </div>
-          </div>
-          <div className="text-2xl font-extrabold text-foreground mt-2">
-            ${saldoGrup.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </div>
-          <p className="text-[11px] text-muted-foreground mt-1">
-            {conteoGrup} grupos · Colocado: ${montoGrup.toLocaleString("es-MX", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-          </p>
-        </Card>
-
-        {/* KPI 3: Saldo Total */}
+        {/* KPI 2: Valor Total */}
         <Card className="p-4 border shadow-sm bg-card hover:border-primary/30 transition-colors">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
-              Saldo Total
+              Valor Total
             </span>
             <div className="p-2 rounded-lg bg-primary/10 text-primary">
               <DollarSign className="h-4 w-4" />
@@ -562,11 +543,11 @@ export default function CarteraGeneralPage() {
             ${totalSaldo.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
           <p className="text-[11px] text-muted-foreground mt-1">
-            {filtered.length} préstamos activos (Colocado: ${totalMontoColocado.toLocaleString("es-MX", { minimumFractionDigits: 0, maximumFractionDigits: 0 })})
+            Suma de saldos totales pendientes
           </p>
         </Card>
 
-        {/* KPI 4: Saldo Invertido */}
+        {/* KPI 3: Saldo Invertido */}
         <Card className="p-4 border shadow-sm bg-card hover:border-teal-200 transition-colors">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
@@ -580,7 +561,43 @@ export default function CarteraGeneralPage() {
             ${totalSaldoInvertido.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
           <p className="text-[11px] text-muted-foreground mt-1">
-            Ganancia proyectada: ${Math.max(0, totalSaldo - totalSaldoInvertido).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            Suma del capital activo en colocación
+          </p>
+        </Card>
+
+        {/* KPI 4: Grupos */}
+        <Card className="p-4 border shadow-sm bg-card hover:border-purple-200 transition-colors">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
+              Grupos
+            </span>
+            <div className="p-2 rounded-lg bg-purple-50 text-purple-700">
+              <Users className="h-4 w-4" />
+            </div>
+          </div>
+          <div className="text-2xl font-extrabold text-foreground mt-2">
+            {conteoGrup}
+          </div>
+          <p className="text-[11px] text-muted-foreground mt-1">
+            Colocado: ${montoGrup.toLocaleString("es-MX", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+          </p>
+        </Card>
+
+        {/* KPI 5: Clientes */}
+        <Card className="p-4 border shadow-sm bg-card hover:border-sky-200 transition-colors">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
+              Clientes
+            </span>
+            <div className="p-2 rounded-lg bg-sky-50 text-sky-700">
+              <User className="h-4 w-4" />
+            </div>
+          </div>
+          <div className="text-2xl font-extrabold text-foreground mt-2">
+            {conteoInd}
+          </div>
+          <p className="text-[11px] text-muted-foreground mt-1">
+            Colocado: ${montoInd.toLocaleString("es-MX", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
           </p>
         </Card>
       </div>

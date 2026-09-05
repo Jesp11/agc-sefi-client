@@ -155,7 +155,9 @@ export function EditarCreditoDialog({ credito, onSuccess }: EditarCreditoDialogP
         interes: Number(form.interes),
         total: Number(form.total),
         saldo_pendiente: nullableNumber(form.saldo_pendiente),
-        abonos_historicos: nullableNumber(form.abonos_historicos),
+        // Compatibilidad durante el despliegue: producción puede no haber aplicado
+        // todavía la migración del campo. Un valor vacío no debe enviarse.
+        ...(form.abonos_historicos.trim() !== "" ? { abonos_historicos: nullableNumber(form.abonos_historicos) } : {}),
         plazos: Number(form.plazos),
         valor_ficha: Number(form.valor_ficha),
         dias_pago: form.dias_pago,
