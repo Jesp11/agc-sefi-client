@@ -42,6 +42,8 @@ const TASA_LABELS: Record<string, string> = {
   TCGEC00: "Exclusivo",
 };
 
+const COMISION_APERTURA = 100;
+
 function today(): string {
   return new Date().toISOString().split("T")[0];
 }
@@ -163,14 +165,14 @@ export function RefinanciarCreditoDialog({
       : 0;
     const total = parseFloat((monto + interes).toFixed(2));
     const valorFicha = plazos > 0 ? parseFloat((total / plazos).toFixed(2)) : 0;
-    const montoNeto = parseFloat((monto - saldoAbsorbido).toFixed(2));
+    const montoNeto = parseFloat((monto - saldoAbsorbido - COMISION_APERTURA).toFixed(2));
     const porcentajeInteres = monto > 0 ? parseFloat(((interes / monto) * 100).toFixed(2)) : 0;
     return { monto, plazos, interes, total, valorFicha, montoNeto, porcentajeInteres };
   }, [form.monto_otorgado, selectedOption, plazosEditables, saldoAbsorbido]);
 
   const canSubmit =
     !!selectedOption &&
-    calc.monto >= saldoAbsorbido &&
+    calc.monto >= saldoAbsorbido + COMISION_APERTURA &&
     calc.plazos > 0 &&
     calc.total > 0 &&
     calc.valorFicha > 0 &&
@@ -216,6 +218,7 @@ export function RefinanciarCreditoDialog({
           fecha_primer_pago: form.fecha_primer_pago,
           dias_pago: getDiaPago(form.fecha_primer_pago) || diasPago || null,
           abono_efectivo: abonoEfectivo || null,
+          comision_apertura: COMISION_APERTURA,
           notas: form.notas || null,
         }),
       });
@@ -256,8 +259,8 @@ export function RefinanciarCreditoDialog({
         </DialogHeader>
         <form onSubmit={handleSubmit} className="grid gap-4">
           <p className="text-sm text-muted-foreground">
-            Define la renovación efectiva. El saldo pendiente se absorbe del nuevo monto y el
-            abono efectivo, si existe, se registra como cobro independiente.
+            Define la renovación efectiva. Del nuevo monto se descuenta el saldo absorbido y la
+            comisión de apertura de $100; el abono efectivo, si existe, se registra como cobro independiente.
           </p>
 
           <div className="rounded-lg border bg-muted/30 p-3 grid grid-cols-2 gap-3 text-sm">
@@ -268,6 +271,10 @@ export function RefinanciarCreditoDialog({
             <div>
               <p className="text-xs text-muted-foreground uppercase">Saldo a absorber</p>
               <p className="font-semibold">${money(saldoAbsorbido)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground uppercase">Comisión apertura</p>
+              <p className="font-semibold">${money(COMISION_APERTURA)}</p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground uppercase">Monto neto a entregar</p>
@@ -282,14 +289,14 @@ export function RefinanciarCreditoDialog({
             <Input
               type="number"
               step="0.01"
-              min={saldoAbsorbido}
+              min={saldoAbsorbido + COMISION_APERTURA}
               required
-              placeholder={`Mínimo ${money(saldoAbsorbido)}`}
+              placeholder={`Mínimo ${money(saldoAbsorbido + COMISION_APERTURA)}`}
               value={form.monto_otorgado}
               onChange={(e) => setForm({ ...form, monto_otorgado: e.target.value })}
             />
-            {calc.monto > 0 && calc.monto < saldoAbsorbido && (
-              <p className="text-xs text-destructive">No puede ser menor al saldo a absorber.</p>
+            {calc.monto > 0 && calc.monto < saldoAbsorbido + COMISION_APERTURA && (
+              <p className="text-xs text-destructive">Debe cubrir el saldo a absorber y la comisión de $100.</p>
             )}
           </div>
 
@@ -409,7 +416,7 @@ export function RefinanciarCreditoDialog({
             </div>
           </div>
 
-          {calc.monto >= saldoAbsorbido && selectedOption && (
+          {calc.monto >= saldoAbsorbido + COMISION_APERTURA && selectedOption && (
             <div className="rounded-lg border divide-y text-sm">
               <div className="flex justify-between px-3 py-2">
                 <span className="text-muted-foreground">Plazos</span>
