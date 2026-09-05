@@ -38,6 +38,22 @@ type GrupoCatalogo = { id: number; nombre_grupo: string };
 const dateValue = (value: unknown) => value ? String(value).slice(0, 10) : "";
 const stringValue = (value: unknown) => value == null ? "" : String(value);
 
+function amortizacionText(value: unknown): string {
+  if (value == null || value === "") return "";
+
+  let parsed = value;
+  for (let depth = 0; typeof parsed === "string" && depth < 3; depth += 1) {
+    try {
+      parsed = JSON.parse(parsed);
+    } catch {
+      // Conserva el contenido original para que el administrador pueda corregirlo.
+      return String(parsed);
+    }
+  }
+
+  return JSON.stringify(parsed, null, 2);
+}
+
 function buildForm(credito: CreditoEditable) {
   return {
     tipo_credito: credito.tipo_credito === "Grupal" ? "Grupal" : "Individual",
@@ -66,7 +82,7 @@ function buildForm(credito: CreditoEditable) {
     fecha_programada_renovacion: dateValue(credito.fecha_programada_renovacion),
     renovacion_autorizada: stringValue(credito.renovacion_autorizada || "Pendiente"),
     renovacion_tasa: stringValue(credito.renovacion_tasa),
-    tabla_amortizacion: credito.tabla_amortizacion ? JSON.stringify(credito.tabla_amortizacion, null, 2) : "",
+    tabla_amortizacion: amortizacionText(credito.tabla_amortizacion),
   };
 }
 
@@ -77,6 +93,7 @@ export function EditarCreditoDialog({ credito, onSuccess }: EditarCreditoDialogP
   const [clientes, setClientes] = useState<ClienteCatalogo[]>([]);
   const [grupos, setGrupos] = useState<GrupoCatalogo[]>([]);
   const [form, setForm] = useState(() => buildForm(credito));
+  const [tablaInicial, setTablaInicial] = useState(() => amortizacionText(credito.tabla_amortizacion));
 
   useEffect(() => {
     if (!open) return;
@@ -109,11 +126,15 @@ export function EditarCreditoDialog({ credito, onSuccess }: EditarCreditoDialogP
       return;
     }
 
-    let tablaAmortizacion: unknown = null;
-    if (form.tabla_amortizacion.trim()) {
+    let tablaAmortizacion: unknown;
+    const tablaFueModificada = form.tabla_amortizacion.trim() !== tablaInicial.trim();
+    if (tablaFueModificada && form.tabla_amortizacion.trim()) {
       try {
         tablaAmortizacion = JSON.parse(form.tabla_amortizacion);
-        if (!Array.isArray(tablaAmortizacion)) throw new Error();
+        for (let depth = 0; typeof tablaAmortizacion === "string" && depth < 3; depth += 1) {
+          tablaAmortizacion = JSON.parse(tablaAmortizacion);
+        }
+        if (typeof tablaAmortizacion !== "object" || tablaAmortizacion === null) throw new Error();
       } catch {
         toast.error("La tabla de amortización debe ser un arreglo JSON válido");
         return;
@@ -139,7 +160,7 @@ export function EditarCreditoDialog({ credito, onSuccess }: EditarCreditoDialogP
         comision_apertura: nullableNumber(form.comision_apertura),
         tasa_asignada: form.tasa_asignada || null,
         porcentaje_interes: nullableNumber(form.porcentaje_interes),
-        tabla_amortizacion: tablaAmortizacion,
+        ...(tablaFueModificada ? { tabla_amortizacion: form.tabla_amortizacion.trim() ? tablaAmortizacion : null } : {}),
         abono_recuperacion: nullableNumber(form.abono_recuperacion),
         estado: form.estado,
         es_personalizado: form.es_personalizado,
@@ -174,7 +195,7 @@ export function EditarCreditoDialog({ credito, onSuccess }: EditarCreditoDialogP
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button variant="outline" size="sm" className="h-9 gap-1.5 font-semibold text-xs" onClick={() => setForm(buildForm(credito))}><Pencil className="h-3.5 w-3.5" />Editar crédito</Button>} />
+      <DialogTrigger render={<Button variant="outline" size="sm" className="h-9 gap-1.5 font-semibold text-xs" onClick={() => { const nextForm = buildForm(credito); setForm(nextForm); setTablaInicial(nextForm.tabla_amortizacion); }}><Pencil className="h-3.5 w-3.5" />Editar crédito</Button>} />
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-4xl">
         <DialogHeader>
           <DialogTitle>Editar crédito #{credito.num_prog}</DialogTitle>
