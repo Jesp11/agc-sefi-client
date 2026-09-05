@@ -21,6 +21,7 @@ import {
   Users, UserCircle, User, Component, ClipboardList, LayoutList,
   AlertTriangle, UserX, FileText, BarChart3, TrendingUp,
   Receipt, Banknote, PiggyBank, CalendarDays, ArrowLeftRight, Cake,
+  CircleAlert,
 } from "lucide-react";
 
 const catalogItems = [
@@ -48,8 +49,10 @@ const contabilidadItems = [
 
 const reporteItems = [
   { title: "Diario", url: "/dashboard/reportes/diario", icon: CalendarDays },
+  { title: "Pagos atrasados", url: "/dashboard/reportes/pagos-atrasados", icon: CircleAlert },
   { title: "Cartera", url: "/dashboard/reportes/cartera", icon: LayoutList },
   { title: "Renovacion de clientes", url: "/dashboard/reportes/por-cerrar", icon: Users },
+  { title: "Agenda de Renovaciones", url: "/dashboard/reportes/agenda-renovaciones", icon: CalendarDays },
   { title: "Global Mensual", url: "/dashboard/reportes/semanal", icon: FileText },
   { title: "Gestor Mensual", url: "/dashboard/reportes/gestor-mensual", icon: CalendarDays },
   { title: "Estado Financiero", url: "/dashboard/reportes/inversionistas-estado", icon: TrendingUp },
@@ -65,8 +68,10 @@ export function AppSidebar() {
   const reportesAsesor = reporteItems.filter(
     (item) =>
       item.url === "/dashboard/reportes/diario" ||
+      item.url === "/dashboard/reportes/pagos-atrasados" ||
       item.url === "/dashboard/reportes/gestor-mensual" ||
       item.url === "/dashboard/reportes/por-cerrar" ||
+      item.url === "/dashboard/reportes/agenda-renovaciones" ||
       item.url === "/dashboard/reportes/cumpleanos"
   );
 

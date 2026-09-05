@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { AgendarRenovacionDialog } from "@/components/agendar-renovacion-dialog";
 import { TablePagination, TableSearch } from "@/components/table-controls";
 import { PAGE_SIZE, filterBySearch, paginateItems, useTableControls } from "@/hooks/use-paginated-list";
 import { creditoSearchFields } from "@/lib/table-utils";
@@ -29,6 +30,7 @@ import {
   Sparkles,
   RotateCcw,
   ChevronDown,
+  CalendarPlus,
 } from "lucide-react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
@@ -363,12 +365,13 @@ export default function ReportePorCerrarPage() {
               <TableHead className="text-center w-48">Fecha Programada Renovación</TableHead>
               <TableHead className="text-center w-44">Autorizado</TableHead>
               <TableHead className="text-center w-40">Aplicar Tasa</TableHead>
+              <TableHead className="text-right w-44">Agenda</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={6} className="h-32 text-center">
+                <TableCell colSpan={7} className="h-32 text-center">
                   <div className="flex flex-col items-center gap-2">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
                     <p className="text-sm text-muted-foreground">Cargando clientes para renovación...</p>
@@ -377,7 +380,7 @@ export default function ReportePorCerrarPage() {
               </TableRow>
             ) : filtered.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
+                <TableCell colSpan={7} className="h-32 text-center text-muted-foreground">
                   {search || filtroAutorizado !== "todos"
                     ? "No se encontraron clientes con los filtros seleccionados."
                     : "No hay clientes en rango de renovación (1 a 6 pagos restantes)."}
@@ -543,6 +546,21 @@ export default function ReportePorCerrarPage() {
                         />
                       </div>
                     </TableCell>
+                    <TableCell className="text-right">
+                      <AgendarRenovacionDialog
+                        numProg={c.num_prog}
+                        fecha={c.fecha_programada_renovacion}
+                        autorizacion={c.renovacion_autorizada}
+                        tasa={c.renovacion_tasa}
+                        onSaved={fetchItems}
+                        trigger={
+                          <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs">
+                            <CalendarPlus className="size-3.5" />
+                            {c.fecha_programada_renovacion ? "Editar agenda" : "Agendar"}
+                          </Button>
+                        }
+                      />
+                    </TableCell>
                   </TableRow>
                 );
               })
@@ -564,4 +582,3 @@ export default function ReportePorCerrarPage() {
     </div>
   );
 }
-

@@ -270,6 +270,31 @@ function AdminPagosView({
         </div>
       )}
 
+      {(data?.renovaciones_del_dia?.length ?? 0) > 0 && (
+        <Card className="border-primary/30">
+          <CardHeader className="pb-3">
+            <CardTitle>Renovaciones del día</CardTitle>
+            <p className="text-sm font-normal text-muted-foreground">La cuota del crédito anterior se excluye de la ruta desde esta fecha.</p>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader><TableRow><TableHead>Cliente / Grupo</TableHead><TableHead>Crédito anterior</TableHead><TableHead>Crédito nuevo</TableHead><TableHead className="text-right">Saldo absorbido</TableHead><TableHead className="text-right">Efectivo neto</TableHead><TableHead>Plazo</TableHead><TableHead>Gestor</TableHead></TableRow></TableHeader>
+              <TableBody>{data.renovaciones_del_dia.map((renovacion: any) => (
+                <TableRow key={renovacion.id}>
+                  <TableCell className="font-medium">{renovacion.cliente || "—"}</TableCell>
+                  <TableCell className="font-mono text-xs">#{renovacion.num_prog_anterior}</TableCell>
+                  <TableCell className="font-mono text-xs">#{renovacion.num_prog_nuevo}</TableCell>
+                  <TableCell className="text-right">{money(renovacion.saldo_absorbido)}</TableCell>
+                  <TableCell className="text-right">{money(renovacion.monto_neto)}</TableCell>
+                  <TableCell>{renovacion.plazos} semanas</TableCell>
+                  <TableCell>{renovacion.gestor || "—"}</TableCell>
+                </TableRow>
+              ))}</TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <div>

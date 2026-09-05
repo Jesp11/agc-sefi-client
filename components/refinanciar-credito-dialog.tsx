@@ -23,6 +23,7 @@ interface RefinanciarCreditoDialogProps {
   tipoCredito?: string | null;
   tasaAsignada?: string | null;
   diasPago?: string | null;
+  fechaEfectivaInicial?: string | null;
   onSuccess?: () => void;
   trigger?: React.ReactElement;
 }
@@ -76,6 +77,7 @@ export function RefinanciarCreditoDialog({
   tipoCredito,
   tasaAsignada,
   diasPago,
+  fechaEfectivaInicial,
   onSuccess,
   trigger,
 }: RefinanciarCreditoDialogProps) {
@@ -91,6 +93,7 @@ export function RefinanciarCreditoDialog({
     monto_otorgado: "",
     fecha_otorgacion: today(),
     fecha_primer_pago: addWeeks(today(), 1),
+    abono_efectivo: "",
     notas: "",
   });
 
@@ -110,8 +113,9 @@ export function RefinanciarCreditoDialog({
     setPlazosEditables(0);
     setForm({
       monto_otorgado: "",
-      fecha_otorgacion: today(),
-      fecha_primer_pago: addWeeks(today(), 1),
+      fecha_otorgacion: fechaEfectivaInicial || today(),
+      fecha_primer_pago: addWeeks(fechaEfectivaInicial || today(), 1),
+      abono_efectivo: "",
       notas: "",
     });
 
@@ -145,7 +149,10 @@ export function RefinanciarCreditoDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, isGrupal, tasaAsignada]);
+  }, [open, isGrupal, tasaAsignada, fechaEfectivaInicial]);
+
+  const abonoEfectivo = Math.min(saldo, Math.max(0, parseFloat(form.abono_efectivo) || 0));
+  const saldoAbsorbido = Math.max(0, saldo - abonoEfectivo);
 
   const calc = useMemo(() => {
     const monto = parseFloat(form.monto_otorgado) || 0;
@@ -156,14 +163,14 @@ export function RefinanciarCreditoDialog({
       : 0;
     const total = parseFloat((monto + interes).toFixed(2));
     const valorFicha = plazos > 0 ? parseFloat((total / plazos).toFixed(2)) : 0;
-    const montoNeto = parseFloat((monto - saldo).toFixed(2));
+    const montoNeto = parseFloat((monto - saldoAbsorbido).toFixed(2));
     const porcentajeInteres = monto > 0 ? parseFloat(((interes / monto) * 100).toFixed(2)) : 0;
     return { monto, plazos, interes, total, valorFicha, montoNeto, porcentajeInteres };
-  }, [form.monto_otorgado, selectedOption, plazosEditables, saldo]);
+  }, [form.monto_otorgado, selectedOption, plazosEditables, saldoAbsorbido]);
 
   const canSubmit =
     !!selectedOption &&
-    calc.monto > saldo &&
+    calc.monto >= saldoAbsorbido &&
     calc.plazos > 0 &&
     calc.total > 0 &&
     calc.valorFicha > 0 &&
@@ -188,7 +195,7 @@ export function RefinanciarCreditoDialog({
       return;
     }
     if (!canSubmit) {
-      toast.error("El nuevo monto debe ser mayor al saldo actual");
+      toast.error("El nuevo monto no puede ser menor al saldo a absorber");
       return;
     }
 
@@ -205,8 +212,10 @@ export function RefinanciarCreditoDialog({
           porcentaje_interes: calc.porcentajeInteres,
           tasa_asignada: selectedOption.tasaKey,
           fecha_otorgacion: form.fecha_otorgacion,
+          fecha_efectiva: form.fecha_otorgacion,
           fecha_primer_pago: form.fecha_primer_pago,
           dias_pago: getDiaPago(form.fecha_primer_pago) || diasPago || null,
+          abono_efectivo: abonoEfectivo || null,
           notas: form.notas || null,
         }),
       });
@@ -247,14 +256,18 @@ export function RefinanciarCreditoDialog({
         </DialogHeader>
         <form onSubmit={handleSubmit} className="grid gap-4">
           <p className="text-sm text-muted-foreground">
-            Extiende el monto del préstamo. El interés y plazos se toman del catálogo de tasas.
-            El saldo actual se descuenta del nuevo monto.
+            Define la renovación efectiva. El saldo pendiente se absorbe del nuevo monto y el
+            abono efectivo, si existe, se registra como cobro independiente.
           </p>
 
           <div className="rounded-lg border bg-muted/30 p-3 grid grid-cols-2 gap-3 text-sm">
             <div>
               <p className="text-xs text-muted-foreground uppercase">Saldo actual</p>
               <p className="font-semibold">${money(saldo)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground uppercase">Saldo a absorber</p>
+              <p className="font-semibold">${money(saldoAbsorbido)}</p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground uppercase">Monto neto a entregar</p>
@@ -269,15 +282,29 @@ export function RefinanciarCreditoDialog({
             <Input
               type="number"
               step="0.01"
-              min={saldo + 0.01}
+              min={saldoAbsorbido}
               required
-              placeholder={`Mayor a ${money(saldo)}`}
+              placeholder={`Mínimo ${money(saldoAbsorbido)}`}
               value={form.monto_otorgado}
               onChange={(e) => setForm({ ...form, monto_otorgado: e.target.value })}
             />
-            {calc.monto > 0 && calc.monto <= saldo && (
-              <p className="text-xs text-destructive">Debe ser mayor al saldo actual para extender.</p>
+            {calc.monto > 0 && calc.monto < saldoAbsorbido && (
+              <p className="text-xs text-destructive">No puede ser menor al saldo a absorber.</p>
             )}
+          </div>
+
+          <div className="grid gap-2">
+            <Label>Abono efectivo del cliente (opcional)</Label>
+            <Input
+              type="number"
+              min="0"
+              max={saldo}
+              step="0.01"
+              value={form.abono_efectivo}
+              onChange={(e) => setForm({ ...form, abono_efectivo: e.target.value })}
+              placeholder="0.00"
+            />
+            <p className="text-xs text-muted-foreground">Se registra como cobro del crédito anterior antes de absorber el saldo.</p>
           </div>
 
           <div className="grid gap-1.5">
@@ -363,7 +390,7 @@ export function RefinanciarCreditoDialog({
               />
             </div>
             <div className="grid gap-2">
-              <Label>Fecha otorgación</Label>
+              <Label>Fecha efectiva</Label>
               <Input
                 type="date"
                 required
@@ -382,7 +409,7 @@ export function RefinanciarCreditoDialog({
             </div>
           </div>
 
-          {calc.monto > saldo && selectedOption && (
+          {calc.monto >= saldoAbsorbido && selectedOption && (
             <div className="rounded-lg border divide-y text-sm">
               <div className="flex justify-between px-3 py-2">
                 <span className="text-muted-foreground">Plazos</span>

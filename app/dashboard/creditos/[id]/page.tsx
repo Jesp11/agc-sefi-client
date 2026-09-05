@@ -175,8 +175,10 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
         nombre: i.nombre,
         telefono: null,
         monto: i.monto_otorgado,
-        valor_ficha: i.valor_ficha,
-      }));
+      valor_ficha: i.valor_ficha,
+    }));
+  const renovacionComoNueva = Array.isArray(credito.refinanciamientos) ? credito.refinanciamientos[0] : null;
+  const renovacionComoAnterior = Array.isArray(credito.refinanciamientos_como_anterior) ? credito.refinanciamientos_como_anterior[0] : null;
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
@@ -326,6 +328,33 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {(renovacionComoNueva || renovacionComoAnterior) && (
+        <div className="space-y-4">
+          {renovacionComoNueva && (
+            <Card className="border-primary/25 bg-primary/5">
+              <CardHeader className="pb-2"><CardTitle className="text-base">Renovación</CardTitle></CardHeader>
+              <CardContent className="grid gap-4 text-sm sm:grid-cols-2 xl:grid-cols-4">
+                <div className="grid gap-1"><span className="text-muted-foreground">Crédito anterior</span><Button variant="link" className="h-auto justify-start p-0" onClick={() => router.push(`/dashboard/creditos/${renovacionComoNueva.credito_anterior?.num_prog ?? renovacionComoNueva.num_prog_anterior}`)}>#{renovacionComoNueva.credito_anterior?.num_prog ?? renovacionComoNueva.num_prog_anterior}</Button></div>
+                <div className="grid gap-1"><span className="text-muted-foreground">Fecha efectiva</span><span>{fmtFecha(renovacionComoNueva.fecha_efectiva)}</span></div>
+                <div className="grid gap-1"><span className="text-muted-foreground">Saldo absorbido</span><span className="font-semibold">${Number(renovacionComoNueva.saldo_anterior ?? 0).toLocaleString("es-MX", { minimumFractionDigits: 2 })}</span></div>
+                <div className="grid gap-1"><span className="text-muted-foreground">Efectivo neto</span><span className="font-semibold">${Number(renovacionComoNueva.monto_neto ?? 0).toLocaleString("es-MX", { minimumFractionDigits: 2 })}</span></div>
+              </CardContent>
+            </Card>
+          )}
+          {renovacionComoAnterior && (
+            <Card className="border-primary/25 bg-primary/5">
+              <CardHeader className="pb-2"><CardTitle className="text-base">Renovado por</CardTitle></CardHeader>
+              <CardContent className="grid gap-4 text-sm sm:grid-cols-2 xl:grid-cols-4">
+                <div className="grid gap-1"><span className="text-muted-foreground">Crédito nuevo</span><Button variant="link" className="h-auto justify-start p-0" onClick={() => router.push(`/dashboard/creditos/${renovacionComoAnterior.credito_nuevo?.num_prog ?? renovacionComoAnterior.num_prog_nuevo}`)}>#{renovacionComoAnterior.credito_nuevo?.num_prog ?? renovacionComoAnterior.num_prog_nuevo}</Button></div>
+                <div className="grid gap-1"><span className="text-muted-foreground">Fecha efectiva</span><span>{fmtFecha(renovacionComoAnterior.fecha_efectiva)}</span></div>
+                <div className="grid gap-1"><span className="text-muted-foreground">Saldo absorbido</span><span className="font-semibold">${Number(renovacionComoAnterior.saldo_anterior ?? 0).toLocaleString("es-MX", { minimumFractionDigits: 2 })}</span></div>
+                <div className="grid gap-1"><span className="text-muted-foreground">Efectivo neto</span><span className="font-semibold">${Number(renovacionComoAnterior.monto_neto ?? 0).toLocaleString("es-MX", { minimumFractionDigits: 2 })}</span></div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
       )}
 
       <div className="grid gap-6 md:grid-cols-3">
