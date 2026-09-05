@@ -80,9 +80,11 @@ function buildForm(credito: CreditoEditable) {
     es_adicional: Boolean(credito.es_adicional),
     ubicacion_expediente: stringValue(credito.ubicacion_expediente),
     notas_expediente: stringValue(credito.notas_expediente),
-    fecha_programada_renovacion: dateValue(credito.fecha_programada_renovacion),
-    renovacion_autorizada: stringValue(credito.renovacion_autorizada || "Pendiente"),
-    renovacion_tasa: stringValue(credito.renovacion_tasa),
+    // La renovación se agenda desde su flujo específico; no debe precargarse
+    // al abrir la edición general de un préstamo.
+    fecha_programada_renovacion: "",
+    renovacion_autorizada: "",
+    renovacion_tasa: "",
     tabla_amortizacion: amortizacionText(credito.tabla_amortizacion),
   };
 }
@@ -142,6 +144,10 @@ export function EditarCreditoDialog({ credito, onSuccess }: EditarCreditoDialogP
       }
     }
 
+    const tieneDatosRenovacion = Boolean(
+      form.fecha_programada_renovacion || form.renovacion_autorizada || form.renovacion_tasa,
+    );
+
     setSaving(true);
     try {
       const payload = {
@@ -171,9 +177,11 @@ export function EditarCreditoDialog({ credito, onSuccess }: EditarCreditoDialogP
         es_adicional: form.es_adicional,
         ubicacion_expediente: form.ubicacion_expediente || null,
         notas_expediente: form.notas_expediente || null,
-        fecha_programada_renovacion: form.fecha_programada_renovacion || null,
-        renovacion_autorizada: form.renovacion_autorizada || null,
-        renovacion_tasa: form.renovacion_tasa || null,
+        ...(tieneDatosRenovacion ? {
+          fecha_programada_renovacion: form.fecha_programada_renovacion || null,
+          renovacion_autorizada: form.renovacion_autorizada || null,
+          renovacion_tasa: form.renovacion_tasa || null,
+        } : {}),
       };
       const response = await apiFetch(`/creditos/${credito.num_prog}`, {
         method: "PUT",
