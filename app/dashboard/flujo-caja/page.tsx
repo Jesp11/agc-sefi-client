@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { fmtFecha } from "@/lib/utils";
-import { ArrowDownCircle, ArrowUpCircle, Plus, FileSpreadsheet, Download, FileDown, ChevronDown } from "lucide-react";
+import { ArrowDownCircle, ArrowUpCircle, Plus, FileSpreadsheet, Download, FileDown, ChevronDown, Pencil } from "lucide-react";
 import { TablePagination, TableSearch } from "@/components/table-controls";
 import { PAGE_SIZE, filterBySearch, paginateItems, useTableControls } from "@/hooks/use-paginated-list";
 import { fetchAllPages, movimientoCajaSearchFields } from "@/lib/table-utils";
@@ -66,6 +66,7 @@ export default function FlujoCajaPage() {
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState(emptyForm());
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingMovimiento, setEditingMovimiento] = useState<any | null>(null);
   const [tab, setTab] = useState("todos");
   const listControls = useTableControls();
   const importInputRef = useRef<HTMLInputElement>(null);
@@ -102,9 +103,10 @@ export default function FlujoCajaPage() {
     });
   }, []);
 
-  const handleCreate = async () => {
-    const res = await apiFetch("/flujo-caja", {
-      method: "POST",
+  const handleSave = async () => {
+    const isEditing = Boolean(editingMovimiento);
+    const res = await apiFetch(isEditing ? `/flujo-caja/${editingMovimiento.id}` : "/flujo-caja", {
+      method: isEditing ? "PUT" : "POST",
       body: JSON.stringify({
         ...form,
         monto: parseFloat(form.monto),
@@ -114,14 +116,39 @@ export default function FlujoCajaPage() {
       }),
     });
     if (res.ok) {
-      toast.success("Movimiento registrado");
+      toast.success(isEditing ? "Movimiento actualizado" : "Movimiento registrado");
       setDialogOpen(false);
+      setEditingMovimiento(null);
       setForm(emptyForm());
       fetchData();
     } else {
       const err = await res.json().catch(() => ({}));
       toast.error(err.message || "Error al registrar");
     }
+  };
+
+  const openCreate = () => {
+    setEditingMovimiento(null);
+    setForm(emptyForm());
+    setDialogOpen(true);
+  };
+
+  const openEdit = (movimiento: any) => {
+    if (movimiento.pago_id || String(movimiento.referencia ?? "").startsWith("GASTO-") || String(movimiento.referencia ?? "").startsWith("DESEMBOLSO-")) {
+      toast.error("Este movimiento se genera automáticamente. Corrige el pago, gasto o desembolso de origen.");
+      return;
+    }
+    setEditingMovimiento(movimiento);
+    setForm({
+      fecha: String(movimiento.fecha ?? "").slice(0, 10),
+      id_asesor: movimiento.id_asesor ? String(movimiento.id_asesor) : "",
+      motivo: movimiento.motivo ?? "",
+      tipo: movimiento.tipo === "Egreso" ? "Egreso" : "Ingreso",
+      monto: String(movimiento.monto ?? ""),
+      categoria: movimiento.categoria ?? "",
+      cuenta: movimiento.cuenta ?? "Efectivo",
+    });
+    setDialogOpen(true);
   };
 
   const filteredByTab = movimientos.filter((m) => {
@@ -306,10 +333,16 @@ export default function FlujoCajaPage() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger render={<Button><Plus className="size-4 mr-1" />Registrar movimiento</Button>} />
+          <Dialog open={dialogOpen} onOpenChange={(open) => {
+            setDialogOpen(open);
+            if (!open) {
+              setEditingMovimiento(null);
+              setForm(emptyForm());
+            }
+          }}>
+            <DialogTrigger render={<Button onClick={openCreate}><Plus className="size-4 mr-1" />Registrar movimiento</Button>} />
             <DialogContent className="max-w-md">
-              <DialogHeader><DialogTitle>Nuevo movimiento de caja</DialogTitle></DialogHeader>
+              <DialogHeader><DialogTitle>{editingMovimiento ? "Editar movimiento de caja" : "Nuevo movimiento de caja"}</DialogTitle></DialogHeader>
               <div className="grid gap-3">
                 <div className="grid grid-cols-2 gap-2">
                   <Button
@@ -356,7 +389,7 @@ export default function FlujoCajaPage() {
                     ))}
                   </select>
                 </div>
-                <Button onClick={handleCreate}>Guardar</Button>
+                <Button onClick={handleSave}>{editingMovimiento ? "Guardar cambios" : "Guardar"}</Button>
               </div>
             </DialogContent>
           </Dialog>
@@ -418,13 +451,14 @@ export default function FlujoCajaPage() {
                   <TableHead className="text-right">Egreso</TableHead>
                   <TableHead className="text-right">Ingreso</TableHead>
                   <TableHead className="text-right">Saldo</TableHead>
+                  <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
-                  <TableRow><TableCell colSpan={8} className="h-32 text-center text-muted-foreground">Cargando...</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={9} className="h-32 text-center text-muted-foreground">Cargando...</TableCell></TableRow>
                 ) : filtered.length === 0 ? (
-                  <TableRow><TableCell colSpan={8} className="h-32 text-center text-muted-foreground">{listControls.search ? "Sin resultados." : "Sin movimientos este mes."}</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={9} className="h-32 text-center text-muted-foreground">{listControls.search ? "Sin resultados." : "Sin movimientos este mes."}</TableCell></TableRow>
                 ) : paginated.map((m) => {
                   const isSaldoInicial = m.categoria === "SaldoInicial";
                   return (
@@ -451,6 +485,11 @@ export default function FlujoCajaPage() {
                       </TableCell>
                       <TableCell className={`text-right font-semibold ${isSaldoInicial ? "text-primary font-bold" : ""}`}>
                         {m.saldo_resultante != null ? fmt(m.saldo_resultante) : "—"}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button variant="ghost" size="icon" className="size-8" onClick={() => openEdit(m)} aria-label={`Editar movimiento ${m.id}`}>
+                          <Pencil className="size-4" />
+                        </Button>
                       </TableCell>
                     </TableRow>
                   );

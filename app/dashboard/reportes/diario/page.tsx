@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/context/auth-context";
@@ -21,7 +22,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { TablePagination, TableSearch } from "@/components/table-controls";
 import { PAGE_SIZE, filterBySearch, paginateItems, useTableControls } from "@/hooks/use-paginated-list";
 import { fmtFecha } from "@/lib/utils";
-import { User, Users, AlertTriangle, Banknote, ChevronDown, ChevronUp, ChevronsUpDown, FileText } from "lucide-react";
+import { downloadRoutePaymentTemplate } from "@/lib/pagos-ruta-xlsx";
+import { ImportarPagosRutaDialog } from "@/components/importar-pagos-ruta-dialog";
+import { User, Users, AlertTriangle, Banknote, ChevronDown, ChevronUp, ChevronsUpDown, FileText, Download, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 const cobroSearchFields = (c: any) => [
@@ -45,6 +48,46 @@ function labelDia(dia: string) {
     SABADO: "Sábado",
   };
   return map[dia] ?? dia;
+}
+
+function FolioLink({ folio }: { folio?: number | string | null }) {
+  if (folio == null) return <>—</>;
+
+  return (
+    <Link
+      href={`/dashboard/creditos/${folio}`}
+      className="text-primary underline decoration-primary/40 underline-offset-2 hover:decoration-primary"
+    >
+      #{folio}
+    </Link>
+  );
+}
+
+function BeneficiarioLink({
+  nombre,
+  clienteId,
+  grupoId,
+}: {
+  nombre?: string | null;
+  clienteId?: string | number | null;
+  grupoId?: string | number | null;
+}) {
+  const href = clienteId
+    ? `/dashboard/clientes/${clienteId}`
+    : grupoId
+      ? `/dashboard/grupos/${grupoId}`
+      : null;
+
+  if (!href) return <>{nombre || "—"}</>;
+
+  return (
+    <Link
+      href={href}
+      className="text-primary underline decoration-primary/40 underline-offset-2 hover:decoration-primary"
+    >
+      {nombre || "—"}
+    </Link>
+  );
 }
 
 export default function ReporteDiarioPage() {
@@ -142,15 +185,32 @@ function AdminPagosView({
   isAdmin: boolean;
   onRefresh: () => void;
 }) {
-  const router = useRouter();
   const porAsesor = data?.por_asesor || [];
-  const filtered = filterBySearch(porAsesor, search, (a: any) => [
-    a.nombre_asesor,
-    a.codigo_asesor,
-    a.a_recibir,
-    a.total_cobrado,
-    a.num_abonos,
-  ]);
+  const pagos = data?.pagos || [];
+  const searchTerm = search.toLowerCase().trim();
+  const matchesSearch = (fields: unknown[]) =>
+    fields.some((field) => String(field ?? "").toLowerCase().includes(searchTerm));
+  const filtered = filterBySearch(porAsesor, search, (a: any) => {
+    const pagosAsesor = pagos.filter(
+      (p: any) => (p.credito?.id_asesor ?? 0) === Number(a.id_asesor),
+    );
+
+    return [
+      a.nombre_asesor,
+      a.codigo_asesor,
+      a.a_recibir,
+      a.total_cobrado,
+      a.num_abonos,
+      ...pagosAsesor.flatMap((p: any) => [
+        p.credito?.cliente?.nombre_completo,
+        p.credito?.grupo?.nombre_grupo,
+      ]),
+      ...(a.clientes_programados || []).flatMap((c: any) => [
+        c.cliente?.nombre_completo,
+        c.grupo?.nombre_grupo,
+      ]),
+    ];
+  });
   const paginated = paginateItems(filtered, page);
   const money = (n: number) =>
     `$${Number(n || 0).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -160,6 +220,7 @@ function AdminPagosView({
   const [montoRecibido, setMontoRecibido] = useState("");
   const [notasRecepcion, setNotasRecepcion] = useState("");
   const [savingRecepcion, setSavingRecepcion] = useState(false);
+  const [importandoRuta, setImportandoRuta] = useState(false);
 
   const toggleAsesor = (key: string) => {
     setExpandedAsesores((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -236,7 +297,22 @@ function AdminPagosView({
             {isAdmin ? " — abonos a recibir (sin multas)" : ""}.
           </p>
         </div>
-        <Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className="w-40" />
+        <div className="flex flex-wrap items-center gap-2">
+          {isAdmin && <>
+            <Button
+              variant="outline"
+              className="gap-2"
+              onClick={() => downloadRoutePaymentTemplate(fecha, data?.cobros_programados || [], data?.pagos || [])}
+              disabled={!data}
+            >
+              <Download className="size-4" />Descargar plantilla de pagos
+            </Button>
+            <Button className="gap-2" onClick={() => setImportandoRuta(true)}>
+              <Upload className="size-4" />Importar pagos de ruta
+            </Button>
+          </>}
+          <Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className="w-40" />
+        </div>
       </div>
 
       {data && (
@@ -281,9 +357,15 @@ function AdminPagosView({
               <TableHeader><TableRow><TableHead>Cliente / Grupo</TableHead><TableHead>Crédito anterior</TableHead><TableHead>Crédito nuevo</TableHead><TableHead className="text-right">Saldo absorbido</TableHead><TableHead className="text-right">Efectivo neto</TableHead><TableHead>Plazo</TableHead><TableHead>Gestor</TableHead></TableRow></TableHeader>
               <TableBody>{data.renovaciones_del_dia.map((renovacion: any) => (
                 <TableRow key={renovacion.id}>
-                  <TableCell className="font-medium">{renovacion.cliente || "—"}</TableCell>
-                  <TableCell className="font-mono text-xs">#{renovacion.num_prog_anterior}</TableCell>
-                  <TableCell className="font-mono text-xs">#{renovacion.num_prog_nuevo}</TableCell>
+                  <TableCell className="font-medium">
+                    <BeneficiarioLink
+                      nombre={renovacion.cliente}
+                      clienteId={renovacion.cliente_id}
+                      grupoId={renovacion.grupo_id}
+                    />
+                  </TableCell>
+                  <TableCell className="font-mono text-xs"><FolioLink folio={renovacion.num_prog_anterior} /></TableCell>
+                  <TableCell className="font-mono text-xs"><FolioLink folio={renovacion.num_prog_nuevo} /></TableCell>
                   <TableCell className="text-right">{money(renovacion.saldo_absorbido)}</TableCell>
                   <TableCell className="text-right">{money(renovacion.monto_neto)}</TableCell>
                   <TableCell>{renovacion.plazos} semanas</TableCell>
@@ -314,7 +396,7 @@ function AdminPagosView({
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          <TableSearch placeholder="Buscar gestor de cobranza..." value={search} onChange={handleSearch} />
+          <TableSearch placeholder="Buscar gestor, cliente o grupo..." value={search} onChange={handleSearch} />
           <Table>
             <TableHeader>
               <TableRow>
@@ -342,7 +424,6 @@ function AdminPagosView({
               ) : (
                 paginated.map((a: any) => {
                   const asesorKey = String(a.id_asesor ?? a.nombre_asesor);
-                  const isExpanded = Boolean(expandedAsesores[asesorKey]);
                   const pendiente = a.pendiente_entrega ?? a.a_recibir ?? 0;
                   const completo = a.recibido && pendiente <= 0.009;
                   const pagosAsesor = (data?.pagos || []).filter(
@@ -351,6 +432,34 @@ function AdminPagosView({
                   const creditosAsesor = (data?.creditos || []).filter(
                     (c: any) => (c.id_asesor ?? 0) === Number(a.id_asesor)
                   );
+                  const asesorCoincide = !searchTerm || matchesSearch([
+                    a.nombre_asesor,
+                    a.codigo_asesor,
+                    a.a_recibir,
+                    a.total_cobrado,
+                    a.num_abonos,
+                  ]);
+                  const pagoCoincide = (p: any) => matchesSearch([
+                    p.credito?.cliente?.nombre_completo,
+                    p.credito?.grupo?.nombre_grupo,
+                  ]);
+                  const clienteProgramadoCoincide = (c: any) => matchesSearch([
+                    c.cliente?.nombre_completo,
+                    c.grupo?.nombre_grupo,
+                  ]);
+                  const pagosMostrados = asesorCoincide
+                    ? pagosAsesor
+                    : pagosAsesor.filter(pagoCoincide);
+                  const clientesProgramadosMostrados = asesorCoincide
+                    ? (a.clientes_programados || [])
+                    : (a.clientes_programados || []).filter(clienteProgramadoCoincide);
+                  const creditosOtorgadosMostrados = asesorCoincide
+                    ? creditosAsesor
+                    : creditosAsesor.filter((c: any) => matchesSearch([
+                      c.cliente?.nombre_completo,
+                      c.grupo?.nombre_grupo,
+                    ]));
+                  const isExpanded = Boolean(expandedAsesores[asesorKey]) || (Boolean(searchTerm) && !asesorCoincide);
 
                   return (
                     <React.Fragment key={asesorKey}>
@@ -419,17 +528,17 @@ function AdminPagosView({
                           <TableCell colSpan={8} className="p-3 pl-8">
                             <div className="rounded-lg border bg-background p-4 shadow-sm space-y-4">
                               {/* Pagos registrados */}
-                              {pagosAsesor.length > 0 && (
+                              {pagosMostrados.length > 0 && (
                                 <div className="space-y-2">
                                   <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-2">
                                     <div className="flex items-center gap-2">
                                       <Users className="h-4 w-4 text-emerald-600" />
                                       <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                                        Abonos Registrados — {a.nombre_asesor} ({pagosAsesor.length})
+                                        Abonos Registrados — {a.nombre_asesor} ({pagosMostrados.length})
                                       </span>
                                     </div>
                                     <span className="text-xs font-semibold text-emerald-700">
-                                      Cobrado en caja: {money(a.total_cobrado)}
+                                      Cobrado en caja: {money(pagosMostrados.reduce((total: number, p: any) => total + Number(p.monto || 0), 0))}
                                     </span>
                                   </div>
                                   <Table>
@@ -443,13 +552,17 @@ function AdminPagosView({
                                       </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                      {pagosAsesor.map((p: any) => (
+                                      {pagosMostrados.map((p: any) => (
                                         <TableRow key={p.id} className="text-xs hover:bg-muted/30">
                                           <TableCell className="font-mono font-medium">
-                                            #{p.credito?.num_prog ?? p.id}
+                                            <FolioLink folio={p.credito?.num_prog ?? p.id} />
                                           </TableCell>
                                           <TableCell className="font-medium text-foreground">
-                                            {p.credito?.cliente?.nombre_completo || p.credito?.grupo?.nombre_grupo || "Cliente sin nombre"}
+                                            <BeneficiarioLink
+                                              nombre={p.credito?.cliente?.nombre_completo || p.credito?.grupo?.nombre_grupo || "Cliente sin nombre"}
+                                              clienteId={p.credito?.cliente?.id_cliente ?? p.credito?.id_cliente}
+                                              grupoId={p.credito?.grupo?.id ?? p.credito?.id_grupo}
+                                            />
                                           </TableCell>
                                           <TableCell>
                                             <Badge variant="outline" className="text-[10px] py-0">
@@ -470,17 +583,17 @@ function AdminPagosView({
                               )}
 
                               {/* Clientes programados para cobrar hoy */}
-                              {(a.clientes_programados || []).length > 0 && (
+                              {clientesProgramadosMostrados.length > 0 && (
                                 <div className="space-y-2">
                                   <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-2">
                                     <div className="flex items-center gap-2">
                                       <Users className="h-4 w-4 text-primary" />
                                       <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                                        Ruta / Clientes programados para cobro ({a.clientes_programados.length})
+                                        Ruta / Clientes programados para cobro ({clientesProgramadosMostrados.length})
                                       </span>
                                     </div>
                                     <span className="text-xs font-semibold text-primary">
-                                      Meta programada: {money(a.monto_programado ?? a.a_recibir)}
+                                      Meta programada: {money(clientesProgramadosMostrados.reduce((total: number, c: any) => total + Number(c.monto_a_cobrar || 0), 0))}
                                     </span>
                                   </div>
                                   <Table>
@@ -495,7 +608,7 @@ function AdminPagosView({
                                       </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                      {a.clientes_programados.map((c: any) => {
+                                      {clientesProgramadosMostrados.map((c: any) => {
                                         const pagosCliente = pagosAsesor.filter((p: any) => p.credito?.num_prog === c.num_prog);
                                         const totalPagado = pagosCliente.reduce((sum: number, p: any) => sum + Number(p.monto), 0);
                                         const isCobrado = totalPagado >= (c.monto_a_cobrar - 0.01);
@@ -503,9 +616,13 @@ function AdminPagosView({
                                         
                                         return (
                                           <TableRow key={c.num_prog} className="text-xs hover:bg-muted/30">
-                                            <TableCell className="font-mono font-medium">#{c.num_prog}</TableCell>
+                                            <TableCell className="font-mono font-medium"><FolioLink folio={c.num_prog} /></TableCell>
                                             <TableCell className="font-medium text-foreground">
-                                              {c.cliente?.nombre_completo || c.grupo?.nombre_grupo || "—"}
+                                              <BeneficiarioLink
+                                                nombre={c.cliente?.nombre_completo || c.grupo?.nombre_grupo}
+                                                clienteId={c.cliente?.id_cliente ?? c.id_cliente}
+                                                grupoId={c.grupo?.id ?? c.id_grupo}
+                                              />
                                             </TableCell>
                                             <TableCell className="text-muted-foreground">{c.dias_pago}</TableCell>
                                             <TableCell>
@@ -542,23 +659,29 @@ function AdminPagosView({
                                 </div>
                               )}
 
-                              {pagosAsesor.length === 0 && (a.clientes_programados || []).length === 0 && (
+                              {pagosMostrados.length === 0 && clientesProgramadosMostrados.length === 0 && creditosOtorgadosMostrados.length === 0 && (
                                 <p className="text-xs text-muted-foreground text-center py-3">
                                   Sin cobranza programada ni pagos registrados para este gestor de cobranza.
                                 </p>
                               )}
 
-                              {creditosAsesor.length > 0 && (
+                              {creditosOtorgadosMostrados.length > 0 && (
                                 <div className="mt-3 pt-3 border-t">
                                   <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-2">
-                                    Préstamos nuevos otorgados hoy ({creditosAsesor.length})
+                                    Préstamos nuevos otorgados hoy ({creditosOtorgadosMostrados.length})
                                   </span>
                                   <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-2">
-                                    {creditosAsesor.map((cr: any) => (
+                                    {creditosOtorgadosMostrados.map((cr: any) => (
                                       <div key={cr.id_credito ?? cr.num_prog} className="flex items-center justify-between p-2 rounded border bg-muted/20 text-xs">
                                         <div>
-                                          <span className="font-mono font-semibold">#{cr.num_prog}</span>
-                                          <p className="truncate max-w-40 font-medium">{cr.cliente?.nombre_completo || cr.grupo?.nombre_grupo}</p>
+                                          <span className="font-mono font-semibold"><FolioLink folio={cr.num_prog} /></span>
+                                          <p className="truncate max-w-40 font-medium">
+                                            <BeneficiarioLink
+                                              nombre={cr.cliente?.nombre_completo || cr.grupo?.nombre_grupo}
+                                              clienteId={cr.cliente?.id_cliente ?? cr.id_cliente}
+                                              grupoId={cr.grupo?.id ?? cr.id_grupo}
+                                            />
+                                          </p>
                                         </div>
                                         <span className="font-bold text-primary">{money(cr.monto_otorgado)}</span>
                                       </div>
@@ -641,6 +764,14 @@ function AdminPagosView({
           </form>
         </DialogContent>
       </Dialog>
+      {isAdmin && <ImportarPagosRutaDialog
+        open={importandoRuta}
+        onOpenChange={setImportandoRuta}
+        fecha={fecha}
+        cobros={data?.cobros_programados || []}
+        pagos={data?.pagos || []}
+        onImported={onRefresh}
+      />}
     </div>
   );
 }
@@ -755,13 +886,17 @@ function AsesorCobrosView({
                   const esAtrasado = c.categoria === "atrasado";
                   return (
                     <TableRow key={c.num_prog}>
-                      <TableCell className="font-mono text-xs">#{c.num_prog}</TableCell>
+                      <TableCell className="font-mono text-xs"><FolioLink folio={c.num_prog} /></TableCell>
                       <TableCell className="font-medium whitespace-nowrap">
                         <div className="flex items-center gap-2">
                           {isGrupal
                             ? <Users className="h-4 w-4 text-primary/70" />
                             : <User className="h-4 w-4 text-primary/70" />}
-                          {nombre}
+                          <BeneficiarioLink
+                            nombre={nombre}
+                            clienteId={c.cliente?.id_cliente ?? c.id_cliente}
+                            grupoId={c.grupo?.id ?? c.id_grupo}
+                          />
                         </div>
                       </TableCell>
                       <TableCell className="text-xs">{c.dias_pago ?? "—"}</TableCell>

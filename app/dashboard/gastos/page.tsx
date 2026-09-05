@@ -43,10 +43,12 @@ export default function GastosPage() {
   const [catalogo, setCatalogo] = useState<CatalogoGasto[]>([]);
   const [loading, setLoading] = useState(true);
   const { search, handleSearch, page, setPage } = useTableControls();
+  const [mes, setMes] = useState(() => new Date().toISOString().slice(0, 7));
   const [form, setForm] = useState(emptyForm);
   const [catalogoForm, setCatalogoForm] = useState(emptyCatalogoForm);
   const [gastoOpen, setGastoOpen] = useState(false);
   const [catalogoOpen, setCatalogoOpen] = useState(false);
+  const [editingGasto, setEditingGasto] = useState<any | null>(null);
 
   const fetchData = async () => {
     setLoading(true);
@@ -92,28 +94,44 @@ export default function GastosPage() {
     }));
   };
 
-  const handleCreate = async () => {
+  const openEditarGasto = (gasto: any) => {
+    setEditingGasto(gasto);
+    setForm({
+      catalogo_gasto_id: gasto.catalogo_gasto_id ? String(gasto.catalogo_gasto_id) : "",
+      concepto: gasto.concepto ?? "",
+      monto: String(gasto.monto ?? ""),
+      fecha: String(gasto.fecha ?? "").slice(0, 10),
+      categoria: gasto.categoria ?? "",
+      cuenta: gasto.cuenta ?? "",
+    });
+    setGastoOpen(true);
+  };
+
+  const handleSave = async () => {
     const payload: Record<string, unknown> = {
       monto: parseFloat(form.monto),
       fecha: form.fecha,
+      concepto: form.concepto,
+      categoria: form.categoria || null,
+      cuenta: form.cuenta || null,
     };
     if (form.catalogo_gasto_id) {
       payload.catalogo_gasto_id = Number(form.catalogo_gasto_id);
-    } else {
-      payload.concepto = form.concepto;
-      payload.categoria = form.categoria || null;
     }
-    payload.cuenta = form.cuenta || null;
 
-    const res = await apiFetch("/gastos", { method: "POST", body: JSON.stringify(payload) });
+    const res = await apiFetch(editingGasto ? `/gastos/${editingGasto.id}` : "/gastos", {
+      method: editingGasto ? "PUT" : "POST",
+      body: JSON.stringify(payload),
+    });
     if (res.ok) {
-      toast.success("Gasto registrado");
+      toast.success(editingGasto ? "Gasto actualizado" : "Gasto registrado");
       setForm(emptyForm());
+      setEditingGasto(null);
       setGastoOpen(false);
       fetchData();
     } else {
       const err = await res.json().catch(() => null);
-      toast.error(err?.message || "Error al registrar gasto");
+      toast.error(err?.message || "Error al guardar gasto");
     }
   };
 
@@ -146,7 +164,8 @@ export default function GastosPage() {
     }
   };
 
-  const filtered = filterBySearch(items, search, gastoSearchFields);
+  const gastosDelMes = items.filter((gasto) => String(gasto.fecha ?? "").slice(0, 7) === mes);
+  const filtered = filterBySearch(gastosDelMes, search, gastoSearchFields);
   const paginated = paginateItems(filtered, page);
 
   return (
@@ -231,11 +250,16 @@ export default function GastosPage() {
 
           <Dialog open={gastoOpen} onOpenChange={(open) => {
             setGastoOpen(open);
-            if (open) setForm(emptyForm());
+            if (!open) {
+              setEditingGasto(null);
+              setForm(emptyForm());
+            } else if (!editingGasto) {
+              setForm(emptyForm());
+            }
           }}>
             <DialogTrigger render={<Button>Registrar Gasto</Button>} />
             <DialogContent>
-              <DialogHeader><DialogTitle>Nuevo Gasto</DialogTitle></DialogHeader>
+              <DialogHeader><DialogTitle>{editingGasto ? "Editar Gasto" : "Nuevo Gasto"}</DialogTitle></DialogHeader>
               <div className="grid gap-3">
                 <div>
                   <Label>Gasto del catálogo</Label>
@@ -262,7 +286,6 @@ export default function GastosPage() {
                   <Input
                     value={form.concepto}
                     onChange={(e) => setForm({ ...form, concepto: e.target.value, catalogo_gasto_id: "" })}
-                    disabled={!!form.catalogo_gasto_id}
                     placeholder="O captura un gasto no catalogado"
                   />
                 </div>
@@ -279,7 +302,6 @@ export default function GastosPage() {
                   <Input
                     value={form.categoria}
                     onChange={(e) => setForm({ ...form, categoria: e.target.value })}
-                    disabled={!!form.catalogo_gasto_id}
                   />
                 </div>
                 <div>
@@ -300,25 +322,39 @@ export default function GastosPage() {
                   </select>
                 </div>
                 <Button
-                  onClick={handleCreate}
+                  onClick={handleSave}
                   disabled={!form.monto || (!form.catalogo_gasto_id && !form.concepto.trim())}
                 >
-                  Guardar
+                  {editingGasto ? "Guardar cambios" : "Guardar"}
                 </Button>
               </div>
             </DialogContent>
           </Dialog>
         </div>
       </div>
-      <TableSearch placeholder="Buscar gastos..." value={search} onChange={handleSearch} />
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="w-full sm:w-48">
+          <Label htmlFor="mes-gastos">Mes</Label>
+          <Input
+            id="mes-gastos"
+            type="month"
+            value={mes}
+            onChange={(e) => {
+              setMes(e.target.value);
+              setPage(1);
+            }}
+          />
+        </div>
+        <TableSearch placeholder="Buscar gastos del mes..." value={search} onChange={handleSearch} />
+      </div>
       <Card>
         <Table>
-          <TableHeader><TableRow><TableHead>Fecha</TableHead><TableHead>Concepto</TableHead><TableHead>Categoría</TableHead><TableHead>Cuenta</TableHead><TableHead className="text-right">Monto</TableHead></TableRow></TableHeader>
+          <TableHeader><TableRow><TableHead>Fecha</TableHead><TableHead>Concepto</TableHead><TableHead>Categoría</TableHead><TableHead>Cuenta</TableHead><TableHead className="text-right">Monto</TableHead><TableHead className="text-right">Acción</TableHead></TableRow></TableHeader>
           <TableBody>
             {loading ? (
-              <TableRow><TableCell colSpan={5} className="h-24 text-center text-muted-foreground">Cargando...</TableCell></TableRow>
+              <TableRow><TableCell colSpan={6} className="h-24 text-center text-muted-foreground">Cargando...</TableCell></TableRow>
             ) : filtered.length === 0 ? (
-              <TableRow><TableCell colSpan={5} className="h-24 text-center text-muted-foreground">{search ? "No se encontraron gastos." : "Sin gastos registrados."}</TableCell></TableRow>
+              <TableRow><TableCell colSpan={6} className="h-24 text-center text-muted-foreground">{search ? "No se encontraron gastos." : "Sin gastos registrados."}</TableCell></TableRow>
             ) : paginated.map((g) => (
               <TableRow key={g.id}>
                 <TableCell>{fmtFecha(g.fecha)}</TableCell>
@@ -326,6 +362,9 @@ export default function GastosPage() {
                 <TableCell>{g.categoria}</TableCell>
                 <TableCell>{g.cuenta || "—"}</TableCell>
                 <TableCell className="text-right font-semibold">${Number(g.monto).toLocaleString()}</TableCell>
+                <TableCell className="text-right">
+                  <Button size="sm" variant="outline" onClick={() => openEditarGasto(g)}>Editar</Button>
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>
