@@ -46,9 +46,11 @@ export function DistribucionIntegrantesDialog({
     }
     setGuardando(true);
     try {
-      const response = await apiFetch(`/creditos/${credito.num_prog}/distribucion-integrantes`, {
+      // Usa la ruta estándar del crédito para funcionar también cuando una
+      // instancia aún conserva caché de rutas anterior.
+      const response = await apiFetch(`/creditos/${credito.num_prog}`, {
         method: "PUT",
-        body: JSON.stringify({ integrantes: filas.map((fila) => ({ id_cliente: fila.id_cliente, capital: Number(fila.capital) })) }),
+        body: JSON.stringify({ distribucion_integrantes: filas.map((fila) => ({ id_cliente: fila.id_cliente, capital: Number(fila.capital) })) }),
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.message || "No se pudo guardar la distribución.");
