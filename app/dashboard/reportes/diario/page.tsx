@@ -21,13 +21,31 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { TablePagination, TableSearch } from "@/components/table-controls";
 import { PAGE_SIZE, filterBySearch, paginateItems, useTableControls } from "@/hooks/use-paginated-list";
-import { fmtFecha } from "@/lib/utils";
+import { cn, fmtFecha } from "@/lib/utils";
 import { downloadRoutePaymentTemplate } from "@/lib/pagos-ruta-xlsx";
 import { ImportarPagosRutaDialog } from "@/components/importar-pagos-ruta-dialog";
-import { User, Users, AlertTriangle, Banknote, ChevronDown, ChevronUp, ChevronsUpDown, FileText, Download, Upload, RefreshCw } from "lucide-react";
+import { User, Users, Banknote, ChevronDown, ChevronUp, ChevronsUpDown, Download, Upload, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
-const cobroSearchFields = (c: any) => [
+type Cobro = {
+  num_prog: number;
+  tipo_credito?: string;
+  dias_pago?: string | null;
+  categoria?: string;
+  valor_ficha?: number | string | null;
+  monto_a_cobrar?: number | string | null;
+  cuotas_pendientes?: number;
+  cuotas_atrasadas?: number;
+  dias_atraso?: number;
+  pagado_hoy?: boolean;
+  cliente?: { id_cliente?: string | number; nombre_completo?: string | null } | null;
+  grupo?: { id?: string | number; nombre_grupo?: string | null } | null;
+  id_cliente?: string | number;
+  id_grupo?: string | number;
+  asesor?: { nombre_asesor?: string | null } | null;
+};
+
+const cobroSearchFields = (c: Cobro) => [
   c.num_prog,
   c.cliente?.nombre_completo,
   c.grupo?.nombre_grupo,
@@ -798,9 +816,18 @@ function AsesorCobrosView({
   setPage: (p: number) => void;
   onCobrar: (numProg: number) => void;
 }) {
-  const cobros = data?.cobros ?? [];
-  const filtered = filterBySearch(cobros, search, cobroSearchFields);
-  const paginated = paginateItems(filtered, page);
+  const cobros: Cobro[] = data?.cobros ?? [];
+  const rutaDelDia = cobros.filter((c) => c.categoria === "del_dia");
+  const pagosAtrasados = cobros.filter((c) => c.categoria === "atrasado");
+  const rutaFiltrada = filterBySearch(rutaDelDia, search, cobroSearchFields);
+  const rutaPaginada = paginateItems(rutaFiltrada, page);
+  const atrasadosControls = useTableControls();
+  const atrasadosFiltrados = filterBySearch(pagosAtrasados, atrasadosControls.search, cobroSearchFields);
+  const atrasadosPage = Math.min(
+    atrasadosControls.page,
+    Math.max(1, Math.ceil(atrasadosFiltrados.length / PAGE_SIZE)),
+  );
+  const atrasadosPaginados = paginateItems(atrasadosFiltrados, atrasadosPage);
 
   return (
     <div className="space-y-6">
@@ -808,16 +835,16 @@ function AsesorCobrosView({
         <div>
           <h1 className="text-3xl font-bold">Reporte Diario</h1>
           <p className="text-muted-foreground">
-            Cobros a realizar
+            Ruta de cobros del día
             {data?.dia_semana ? ` — ${labelDia(data.dia_semana)}` : ""}
-            {" "}(incluye pendientes de días anteriores).
+            {" "}y pagos atrasados por recuperar.
           </p>
         </div>
         <Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className="w-40" />
       </div>
 
       {data && (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
           <Card>
             <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Monto cobrado</CardTitle></CardHeader>
             <CardContent className="text-2xl font-bold text-emerald-700">
@@ -849,109 +876,171 @@ function AsesorCobrosView({
         </div>
       )}
 
-      <Card>
-        <CardHeader><CardTitle>Ruta de cobranza</CardTitle></CardHeader>
-        <CardContent className="space-y-4">
-          <TableSearch placeholder="Buscar por folio, cliente o grupo..." value={search} onChange={handleSearch} />
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Folio</TableHead>
-                <TableHead>Cliente / Grupo</TableHead>
-                <TableHead>Día pago</TableHead>
-                <TableHead className="text-center">Categoría</TableHead>
-                <TableHead className="text-right">Valor ficha</TableHead>
-                <TableHead className="text-right">A cobrar</TableHead>
-                <TableHead className="text-center">Cuotas pend.</TableHead>
-                <TableHead className="text-center">Atraso</TableHead>
-                <TableHead className="text-right">Acción</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                <TableRow>
-                  <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">Cargando...</TableCell>
-                </TableRow>
-              ) : filtered.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">
-                    {search ? "No se encontraron cobros." : "No hay cobros pendientes para este día."}
-                  </TableCell>
-                </TableRow>
-              ) : (
-                paginated.map((c: any) => {
-                  const isGrupal = c.tipo_credito === "Grupal";
-                  const nombre = isGrupal
-                    ? (c.grupo?.nombre_grupo ?? "Grupo")
-                    : (c.cliente?.nombre_completo ?? "Cliente");
-                  const esAtrasado = c.categoria === "atrasado";
-                  return (
-                    <TableRow key={c.num_prog}>
-                      <TableCell className="font-mono text-xs"><FolioLink folio={c.num_prog} /></TableCell>
-                      <TableCell className="font-medium whitespace-nowrap">
-                        <div className="flex items-center gap-2">
-                          {isGrupal
-                            ? <Users className="h-4 w-4 text-primary/70" />
-                            : <User className="h-4 w-4 text-primary/70" />}
-                          <BeneficiarioLink
-                            nombre={nombre}
-                            clienteId={c.cliente?.id_cliente ?? c.id_cliente}
-                            grupoId={c.grupo?.id ?? c.id_grupo}
-                          />
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-xs">{c.dias_pago ?? "—"}</TableCell>
-                      <TableCell className="text-center">
-                        {esAtrasado ? (
-                          <Badge className="bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-50 gap-1">
-                            <AlertTriangle className="h-3 w-3" />
-                            Pendiente anterior
-                          </Badge>
-                        ) : (
-                          <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-50">
-                            Del día
-                          </Badge>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right text-xs">
-                        ${Number(c.valor_ficha || 0).toLocaleString("es-MX", { minimumFractionDigits: 2 })}
-                      </TableCell>
-                      <TableCell className="text-right text-xs font-bold text-primary">
-                        ${Number(c.monto_a_cobrar || 0).toLocaleString("es-MX", { minimumFractionDigits: 2 })}
-                      </TableCell>
-                      <TableCell className="text-center text-xs">
-                        {c.cuotas_pendientes}
-                        {c.cuotas_atrasadas > 0 && (
-                          <span className="text-amber-700"> ({c.cuotas_atrasadas} atr.)</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-center text-xs">
-                        {c.dias_atraso > 0 ? (
-                          <span className="text-amber-800 font-medium">{c.dias_atraso} d</span>
-                        ) : "—"}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button size="sm" className="h-8 text-xs" onClick={() => onCobrar(c.num_prog)}>
-                          Cobrar
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })
-              )}
-            </TableBody>
-          </Table>
-          {!loading && (
-            <TablePagination
-              page={page}
-              totalItems={filtered.length}
-              pageSize={PAGE_SIZE}
-              onPageChange={setPage}
-              label="cobros"
-            />
-          )}
-        </CardContent>
-      </Card>
+      <CobrosSection
+        title="Ruta de cobros del día"
+        description="Créditos programados para cobrar en la ruta de hoy."
+        emptyMessage="No hay cobros programados para este día."
+        search={search}
+        onSearchChange={handleSearch}
+        page={page}
+        onPageChange={setPage}
+        filtered={rutaFiltrada}
+        paginated={rutaPaginada}
+        loading={loading}
+        onCobrar={onCobrar}
+      />
+
+      <CobrosSection
+        title="Pagos atrasados"
+        description="Créditos con cuotas vencidas de días anteriores."
+        emptyMessage="No hay pagos atrasados pendientes."
+        search={atrasadosControls.search}
+        onSearchChange={atrasadosControls.handleSearch}
+        page={atrasadosPage}
+        onPageChange={atrasadosControls.setPage}
+        filtered={atrasadosFiltrados}
+        paginated={atrasadosPaginados}
+        loading={loading}
+        onCobrar={onCobrar}
+      />
     </div>
+  );
+}
+
+function CobrosSection({
+  title,
+  description,
+  emptyMessage,
+  search,
+  onSearchChange,
+  page,
+  onPageChange,
+  filtered,
+  paginated,
+  loading,
+  onCobrar,
+}: {
+  title: string;
+  description: string;
+  emptyMessage: string;
+  search: string;
+  onSearchChange: (value: string) => void;
+  page: number;
+  onPageChange: (value: number) => void;
+  filtered: Cobro[];
+  paginated: Cobro[];
+  loading: boolean;
+  onCobrar: (numProg: number) => void;
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+        <p className="text-sm text-muted-foreground">{description}</p>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <TableSearch placeholder="Buscar por folio, cliente o grupo..." value={search} onChange={onSearchChange} />
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Folio</TableHead>
+              <TableHead>Cliente / Grupo</TableHead>
+              <TableHead>Día pago</TableHead>
+              <TableHead className="text-right">Valor ficha</TableHead>
+              <TableHead className="text-right">A cobrar</TableHead>
+              <TableHead className="text-center">Cuotas pend.</TableHead>
+              <TableHead className="text-center">Atraso</TableHead>
+              <TableHead className="text-center">Estado</TableHead>
+              <TableHead className="text-right">Acción</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loading ? (
+              <TableRow>
+                <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">Cargando...</TableCell>
+              </TableRow>
+            ) : filtered.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">
+                  {search ? "No se encontraron cobros." : emptyMessage}
+                </TableCell>
+              </TableRow>
+            ) : (
+              paginated.map((c) => {
+                const isGrupal = c.tipo_credito === "Grupal";
+                const nombre = isGrupal
+                  ? (c.grupo?.nombre_grupo ?? "Grupo")
+                  : (c.cliente?.nombre_completo ?? "Cliente");
+                const pagadoHoy = Boolean(c.pagado_hoy);
+
+                return (
+                  <TableRow
+                    key={c.num_prog}
+                    className={cn(
+                      pagadoHoy && "bg-emerald-100 text-emerald-950 hover:bg-emerald-200/80 [&_a]:text-emerald-800 [&_a]:decoration-emerald-600/50",
+                    )}
+                  >
+                    <TableCell className="font-mono text-xs"><FolioLink folio={c.num_prog} /></TableCell>
+                    <TableCell className="font-medium whitespace-nowrap">
+                      <div className="flex items-center gap-2">
+                        {isGrupal
+                          ? <Users className="h-4 w-4 text-primary/70" />
+                          : <User className="h-4 w-4 text-primary/70" />}
+                        <BeneficiarioLink
+                          nombre={nombre}
+                          clienteId={c.cliente?.id_cliente ?? c.id_cliente}
+                          grupoId={c.grupo?.id ?? c.id_grupo}
+                        />
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-xs">{c.dias_pago ?? "—"}</TableCell>
+                    <TableCell className="text-right text-xs">
+                      ${Number(c.valor_ficha || 0).toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+                    </TableCell>
+                    <TableCell className="text-right text-xs font-bold text-primary">
+                      ${Number(c.monto_a_cobrar || 0).toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+                    </TableCell>
+                    <TableCell className="text-center text-xs">
+                      {c.cuotas_pendientes}
+                      {(c.cuotas_atrasadas ?? 0) > 0 && (
+                        <span className="text-amber-700"> ({c.cuotas_atrasadas} atr.)</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-center text-xs">
+                      {(c.dias_atraso ?? 0) > 0 ? (
+                        <span className="text-amber-800 font-medium">{c.dias_atraso} d</span>
+                      ) : "—"}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {pagadoHoy ? (
+                        <Badge className="border-emerald-300 bg-emerald-200 text-emerald-900 hover:bg-emerald-200">
+                          Pagado
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline">Pendiente</Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button size="sm" className="h-8 text-xs" onClick={() => onCobrar(c.num_prog)}>
+                        {pagadoHoy ? "Otro pago" : "Cobrar"}
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })
+            )}
+          </TableBody>
+        </Table>
+        {!loading && (
+          <TablePagination
+            page={page}
+            totalItems={filtered.length}
+            pageSize={PAGE_SIZE}
+            onPageChange={onPageChange}
+            label="cobros"
+          />
+        )}
+      </CardContent>
+    </Card>
   );
 }
