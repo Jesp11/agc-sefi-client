@@ -6,10 +6,14 @@ import { apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   ArrowLeft, User, Users, Calendar, DollarSign, Hash, TrendingUp, Clock,
   Table as TableIcon, History, SlidersHorizontal, CalendarCheck, CalendarX,
   CreditCard, AlertTriangle, FileText, ChevronDown, FileDown, FolderArchive,
+  Pencil, RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { fmtFecha } from "@/lib/utils";
@@ -72,6 +76,16 @@ const estadoStyles: Record<string, string> = {
   CerradoSinRenovacion: "bg-orange-50 text-orange-700 border-orange-200",
 };
 
+type PagoHistorial = {
+  id: number;
+  monto: number | string;
+  fecha: string;
+  hora?: string | null;
+  metodo_pago?: string | null;
+  notas?: string | null;
+  tipo: string;
+};
+
 export default function CreditoDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
   const id = resolvedParams.id;
@@ -84,6 +98,16 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
   const [docAdeudoOpen, setDocAdeudoOpen] = useState(false);
   const [docAdeudoTipo, setDocAdeudoTipo] = useState<TipoDocumentoAdeudo>("pagare");
   const [grupoDocOpen, setGrupoDocOpen] = useState(false);
+  const [editingPago, setEditingPago] = useState<PagoHistorial | null>(null);
+  const [pagoForm, setPagoForm] = useState({
+    monto: "",
+    fecha: "",
+    hora: "",
+    metodo_pago: "Efectivo",
+    notas: "",
+  });
+  const [savingPago, setSavingPago] = useState(false);
+  const [syncingPagoId, setSyncingPagoId] = useState<number | null>(null);
   const scheduleControls = useTableControls();
   const pagosControls = useTableControls();
 
@@ -105,6 +129,69 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
   }, [id]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  const abrirEdicionPago = (pago: PagoHistorial) => {
+    setPagoForm({
+      monto: String(pago.monto ?? ""),
+      fecha: String(pago.fecha ?? "").slice(0, 10),
+      hora: String(pago.hora ?? "").slice(0, 5),
+      metodo_pago: pago.metodo_pago ?? "Efectivo",
+      notas: pago.notas ?? "",
+    });
+    setEditingPago(pago);
+  };
+
+  const guardarPago = async () => {
+    if (!editingPago) return;
+
+    const monto = Number(pagoForm.monto);
+    if (!pagoForm.fecha || !Number.isFinite(monto) || monto <= 0) {
+      toast.error("Indica una fecha y un monto mayor a cero.");
+      return;
+    }
+
+    setSavingPago(true);
+    try {
+      const response = await apiFetch(`/creditos/${id}/pagos/${editingPago.id}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          monto,
+          fecha: pagoForm.fecha,
+          hora: pagoForm.hora || null,
+          metodo_pago: pagoForm.metodo_pago,
+          notas: pagoForm.notas || null,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message || "No se pudo actualizar el abono.");
+
+      toast.success(result.message || "Abono actualizado exitosamente.");
+      setEditingPago(null);
+      await fetchData();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No se pudo actualizar el abono.");
+    } finally {
+      setSavingPago(false);
+    }
+  };
+
+  const sincronizarPagoEnCaja = async (pago: PagoHistorial) => {
+    setSyncingPagoId(pago.id);
+    try {
+      const response = await apiFetch(`/creditos/${id}/pagos/${pago.id}/sincronizar-caja`, {
+        method: "POST",
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message || "No se pudo sincronizar el ingreso.");
+
+      toast.success(result.message || "Ingreso sincronizado con Flujo de Caja.");
+      await fetchData();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No se pudo sincronizar el ingreso.");
+    } finally {
+      setSyncingPagoId(null);
+    }
+  };
 
   if (loading) {
     return (
@@ -667,11 +754,12 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
                       <TableHead>Tipo</TableHead>
                       <TableHead>Método</TableHead>
                       <TableHead className="text-right">Monto</TableHead>
+                      {isAdmin && <TableHead className="text-right">Acciones</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {pagosFiltered.length === 0 ? (
-                      <TableRow><TableCell colSpan={5} className="h-24 text-center text-muted-foreground">No se encontraron pagos.</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={isAdmin ? 6 : 5} className="h-24 text-center text-muted-foreground">No se encontraron pagos.</TableCell></TableRow>
                     ) : pagosPaginated.map((p) => (
                       <TableRow key={p.id}>
                         <TableCell>{fmtFecha(p.fecha)}</TableCell>
@@ -679,6 +767,32 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
                         <TableCell><Badge variant={p.tipo === "Multa" ? "destructive" : "outline"}>{p.tipo}</Badge></TableCell>
                         <TableCell className="text-xs">{p.metodo_pago}</TableCell>
                         <TableCell className="text-right font-semibold">${Number(p.monto).toLocaleString()}</TableCell>
+                        {isAdmin && (
+                          <TableCell className="text-right">
+                            {p.tipo === "Abono" ? (
+                              <div className="flex justify-end gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-8"
+                                  onClick={() => abrirEdicionPago(p)}
+                                >
+                                  <Pencil className="mr-1 h-3.5 w-3.5" /> Editar
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-8"
+                                  disabled={syncingPagoId === p.id}
+                                  onClick={() => sincronizarPagoEnCaja(p)}
+                                >
+                                  <RefreshCw className={`mr-1 h-3.5 w-3.5 ${syncingPagoId === p.id ? "animate-spin" : ""}`} />
+                                  {syncingPagoId === p.id ? "Sincronizando" : "Sincronizar caja"}
+                                </Button>
+                              </div>
+                            ) : "—"}
+                          </TableCell>
+                        )}
                       </TableRow>
                     ))}
                   </TableBody>
@@ -711,6 +825,48 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
           defaultDoc={docAdeudoTipo}
         />
       )}
+      <Dialog open={Boolean(editingPago)} onOpenChange={(open) => !open && setEditingPago(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Editar abono</DialogTitle>
+            <DialogDescription>
+              Si este abono ya tiene un ingreso vinculado, los cambios se reflejarán también en Flujo de Caja.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            <div className="grid gap-2">
+              <Label htmlFor="pago-monto">Monto</Label>
+              <Input id="pago-monto" type="number" min="0.01" step="0.01" value={pagoForm.monto} onChange={(e) => setPagoForm({ ...pagoForm, monto: e.target.value })} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="grid gap-2">
+                <Label htmlFor="pago-fecha">Fecha</Label>
+                <Input id="pago-fecha" type="date" value={pagoForm.fecha} onChange={(e) => setPagoForm({ ...pagoForm, fecha: e.target.value })} />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="pago-hora">Hora</Label>
+                <Input id="pago-hora" type="time" value={pagoForm.hora} onChange={(e) => setPagoForm({ ...pagoForm, hora: e.target.value })} />
+              </div>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="pago-metodo">Método de pago</Label>
+              <select id="pago-metodo" className="h-10 rounded-md border border-input bg-background px-3 text-sm" value={pagoForm.metodo_pago} onChange={(e) => setPagoForm({ ...pagoForm, metodo_pago: e.target.value })}>
+                <option value="Efectivo">Efectivo</option>
+                <option value="Transferencia">Transferencia</option>
+                <option value="Otro">Otro</option>
+              </select>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="pago-notas">Notas</Label>
+              <textarea id="pago-notas" className="min-h-20 rounded-md border border-input bg-background px-3 py-2 text-sm" value={pagoForm.notas} onChange={(e) => setPagoForm({ ...pagoForm, notas: e.target.value })} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingPago(null)} disabled={savingPago}>Cancelar</Button>
+            <Button onClick={guardarPago} disabled={savingPago}>{savingPago ? "Guardando..." : "Guardar cambios"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       {credito.tipo_credito === "Grupal" && (
         <GrupoDocumentoDialog
           credito={credito}

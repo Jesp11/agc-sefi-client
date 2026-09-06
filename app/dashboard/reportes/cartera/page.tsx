@@ -619,13 +619,29 @@ export default function ReporteCarteraPage() {
                   <TableCell>${Number(c.saldo_inversion ?? 0).toLocaleString("es-MX")}</TableCell>
                   {showGroupFields && <TableCell>${Number(c.ahorro_total_grupal ?? 0).toLocaleString("es-MX")}</TableCell>}
                   <TableCell>{c.semanas_restantes ?? 0}</TableCell>
-                  {Array.from({ length: 16 }, (_, i) => (
-                    <TableCell key={i}>
-                      {Number(c.pagos_programados?.[i] ?? 0) > 0
-                        ? `$${Number(c.pagos_programados[i]).toLocaleString("es-MX")}`
-                        : "—"}
-                    </TableCell>
-                  ))}
+                  {Array.from({ length: 16 }, (_, i) => {
+                    const montoProgramado = Number(c.pagos_programados?.[i] ?? 0);
+                    const cuota = c.estado_pagos_programados?.[i];
+                    const estado = cuota?.estado ?? "Pendiente";
+
+                    if (montoProgramado <= 0) {
+                      return <TableCell key={i}>—</TableCell>;
+                    }
+
+                    const estadoClass = estado === "Pagado"
+                      ? "bg-emerald-100 text-emerald-800"
+                      : estado === "Parcial"
+                        ? "bg-amber-100 text-amber-800"
+                        : "";
+
+                    return (
+                      <TableCell key={i} className="min-w-20">
+                        <div className={`rounded px-2 py-1 text-center text-xs font-medium whitespace-nowrap ${estadoClass}`}>
+                          ${montoProgramado.toLocaleString("es-MX")}
+                        </div>
+                      </TableCell>
+                    );
+                  })}
                   {showGroupFields &&
                     Array.from({ length: 16 }, (_, i) => (
                       <TableCell key={`a-cell-${i}`}>
