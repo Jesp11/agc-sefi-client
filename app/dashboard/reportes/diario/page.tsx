@@ -24,7 +24,7 @@ import { PAGE_SIZE, filterBySearch, paginateItems, useTableControls } from "@/ho
 import { fmtFecha } from "@/lib/utils";
 import { downloadRoutePaymentTemplate } from "@/lib/pagos-ruta-xlsx";
 import { ImportarPagosRutaDialog } from "@/components/importar-pagos-ruta-dialog";
-import { User, Users, AlertTriangle, Banknote, ChevronDown, ChevronUp, ChevronsUpDown, FileText, Download, Upload } from "lucide-react";
+import { User, Users, AlertTriangle, Banknote, ChevronDown, ChevronUp, ChevronsUpDown, FileText, Download, Upload, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
 const cobroSearchFields = (c: any) => [
@@ -298,6 +298,9 @@ function AdminPagosView({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" className="gap-2" onClick={onRefresh} disabled={loading}>
+            <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />Actualizar
+          </Button>
           {isAdmin && <>
             <Button
               variant="outline"
@@ -383,7 +386,7 @@ function AdminPagosView({
           <div>
             <CardTitle>Desglose de Cobranza por Gestor Cobranza</CardTitle>
             <p className="text-sm font-normal text-muted-foreground">
-              Haz clic en cada asesor para ver el detalle de los clientes que realizaron abonos hoy.
+              Haz clic en cada asesor para ver sus abonos registrados y la ruta que aún queda por cobrar.
             </p>
           </div>
           <div className="flex gap-2">
@@ -431,6 +434,16 @@ function AdminPagosView({
                   const pagosAsesor = (data?.pagos || []).filter(
                     (p: any) => (p.credito?.id_asesor ?? 0) === Number(a.id_asesor)
                   );
+                  // La ruta y los abonos son listas excluyentes: en cuanto un
+                  // crédito recibe un abono del día, deja de aparecer en ruta.
+                  const foliosConAbono = new Set(
+                    pagosAsesor
+                      .filter((p: any) => Number(p.monto || 0) > 0)
+                      .map((p: any) => String(p.credito?.num_prog ?? "")),
+                  );
+                  const rutaPendienteAsesor = (a.clientes_programados || []).filter(
+                    (c: any) => !foliosConAbono.has(String(c.num_prog)),
+                  );
                   const creditosAsesor = (data?.creditos || []).filter(
                     (c: any) => (c.id_asesor ?? 0) === Number(a.id_asesor)
                   );
@@ -453,8 +466,8 @@ function AdminPagosView({
                     ? pagosAsesor
                     : pagosAsesor.filter(pagoCoincide);
                   const clientesProgramadosMostrados = asesorCoincide
-                    ? (a.clientes_programados || [])
-                    : (a.clientes_programados || []).filter(clienteProgramadoCoincide);
+                    ? rutaPendienteAsesor
+                    : rutaPendienteAsesor.filter(clienteProgramadoCoincide);
                   const creditosOtorgadosMostrados = asesorCoincide
                     ? creditosAsesor
                     : creditosAsesor.filter((c: any) => matchesSearch([
@@ -483,10 +496,13 @@ function AdminPagosView({
                               {a.codigo_asesor && <Badge variant="outline" className="text-[10px] bg-background">#{a.codigo_asesor}</Badge>}
                             </div>
                             <Badge variant="outline" className="w-fit text-[11px] font-normal py-0">
-                              {pagosAsesor.length > 0
-                                ? `${pagosAsesor.length} ${pagosAsesor.length === 1 ? "cobro registrado" : "cobros registrados"}`
-                                : `${(a.clientes_programados || []).length} programados`}
+                              {rutaPendienteAsesor.length} {rutaPendienteAsesor.length === 1 ? "pendiente en ruta" : "pendientes en ruta"}
                             </Badge>
+                            {pagosAsesor.length > 0 && (
+                              <Badge variant="outline" className="w-fit border-emerald-200 bg-emerald-50 text-[11px] font-normal py-0 text-emerald-700">
+                                {pagosAsesor.length} {pagosAsesor.length === 1 ? "abono registrado" : "abonos registrados"}
+                              </Badge>
+                            )}
                           </div>
                         </TableCell>
                         <TableCell className="text-right font-medium text-blue-600">
@@ -527,7 +543,7 @@ function AdminPagosView({
                         </TableCell>
                       </TableRow>
 
-                      {/* Subtabla de desglose de clientes que pagaron o programados */}
+                      {/* Abonos y ruta pendiente son excluyentes para no duplicar clientes. */}
                       {isExpanded && (
                         <TableRow className="bg-muted/15 hover:bg-muted/15 border-b-2">
                           <TableCell colSpan={9} className="p-3 pl-8">
@@ -587,18 +603,18 @@ function AdminPagosView({
                                 </div>
                               )}
 
-                              {/* Clientes programados para cobrar hoy */}
+                              {/* Ruta pendiente: los clientes con abono ya están en la sección anterior. */}
                               {clientesProgramadosMostrados.length > 0 && (
                                 <div className="space-y-2">
                                   <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-2">
                                     <div className="flex items-center gap-2">
                                       <Users className="h-4 w-4 text-primary" />
                                       <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                                        Ruta / Clientes programados para cobro ({clientesProgramadosMostrados.length})
+                                        Ruta pendiente / Clientes programados para cobro ({clientesProgramadosMostrados.length})
                                       </span>
                                     </div>
                                     <span className="text-xs font-semibold text-primary">
-                                      Meta programada: {money(clientesProgramadosMostrados.reduce((total: number, c: any) => total + Number(c.monto_a_cobrar || 0), 0))}
+                                      Pendiente de ruta: {money(clientesProgramadosMostrados.reduce((total: number, c: any) => total + Number(c.monto_a_cobrar || 0), 0))}
                                     </span>
                                   </div>
                                   <Table>
@@ -609,17 +625,10 @@ function AdminPagosView({
                                         <TableHead className="text-xs h-8">Día de pago</TableHead>
                                         <TableHead className="text-xs h-8">Estado</TableHead>
                                         <TableHead className="text-xs h-8 text-right">A cobrar</TableHead>
-                                        <TableHead className="text-xs h-8 text-center">Resultado</TableHead>
                                       </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                      {clientesProgramadosMostrados.map((c: any) => {
-                                        const pagosCliente = pagosAsesor.filter((p: any) => p.credito?.num_prog === c.num_prog);
-                                        const totalPagado = pagosCliente.reduce((sum: number, p: any) => sum + Number(p.monto), 0);
-                                        const isCobrado = totalPagado >= (c.monto_a_cobrar - 0.01);
-                                        const hasPartial = totalPagado > 0 && !isCobrado;
-                                        
-                                        return (
+                                      {clientesProgramadosMostrados.map((c: any) => (
                                           <TableRow key={c.num_prog} className="text-xs hover:bg-muted/30">
                                             <TableCell className="font-mono font-medium"><FolioLink folio={c.num_prog} /></TableCell>
                                             <TableCell className="font-medium text-foreground">
@@ -641,26 +650,16 @@ function AdminPagosView({
                                             <TableCell className="text-right font-bold text-primary">
                                               {money(c.monto_a_cobrar)}
                                             </TableCell>
-                                            <TableCell className="text-center">
-                                              {isCobrado ? (
-                                                <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 font-semibold">
-                                                  Cobrado {money(totalPagado)}
-                                                </Badge>
-                                              ) : hasPartial ? (
-                                                <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 font-semibold">
-                                                  Parcial {money(totalPagado)}
-                                                </Badge>
-                                              ) : (
-                                                <Badge variant="outline" className="bg-muted text-muted-foreground border-border font-semibold">
-                                                  Pendiente
-                                                </Badge>
-                                              )}
-                                            </TableCell>
                                           </TableRow>
-                                        );
-                                      })}
+                                      ))}
                                     </TableBody>
                                   </Table>
+                                </div>
+                              )}
+
+                              {rutaPendienteAsesor.length === 0 && (a.clientes_programados || []).length > 0 && (
+                                <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+                                  Toda la ruta programada ya tiene abonos registrados.
                                 </div>
                               )}
 
