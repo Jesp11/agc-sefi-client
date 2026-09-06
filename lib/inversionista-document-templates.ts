@@ -35,11 +35,19 @@ function money(value: number): string {
   return Number(value).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+function fechaDocumento(value: string) {
+  if (value) return desglosarFecha(value);
+  return { dia: "__", mes: "____________", anio: "____", texto: "____________", formatoCorto: "____________" };
+}
+
 function participantsToLines(items: DocumentoEntregante[]): string {
-  return items
-    .filter((item) => item.nombre.trim())
-    .map((item) => `${item.participacion.trim() || "RESPONSABLE"} ${item.nombre.trim().toUpperCase()}`)
-    .join(", ");
+  const lines = items.map((item) => {
+    const participacion = item.participacion.trim() || "RESPONSABLE";
+    const nombre = item.nombre.trim().toUpperCase() || "____________________________";
+    return `${participacion} ${nombre}`;
+  });
+
+  return lines.join(", ") || "____________________________";
 }
 
 export function buildReciboInversionistaParams(inversionista: any): ReciboInversionistaParams {
@@ -94,14 +102,14 @@ export function buildContratoInversionistaParams(inversionista: any): ContratoIn
 }
 
 export function generarReciboInversionistaMarkdown(p: ReciboInversionistaParams): string {
-  const fecha = desglosarFecha(p.fechaExpedicion);
+  const fecha = fechaDocumento(p.fechaExpedicion);
   return `# R E C I B O
 
 **RECIBO ${p.folio}** &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; **BUENO POR:** $${money(p.monto)}
 
 **EN ${p.lugarExpedicion}, A ${fecha.texto}.**
 
-RECIBI, por conducto de ${participantsToLines(p.entregantes)}, la cantidad de **$${money(p.monto)} (${numeroALetras(p.monto)})**, como rendimientos del préstamo otorgado sin fines de lucro, en esta misma fecha, correspondientes al periodo del **${desglosarFecha(p.periodoInicio).texto}** al **${desglosarFecha(p.periodoFin).texto}**.
+RECIBI, por conducto de ${participantsToLines(p.entregantes)}, la cantidad de **$${money(p.monto)} (${numeroALetras(p.monto)})**, como rendimientos del préstamo otorgado sin fines de lucro, en esta misma fecha, correspondientes al periodo del **${fechaDocumento(p.periodoInicio).texto}** al **${fechaDocumento(p.periodoFin).texto}**.
 
 Lo que hago constar para los efectos legales a que dé lugar el presente recibo.
 
@@ -124,7 +132,7 @@ ____________________________________________________
 }
 
 export function generarContratoInversionistaMarkdown(p: ContratoInversionistaParams): string {
-  const fecha = desglosarFecha(p.fechaExpedicion);
+  const fecha = fechaDocumento(p.fechaExpedicion);
   return `# P A G A R É
 
 **NO. ${p.folio}** &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; **BUENO POR:** $${money(p.monto)}
@@ -135,7 +143,7 @@ DEBO Y PAGARE INCONDICIONALMENTE, POR ESTE PAGARE A LA ORDEN DE **${p.acreedor}*
 
 VALOR RECIBIDO A ENTERA SATISFACCIÓN. ESTE PAGARÉ FORMA PARTE DE UNA SERIE NUMERADA DE 1 DE 1 Y ESTÁ SUJETO A LAS CONDICIONES DE QUE, AL NO PAGARSE A SU VENCIMIENTO, CAUSARÁ INTERESES MORATORIOS AL TIPO DEL **${p.tasaMensual} MENSUAL**.
 
-NOTA: El importe de la causa de intereses será saldado los días **${p.fechaPagoDia}** de cada mes mediante recibo firmado por la interesada. El presente contrato tendrá vigencia inicial de **${p.vigenciaMeses} meses** a partir de **${desglosarFecha(p.inicioRendimiento).texto}**.
+NOTA: El importe de la causa de intereses será saldado los días **${p.fechaPagoDia}** de cada mes mediante recibo firmado por la interesada. El presente contrato tendrá vigencia inicial de **${p.vigenciaMeses} meses** a partir de **${fechaDocumento(p.inicioRendimiento).texto}**.
 
 ---
 
@@ -146,7 +154,7 @@ NOTA: El importe de la causa de intereses será saldado los días **${p.fechaPag
 }
 
 export function generarReciboInversionistaHtml(p: ReciboInversionistaParams): string {
-  const fecha = desglosarFecha(p.fechaExpedicion);
+  const fecha = fechaDocumento(p.fechaExpedicion);
   const watermark = "/logo.png";
   const lines = p.entregantes.map((item) => `
     <div class="signature-box">
@@ -292,7 +300,7 @@ export function generarReciboInversionistaHtml(p: ReciboInversionistaParams): st
       </div>
 
       <div class="body-paragraph">
-        RECIBÍ, por conducto de ${participantsToLines(p.entregantes)}, la cantidad de <strong>$${money(p.monto)} (${numeroALetras(p.monto)})</strong>, como rendimientos del préstamo otorgado sin fines de lucro, en esta misma fecha, correspondientes al periodo del <strong>${desglosarFecha(p.periodoInicio).texto}</strong> al <strong>${desglosarFecha(p.periodoFin).texto}</strong>.
+        RECIBÍ, por conducto de ${participantsToLines(p.entregantes)}, la cantidad de <strong>$${money(p.monto)} (${numeroALetras(p.monto)})</strong>, como rendimientos del préstamo otorgado sin fines de lucro, en esta misma fecha, correspondientes al periodo del <strong>${fechaDocumento(p.periodoInicio).texto}</strong> al <strong>${fechaDocumento(p.periodoFin).texto}</strong>.
       </div>
 
       <div class="body-plain">
@@ -316,7 +324,7 @@ export function generarReciboInversionistaHtml(p: ReciboInversionistaParams): st
 }
 
 export function generarContratoInversionistaHtml(p: ContratoInversionistaParams): string {
-  const fecha = desglosarFecha(p.fechaExpedicion);
+  const fecha = fechaDocumento(p.fechaExpedicion);
   const watermark = "/logo.png";
   const responsables = p.responsables.map((item) => `
     <div class="signature-box">
@@ -458,7 +466,7 @@ export function generarContratoInversionistaHtml(p: ContratoInversionistaParams)
       </div>
 
       <div class="body-plain">
-        NOTA: El importe de la causa de intereses será saldado los días <strong>${p.fechaPagoDia}</strong> de cada mes mediante recibo firmado por la interesada. El presente contrato tendrá vigencia inicial de <strong>${p.vigenciaMeses} meses</strong> a partir de <strong>${desglosarFecha(p.inicioRendimiento).texto}</strong>.
+        NOTA: El importe de la causa de intereses será saldado los días <strong>${p.fechaPagoDia}</strong> de cada mes mediante recibo firmado por la interesada. El presente contrato tendrá vigencia inicial de <strong>${p.vigenciaMeses} meses</strong> a partir de <strong>${fechaDocumento(p.inicioRendimiento).texto}</strong>.
       </div>
 
       <div class="signatures-grid">

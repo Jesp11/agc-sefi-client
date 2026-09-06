@@ -347,7 +347,13 @@ export function buildDocumentoAdeudoParams(
 
   const saldoActual = Number(mora.saldo_actual ?? credito?.saldo_pendiente ?? credito?.total ?? 0);
   const montoTotal = Number(credito?.total ?? credito?.monto_otorgado ?? 0);
-  const montoSeleccionado = opciones?.usarSaldoPendiente ? (saldoActual > 0 ? saldoActual : montoTotal) : (montoTotal > 0 ? montoTotal : saldoActual);
+  // El pagaré ampara exclusivamente el capital entregado. El total del
+  // contrato puede incluir intereses y sólo se conserva como respaldo para
+  // la Carta de Adeudo cuando no exista un saldo pendiente.
+  const montoPrestamo = Number(credito?.monto_otorgado ?? credito?.monto ?? 0);
+  const montoSeleccionado = opciones?.usarSaldoPendiente
+    ? (saldoActual > 0 ? saldoActual : montoTotal)
+    : (montoPrestamo > 0 ? montoPrestamo : saldoActual);
 
   const numProgPadded = String(credito?.num_prog || "001").padStart(3, "0");
   const anioOtorgacion = fechaOtorgacion.anio || new Date().getFullYear().toString();

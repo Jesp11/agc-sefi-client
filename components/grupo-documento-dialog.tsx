@@ -20,6 +20,28 @@ import {
   imprimirDocumentoHtml,
   type TarjetaCobroGrupalParams,
 } from "@/lib/group-document-templates";
+import { desglosarFecha } from "@/lib/document-templates";
+
+const EMPTY_DOCUMENT_VALUE = "____________";
+
+function fechaTexto(fecha: string): string {
+  return fecha ? desglosarFecha(fecha).texto : EMPTY_DOCUMENT_VALUE;
+}
+
+function valorOLinea(valor: string): string {
+  return valor.trim() || "____________________________";
+}
+
+function calcularFechaTermino(credito: any): string {
+  const primerPago = String(credito?.fecha_primer_pago || "").split("T")[0];
+  const plazos = Number(credito?.plazos);
+  const [anio, mes, dia] = primerPago.split("-").map(Number);
+  if (!anio || !mes || !dia || !plazos) return "";
+
+  const fecha = new Date(anio, mes - 1, dia);
+  fecha.setDate(fecha.getDate() + (plazos - 1) * 7);
+  return `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, "0")}-${String(fecha.getDate()).padStart(2, "0")}`;
+}
 
 interface GrupoDocumentoDialogProps {
   credito: any;
@@ -33,6 +55,8 @@ export function GrupoDocumentoDialog({ credito, open, onOpenChange }: GrupoDocum
   const [idGrupo, setIdGrupo] = useState("");
   const [tasaAplicada, setTasaAplicada] = useState("");
   const [asesor, setAsesor] = useState("");
+  const [fechaInicio, setFechaInicio] = useState("");
+  const [fechaTermino, setFechaTermino] = useState("");
 
   useEffect(() => {
     if (!open || !credito) return;
@@ -41,6 +65,8 @@ export function GrupoDocumentoDialog({ credito, open, onOpenChange }: GrupoDocum
     setIdGrupo(String(base.idGrupo));
     setTasaAplicada(base.tasaAplicada);
     setAsesor(base.asesor);
+    setFechaInicio(String(credito?.fecha_otorgacion || credito?.fecha_primer_pago || "").split("T")[0]);
+    setFechaTermino(calcularFechaTermino(credito));
   }, [open, credito]);
 
   const params: TarjetaCobroGrupalParams = useMemo(() => {
@@ -49,12 +75,14 @@ export function GrupoDocumentoDialog({ credito, open, onOpenChange }: GrupoDocum
       ...base,
       // Los campos se inicializan al abrir el diálogo; conservar una cadena
       // vacía permite retirar un dato tanto del Markdown como del PDF.
-      grupo: grupo,
-      idGrupo: idGrupo,
-      tasaAplicada: tasaAplicada,
-      asesor: asesor,
+      grupo: valorOLinea(grupo),
+      idGrupo: valorOLinea(idGrupo),
+      tasaAplicada: valorOLinea(tasaAplicada),
+      asesor: valorOLinea(asesor),
+      fechaInicio: fechaTexto(fechaInicio),
+      fechaTermino: fechaTexto(fechaTermino),
     };
-  }, [asesor, credito, grupo, idGrupo, tasaAplicada]);
+  }, [asesor, credito, fechaInicio, fechaTermino, grupo, idGrupo, tasaAplicada]);
 
   const htmlContent = useMemo(() => generarTarjetaCobroGrupalHtml(params), [params]);
   const markdownContent = useMemo(() => generarTarjetaCobroGrupalMarkdown(params), [params]);
@@ -132,6 +160,29 @@ export function GrupoDocumentoDialog({ credito, open, onOpenChange }: GrupoDocum
               <Label>Asesor</Label>
               <Input value={asesor} onChange={(e) => setAsesor(e.target.value)} className="mt-1" />
             </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label htmlFor="fechaInicioGrupal">Fecha inicio</Label>
+                <Input
+                  id="fechaInicioGrupal"
+                  type="date"
+                  value={fechaInicio}
+                  onChange={(e) => setFechaInicio(e.target.value)}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="fechaTerminoGrupal">Fecha término</Label>
+                <Input
+                  id="fechaTerminoGrupal"
+                  type="date"
+                  value={fechaTermino}
+                  onChange={(e) => setFechaTermino(e.target.value)}
+                  className="mt-1"
+                />
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground -mt-2">El selector permite ajustar también el mes sin modificar el crédito.</p>
             <div className="rounded-xl border bg-muted/40 p-4 text-sm space-y-1">
               <div className="flex justify-between">
                 <span>Crédito total</span>

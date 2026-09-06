@@ -38,11 +38,46 @@ import {
   generarTarjetaCobroHtml,
   imprimirDocumentoHtml,
   buildTarjetaCobroParams,
+  desglosarFecha,
   type DocumentoAdeudoParams,
   type TarjetaCobroParams,
 } from "@/lib/document-templates";
 
 export type TipoDocumentoAdeudo = "pagare" | "carta_adeudo" | "tarjeta_cobro";
+
+const EMPTY_DOCUMENT_VALUE = "____________";
+
+function fechaTexto(fecha: string): string {
+  return fecha ? desglosarFecha(fecha).texto : EMPTY_DOCUMENT_VALUE;
+}
+
+function valorOLinea(valor: string): string {
+  return valor.trim() || "____________________________";
+}
+
+function fechaPartes(fecha: string) {
+  if (!fecha) {
+    return {
+      dia: "__",
+      mes: "____________",
+      anio: "____",
+      texto: EMPTY_DOCUMENT_VALUE,
+    };
+  }
+
+  return desglosarFecha(fecha);
+}
+
+function calcularFechaTermino(credito: any): string {
+  const primerPago = String(credito?.fecha_primer_pago || "").split("T")[0];
+  const plazos = Number(credito?.plazos);
+  const [anio, mes, dia] = primerPago.split("-").map(Number);
+  if (!anio || !mes || !dia || !plazos) return "";
+
+  const fecha = new Date(anio, mes - 1, dia);
+  fecha.setDate(fecha.getDate() + (plazos - 1) * 7);
+  return `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, "0")}-${String(fecha.getDate()).padStart(2, "0")}`;
+}
 
 interface DocumentoAdeudoDialogProps {
   credito: any;
@@ -93,6 +128,10 @@ export function DocumentoAdeudoDialog({
 
   const [multaHorario, setMultaHorario] = useState("75");
   const [multaDia, setMultaDia] = useState("100");
+  const [fechaExpedicion, setFechaExpedicion] = useState("");
+  const [fechaVencimiento, setFechaVencimiento] = useState("");
+  const [fechaInicioTarjeta, setFechaInicioTarjeta] = useState("");
+  const [fechaTerminoTarjeta, setFechaTerminoTarjeta] = useState("");
   const montoOtorgadoOriginal = Number(credito?.monto_otorgado ?? 0);
 
   // Initialize or reset form values when credito or defaultDoc changes
@@ -132,6 +171,13 @@ export function DocumentoAdeudoDialog({
 
     setMultaHorario("75");
     setMultaDia("100");
+
+    const fechaInicio = String(credito?.fecha_otorgacion || credito?.fecha_primer_pago || "").split("T")[0];
+    const fechaTermino = calcularFechaTermino(credito);
+    setFechaExpedicion(fechaInicio);
+    setFechaVencimiento(fechaInicio);
+    setFechaInicioTarjeta(fechaInicio);
+    setFechaTerminoTarjeta(fechaTermino);
   };
 
   useEffect(() => {
@@ -151,25 +197,33 @@ export function DocumentoAdeudoDialog({
       tasaMoratoria,
       lugarExpedicion,
     });
+    const expedicion = fechaPartes(fechaExpedicion);
+    const vencimiento = fechaPartes(fechaVencimiento);
     return {
       ...base,
       // El formulario ya se precarga al abrirse. No usar `|| base.campo`:
       // una cadena vacía es una edición deliberada y debe verse igual en la
       // vista, el Markdown y el PDF.
-      nombreAcreedor: nombreAcreedor.toUpperCase().trim(),
-      domicilioPago: domicilioPago.toUpperCase().trim(),
-      nombreTestigo: nombreTestigo.toUpperCase().trim(),
-      tipoComprobante: tipoComprobante.toUpperCase().trim(),
-      tasaInteresMoratorio: tasaMoratoria.trim(),
-      lugarExpedicion: lugarExpedicion.toUpperCase().trim(),
-      nombreCliente: nombreCliente.toUpperCase().trim(),
-      curp: curp.toUpperCase().trim(),
-      claveElector: claveElector.toUpperCase().trim(),
-      direccion: direccion.toUpperCase().trim(),
-      entreCalles: entreCalles.toUpperCase().trim(),
-      ciudadEstadoCp: ciudadEstadoCp.toUpperCase().trim(),
-      ciudadOrigen: ciudadOrigen.toUpperCase().trim(),
-      telefono: telefono.trim(),
+      nombreAcreedor: valorOLinea(nombreAcreedor.toUpperCase()),
+      domicilioPago: valorOLinea(domicilioPago.toUpperCase()),
+      nombreTestigo: valorOLinea(nombreTestigo.toUpperCase()),
+      tipoComprobante: valorOLinea(tipoComprobante.toUpperCase()),
+      tasaInteresMoratorio: valorOLinea(tasaMoratoria),
+      lugarExpedicion: valorOLinea(lugarExpedicion.toUpperCase()),
+      nombreCliente: valorOLinea(nombreCliente.toUpperCase()),
+      curp: valorOLinea(curp.toUpperCase()),
+      claveElector: valorOLinea(claveElector.toUpperCase()),
+      direccion: valorOLinea(direccion.toUpperCase()),
+      entreCalles: valorOLinea(entreCalles.toUpperCase()),
+      ciudadEstadoCp: valorOLinea(ciudadEstadoCp.toUpperCase()),
+      ciudadOrigen: valorOLinea(ciudadOrigen.toUpperCase()),
+      telefono: valorOLinea(telefono),
+      fechaExpedicion,
+      fechaExpedicionLetras: expedicion.texto,
+      diaVencimiento: vencimiento.dia,
+      mesVencimiento: vencimiento.mes,
+      anioVencimiento: vencimiento.anio,
+      fechaVencimientoLetras: vencimiento.texto,
     };
   }, [
     credito,
@@ -187,6 +241,8 @@ export function DocumentoAdeudoDialog({
     tipoComprobante,
     tasaMoratoria,
     lugarExpedicion,
+    fechaExpedicion,
+    fechaVencimiento,
   ]);
 
   const paramsCartaAdeudo: DocumentoAdeudoParams = useMemo(() => {
@@ -199,22 +255,25 @@ export function DocumentoAdeudoDialog({
       tasaMoratoria,
       lugarExpedicion,
     });
+    const expedicion = fechaPartes(fechaExpedicion);
     return {
       ...base,
-      nombreAcreedor: nombreAcreedor.toUpperCase().trim(),
-      domicilioPago: domicilioPago.toUpperCase().trim(),
-      nombreTestigo: nombreTestigo.toUpperCase().trim(),
-      tipoComprobante: tipoComprobante.toUpperCase().trim(),
-      tasaInteresMoratorio: tasaMoratoria.trim(),
-      lugarExpedicion: lugarExpedicion.toUpperCase().trim(),
-      nombreCliente: nombreCliente.toUpperCase().trim(),
-      curp: curp.toUpperCase().trim(),
-      claveElector: claveElector.toUpperCase().trim(),
-      direccion: direccion.toUpperCase().trim(),
-      entreCalles: entreCalles.toUpperCase().trim(),
-      ciudadEstadoCp: ciudadEstadoCp.toUpperCase().trim(),
-      ciudadOrigen: ciudadOrigen.toUpperCase().trim(),
-      telefono: telefono.trim(),
+      nombreAcreedor: valorOLinea(nombreAcreedor.toUpperCase()),
+      domicilioPago: valorOLinea(domicilioPago.toUpperCase()),
+      nombreTestigo: valorOLinea(nombreTestigo.toUpperCase()),
+      tipoComprobante: valorOLinea(tipoComprobante.toUpperCase()),
+      tasaInteresMoratorio: valorOLinea(tasaMoratoria),
+      lugarExpedicion: valorOLinea(lugarExpedicion.toUpperCase()),
+      nombreCliente: valorOLinea(nombreCliente.toUpperCase()),
+      curp: valorOLinea(curp.toUpperCase()),
+      claveElector: valorOLinea(claveElector.toUpperCase()),
+      direccion: valorOLinea(direccion.toUpperCase()),
+      entreCalles: valorOLinea(entreCalles.toUpperCase()),
+      ciudadEstadoCp: valorOLinea(ciudadEstadoCp.toUpperCase()),
+      ciudadOrigen: valorOLinea(ciudadOrigen.toUpperCase()),
+      telefono: valorOLinea(telefono),
+      fechaExpedicion,
+      fechaExpedicionLetras: expedicion.texto,
     };
   }, [
     credito,
@@ -232,25 +291,28 @@ export function DocumentoAdeudoDialog({
     tipoComprobante,
     tasaMoratoria,
     lugarExpedicion,
+    fechaExpedicion,
   ]);
 
   // Build parameters for Tarjeta de Cobro (FIXED TO ORIGINAL PLAN)
   const paramsTarjeta: TarjetaCobroParams = useMemo(() => {
     return buildTarjetaCobroParams(credito, {
-      nombreCliente: nombreCliente.toUpperCase().trim(),
-      domicilio: (direccion ? `${direccion}${entreCalles ? `, ${entreCalles}` : ""}, TAMPICO, TAMPS.` : "").toUpperCase().trim(),
-      celCliente: telefono.trim(),
+      nombreCliente: valorOLinea(nombreCliente.toUpperCase()),
+      domicilio: valorOLinea(direccion ? `${direccion}${entreCalles ? `, ${entreCalles}` : ""}, TAMPICO, TAMPS.`.toUpperCase() : ""),
+      celCliente: valorOLinea(telefono),
       montoOtorgado: montoOtorgadoOriginal || Number(credito?.monto_otorgado) || 0,
-      refFamParentesco: refFamParentesco.toUpperCase().trim(),
-      refFamNombre: refFamNombre.toUpperCase().trim(),
-      refFamCel: refFamCel.trim(),
-      refFamDireccion: refFamDireccion.toUpperCase().trim(),
-      refPerTipo: refPerTipo.toUpperCase().trim(),
-      refPerNombre: refPerNombre.toUpperCase().trim(),
-      refPerCel: refPerCel.trim(),
-      refPerDireccion: refPerDireccion.toUpperCase().trim(),
-      multaHorario: multaHorario.trim(),
-      multaDia: multaDia.trim(),
+      refFamParentesco: valorOLinea(refFamParentesco.toUpperCase()),
+      refFamNombre: valorOLinea(refFamNombre.toUpperCase()),
+      refFamCel: valorOLinea(refFamCel),
+      refFamDireccion: valorOLinea(refFamDireccion.toUpperCase()),
+      refPerTipo: valorOLinea(refPerTipo.toUpperCase()),
+      refPerNombre: valorOLinea(refPerNombre.toUpperCase()),
+      refPerCel: valorOLinea(refPerCel),
+      refPerDireccion: valorOLinea(refPerDireccion.toUpperCase()),
+      multaHorario: valorOLinea(multaHorario),
+      multaDia: valorOLinea(multaDia),
+      fechaInicio: fechaTexto(fechaInicioTarjeta),
+      fechaTermino: fechaTexto(fechaTerminoTarjeta),
     });
   }, [
     credito,
@@ -269,6 +331,8 @@ export function DocumentoAdeudoDialog({
     refPerDireccion,
     multaHorario,
     multaDia,
+    fechaInicioTarjeta,
+    fechaTerminoTarjeta,
   ]);
 
   const markdownContent = useMemo(() => {
@@ -411,14 +475,14 @@ export function DocumentoAdeudoDialog({
                   <Badge variant="outline" className="text-[10px] font-mono">Título Ejecutivo</Badge>
                 </div>
                 <div className="flex items-baseline justify-between pt-1">
-                  <span className="text-xs text-muted-foreground">Total del Contrato:</span>
+                  <span className="text-xs text-muted-foreground">Capital prestado:</span>
                   <span className="text-lg font-black text-primary">${paramsPagare.monto.toLocaleString("es-MX", { minimumFractionDigits: 2 })}</span>
                 </div>
                 <p className="text-[10px] text-muted-foreground font-mono uppercase">
                   ({paramsPagare.montoLetras})
                 </p>
                 <p className="text-[10px] text-muted-foreground leading-tight pt-1 border-t border-primary/10">
-                  * El pagaré ampara el valor contractual total pactado al momento del desembolso.
+                  * El pagaré ampara únicamente el capital entregado, sin incluir intereses.
                 </p>
               </div>
             ) : docType === "carta_adeudo" ? (
@@ -645,6 +709,65 @@ export function DocumentoAdeudoDialog({
                 </div>
               </div>
             )}
+
+            {/* Las fechas son de presentación: no modifican el crédito original. */}
+            <div className="space-y-3 p-3.5 rounded-xl border bg-background/80 shadow-xs">
+              <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                <FileText className="h-3.5 w-3.5 text-primary" /> Fechas del Documento
+              </Label>
+              {docType === "tarjeta_cobro" ? (
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label htmlFor="fechaInicioTarjeta" className="text-[11px] text-muted-foreground">Fecha inicio</Label>
+                    <Input
+                      id="fechaInicioTarjeta"
+                      type="date"
+                      value={fechaInicioTarjeta}
+                      onChange={(e) => setFechaInicioTarjeta(e.target.value)}
+                      className="h-9 text-xs mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="fechaTerminoTarjeta" className="text-[11px] text-muted-foreground">Fecha término</Label>
+                    <Input
+                      id="fechaTerminoTarjeta"
+                      type="date"
+                      value={fechaTerminoTarjeta}
+                      onChange={(e) => setFechaTerminoTarjeta(e.target.value)}
+                      className="h-9 text-xs mt-1"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label htmlFor="fechaExpedicion" className="text-[11px] text-muted-foreground">Fecha de expedición</Label>
+                    <Input
+                      id="fechaExpedicion"
+                      type="date"
+                      value={fechaExpedicion}
+                      onChange={(e) => setFechaExpedicion(e.target.value)}
+                      className="h-9 text-xs mt-1"
+                    />
+                  </div>
+                  {docType === "pagare" && (
+                    <div>
+                      <Label htmlFor="fechaVencimiento" className="text-[11px] text-muted-foreground">Fecha de vencimiento</Label>
+                      <Input
+                        id="fechaVencimiento"
+                        type="date"
+                        value={fechaVencimiento}
+                        onChange={(e) => setFechaVencimiento(e.target.value)}
+                        className="h-9 text-xs mt-1"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+              <p className="text-[10px] text-muted-foreground">
+                Puedes cambiar el día, mes y año; al vaciar una fecha se conserva el espacio en el documento.
+              </p>
+            </div>
 
             {/* Section: Acreedor y Condiciones */}
             <div className="space-y-3 p-3.5 rounded-xl border bg-background/80 shadow-xs">

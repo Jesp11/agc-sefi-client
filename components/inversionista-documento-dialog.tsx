@@ -29,6 +29,14 @@ import { desglosarFecha, numeroALetras } from "@/lib/document-templates";
 
 type TipoDocumentoInversionista = "recibo" | "contrato";
 
+function fechaVisible(fecha: string) {
+  return fecha ? desglosarFecha(fecha) : { dia: "__", mes: "____________", anio: "____", texto: "____________", formatoCorto: "____________" };
+}
+
+function valorOLinea(valor: string): string {
+  return valor.trim() || "____________________________";
+}
+
 interface InversionistaDocumentoDialogProps {
   inversionista: any;
   open: boolean;
@@ -47,6 +55,10 @@ export function InversionistaDocumentoDialog({
   const [beneficiario, setBeneficiario] = useState("");
   const [periodoInicio, setPeriodoInicio] = useState("");
   const [periodoFin, setPeriodoFin] = useState("");
+  const [fechaExpedicionRecibo, setFechaExpedicionRecibo] = useState("");
+  const [fechaExpedicionContrato, setFechaExpedicionContrato] = useState("");
+  const [fechaPago, setFechaPago] = useState("");
+  const [inicioRendimiento, setInicioRendimiento] = useState("");
   const [tasaMensual, setTasaMensual] = useState("4%");
   const [entregante1, setEntregante1] = useState("FREDY PONCE SANCHEZ");
   const [entregante2, setEntregante2] = useState("JOSSUE GIBRAN SOBREVILLA DIAZ");
@@ -61,6 +73,10 @@ export function InversionistaDocumentoDialog({
     setBeneficiario(recibo.beneficiario);
     setPeriodoInicio(recibo.periodoInicio);
     setPeriodoFin(recibo.periodoFin);
+    setFechaExpedicionRecibo(recibo.fechaExpedicion);
+    setFechaExpedicionContrato(contrato.fechaExpedicion);
+    setFechaPago(`${contrato.fechaPagoAnio}-${String(["ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO", "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"].indexOf(contrato.fechaPagoMes) + 1).padStart(2, "0")}-${String(contrato.fechaPagoDia).padStart(2, "0")}`);
+    setInicioRendimiento(contrato.inicioRendimiento);
     setTasaMensual(contrato.tasaMensual);
     setEntregante1(recibo.entregantes[0]?.nombre || "FREDY PONCE SANCHEZ");
     setEntregante2(recibo.entregantes[1]?.nombre || "JOSSUE GIBRAN SOBREVILLA DIAZ");
@@ -70,33 +86,40 @@ export function InversionistaDocumentoDialog({
     const base = buildReciboInversionistaParams(inversionista);
     return {
       ...base,
-      folio,
+      folio: valorOLinea(folio),
       monto: Number(monto || 0),
-      beneficiario: beneficiario.toUpperCase(),
+      beneficiario: valorOLinea(beneficiario.toUpperCase()),
+      fechaExpedicion: fechaExpedicionRecibo,
       periodoInicio,
       periodoFin,
       entregantes: [
-        { nombre: entregante1, participacion: "ENTREGUE: DEUDA COMPARTIDA 50%" },
-        { nombre: entregante2, participacion: "ENTREGUE: DEUDA COMPARTIDA 50%" },
+        { nombre: valorOLinea(entregante1), participacion: "ENTREGUE: DEUDA COMPARTIDA 50%" },
+        { nombre: valorOLinea(entregante2), participacion: "ENTREGUE: DEUDA COMPARTIDA 50%" },
       ],
     };
-  }, [beneficiario, entregante1, entregante2, folio, inversionista, monto, periodoFin, periodoInicio]);
+  }, [beneficiario, entregante1, entregante2, fechaExpedicionRecibo, folio, inversionista, monto, periodoFin, periodoInicio]);
 
   const contratoParams: ContratoInversionistaParams = useMemo(() => {
     const base = buildContratoInversionistaParams(inversionista);
-    const folioContrato = folio.replace(/^REC-/, "");
+    const folioContrato = valorOLinea(folio.replace(/^REC-/, ""));
+    const fechaPagoDesglosada = fechaPago ? desglosarFecha(fechaPago) : null;
     return {
       ...base,
       folio: folioContrato,
       monto: Number(monto || 0),
-      acreedor: beneficiario.toUpperCase(),
-      tasaMensual,
+      acreedor: valorOLinea(beneficiario.toUpperCase()),
+      tasaMensual: valorOLinea(tasaMensual),
+      fechaExpedicion: fechaExpedicionContrato,
+      fechaPagoDia: fechaPagoDesglosada?.dia || "__",
+      fechaPagoMes: fechaPagoDesglosada?.mes || "____________",
+      fechaPagoAnio: fechaPagoDesglosada?.anio || "____",
+      inicioRendimiento,
       responsables: [
-        { nombre: entregante1, participacion: "ACEPTO DEUDA COMPARTIDA 50%" },
-        { nombre: entregante2, participacion: "ACEPTO DEUDA COMPARTIDA 50%" },
+        { nombre: valorOLinea(entregante1), participacion: "ACEPTO DEUDA COMPARTIDA 50%" },
+        { nombre: valorOLinea(entregante2), participacion: "ACEPTO DEUDA COMPARTIDA 50%" },
       ],
     };
-  }, [beneficiario, entregante1, entregante2, folio, inversionista, monto, tasaMensual]);
+  }, [beneficiario, entregante1, entregante2, fechaExpedicionContrato, fechaPago, folio, inicioRendimiento, inversionista, monto, tasaMensual]);
 
   const htmlContent = useMemo(
     () =>
@@ -134,8 +157,8 @@ export function InversionistaDocumentoDialog({
     }
   };
 
-  const fechaExpedicionRecibo = desglosarFecha(reciboParams.fechaExpedicion);
-  const fechaExpedicionContrato = desglosarFecha(contratoParams.fechaExpedicion);
+  const fechaExpedicionReciboTexto = fechaVisible(reciboParams.fechaExpedicion);
+  const fechaExpedicionContratoTexto = fechaVisible(contratoParams.fechaExpedicion);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -201,6 +224,15 @@ export function InversionistaDocumentoDialog({
             {docType === "recibo" && (
               <div className="grid grid-cols-2 gap-3">
                 <div>
+                  <Label>Fecha de expedición</Label>
+                  <Input
+                    type="date"
+                    value={fechaExpedicionRecibo}
+                    onChange={(e) => setFechaExpedicionRecibo(e.target.value)}
+                    className="mt-1"
+                  />
+                </div>
+                <div>
                   <Label>Periodo inicio</Label>
                   <Input
                     type="date"
@@ -221,15 +253,49 @@ export function InversionistaDocumentoDialog({
               </div>
             )}
             {docType === "contrato" && (
-              <div>
-                <Label>Tasa mensual</Label>
-                <Input
-                  value={tasaMensual}
-                  onChange={(e) => setTasaMensual(e.target.value)}
-                  className="mt-1"
-                />
-              </div>
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>Fecha de expedición</Label>
+                    <Input
+                      type="date"
+                      value={fechaExpedicionContrato}
+                      onChange={(e) => setFechaExpedicionContrato(e.target.value)}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label>Fecha de pago</Label>
+                    <Input
+                      type="date"
+                      value={fechaPago}
+                      onChange={(e) => setFechaPago(e.target.value)}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label>Inicio de rendimientos</Label>
+                    <Input
+                      type="date"
+                      value={inicioRendimiento}
+                      onChange={(e) => setInicioRendimiento(e.target.value)}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label>Tasa mensual</Label>
+                    <Input
+                      value={tasaMensual}
+                      onChange={(e) => setTasaMensual(e.target.value)}
+                      className="mt-1"
+                    />
+                  </div>
+                </div>
+              </>
             )}
+            <p className="text-xs text-muted-foreground">
+              Puedes cambiar día, mes y año; si se vacía una fecha, el documento conserva ese espacio vacío.
+            </p>
             <div>
               <Label>Entregante / Responsable 1 (50%)</Label>
               <Input
@@ -298,7 +364,7 @@ export function InversionistaDocumentoDialog({
 
                     {/* Location and Date */}
                     <div className="font-bold text-xs uppercase pt-1">
-                      EN {reciboParams.lugarExpedicion}, A {fechaExpedicionRecibo.texto}.
+                      EN {reciboParams.lugarExpedicion}, A {fechaExpedicionReciboTexto.texto}.
                     </div>
 
                     {/* Body */}
@@ -317,8 +383,8 @@ export function InversionistaDocumentoDialog({
                         {numeroALetras(reciboParams.monto)})
                       </strong>
                       , como rendimientos del préstamo otorgado sin fines de lucro, en esta misma fecha, correspondientes al periodo del{" "}
-                      <strong>{desglosarFecha(reciboParams.periodoInicio).texto}</strong> al{" "}
-                      <strong>{desglosarFecha(reciboParams.periodoFin).texto}</strong>.
+                      <strong>{fechaVisible(reciboParams.periodoInicio).texto}</strong> al{" "}
+                      <strong>{fechaVisible(reciboParams.periodoFin).texto}</strong>.
                     </div>
 
                     <div className="text-justify leading-relaxed">
@@ -376,7 +442,7 @@ export function InversionistaDocumentoDialog({
 
                     {/* Location and Date */}
                     <div className="font-bold text-xs uppercase pt-1">
-                      EN {contratoParams.lugarExpedicion}, A {fechaExpedicionContrato.texto}.
+                      EN {contratoParams.lugarExpedicion}, A {fechaExpedicionContratoTexto.texto}.
                     </div>
 
                     {/* Body */}
@@ -403,7 +469,7 @@ export function InversionistaDocumentoDialog({
                       NOTA: El importe de la causa de intereses será saldado los días{" "}
                       <strong>{contratoParams.fechaPagoDia}</strong> de cada mes mediante recibo firmado por la interesada.
                       El presente contrato tendrá vigencia inicial de <strong>{contratoParams.vigenciaMeses} meses</strong> a
-                      partir de <strong>{desglosarFecha(contratoParams.inicioRendimiento).texto}</strong>.
+                      partir de <strong>{fechaVisible(contratoParams.inicioRendimiento).texto}</strong>.
                     </div>
 
                     {/* Responsibles Signatures Grid */}
