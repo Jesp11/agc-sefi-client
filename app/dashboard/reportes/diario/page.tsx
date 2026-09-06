@@ -434,6 +434,12 @@ function AdminPagosView({
                   const pagosAsesor = (data?.pagos || []).filter(
                     (p: any) => (p.credito?.id_asesor ?? 0) === Number(a.id_asesor)
                   );
+                  // La ruta diaria sólo incluye la cuota calendarizada para hoy.
+                  // Los atrasados se gestionan fuera de esta ruta y no deben
+                  // mezclarse con los clientes que el asesor visita hoy.
+                  const rutaDelDiaAsesor = (a.clientes_programados || []).filter(
+                    (c: any) => c.categoria === "del_dia",
+                  );
                   // La ruta y los abonos son listas excluyentes: en cuanto un
                   // crédito recibe un abono del día, deja de aparecer en ruta.
                   const foliosConAbono = new Set(
@@ -441,7 +447,7 @@ function AdminPagosView({
                       .filter((p: any) => Number(p.monto || 0) > 0)
                       .map((p: any) => String(p.credito?.num_prog ?? "")),
                   );
-                  const rutaPendienteAsesor = (a.clientes_programados || []).filter(
+                  const rutaPendienteAsesor = rutaDelDiaAsesor.filter(
                     (c: any) => !foliosConAbono.has(String(c.num_prog)),
                   );
                   const creditosAsesor = (data?.creditos || []).filter(
@@ -496,7 +502,7 @@ function AdminPagosView({
                               {a.codigo_asesor && <Badge variant="outline" className="text-[10px] bg-background">#{a.codigo_asesor}</Badge>}
                             </div>
                             <Badge variant="outline" className="w-fit text-[11px] font-normal py-0">
-                              {rutaPendienteAsesor.length} {rutaPendienteAsesor.length === 1 ? "pendiente en ruta" : "pendientes en ruta"}
+                              {rutaPendienteAsesor.length} {rutaPendienteAsesor.length === 1 ? "pendiente en ruta hoy" : "pendientes en ruta hoy"}
                             </Badge>
                             {pagosAsesor.length > 0 && (
                               <Badge variant="outline" className="w-fit border-emerald-200 bg-emerald-50 text-[11px] font-normal py-0 text-emerald-700">
@@ -610,7 +616,7 @@ function AdminPagosView({
                                     <div className="flex items-center gap-2">
                                       <Users className="h-4 w-4 text-primary" />
                                       <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                                        Ruta pendiente / Clientes programados para cobro ({clientesProgramadosMostrados.length})
+                                        Ruta del día / Clientes programados para cobro ({clientesProgramadosMostrados.length})
                                       </span>
                                     </div>
                                     <span className="text-xs font-semibold text-primary">
@@ -623,7 +629,6 @@ function AdminPagosView({
                                         <TableHead className="text-xs h-8">Folio</TableHead>
                                         <TableHead className="text-xs h-8">Cliente / Grupo</TableHead>
                                         <TableHead className="text-xs h-8">Día de pago</TableHead>
-                                        <TableHead className="text-xs h-8">Estado</TableHead>
                                         <TableHead className="text-xs h-8 text-right">A cobrar</TableHead>
                                       </TableRow>
                                     </TableHeader>
@@ -639,14 +644,6 @@ function AdminPagosView({
                                               />
                                             </TableCell>
                                             <TableCell className="text-muted-foreground">{c.dias_pago}</TableCell>
-                                            <TableCell>
-                                              <Badge
-                                                variant={c.categoria === "del_dia" ? "secondary" : "outline"}
-                                                className={`text-[10px] py-0 ${c.categoria === "del_dia" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-amber-50 text-amber-800 border-amber-200"}`}
-                                              >
-                                                {c.categoria === "del_dia" ? "Del día" : `Atrasado`}
-                                              </Badge>
-                                            </TableCell>
                                             <TableCell className="text-right font-bold text-primary">
                                               {money(c.monto_a_cobrar)}
                                             </TableCell>
@@ -657,9 +654,9 @@ function AdminPagosView({
                                 </div>
                               )}
 
-                              {rutaPendienteAsesor.length === 0 && (a.clientes_programados || []).length > 0 && (
+                              {rutaPendienteAsesor.length === 0 && rutaDelDiaAsesor.length > 0 && (
                                 <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
-                                  Toda la ruta programada ya tiene abonos registrados.
+                                  Toda la ruta programada para hoy ya tiene abonos registrados.
                                 </div>
                               )}
 
