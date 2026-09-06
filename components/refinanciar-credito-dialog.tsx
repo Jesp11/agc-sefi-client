@@ -23,6 +23,7 @@ interface RefinanciarCreditoDialogProps {
   tipoCredito?: string | null;
   tasaAsignada?: string | null;
   diasPago?: string | null;
+  comisionApertura?: number | string | null;
   fechaEfectivaInicial?: string | null;
   onSuccess?: () => void;
   trigger?: React.ReactElement;
@@ -41,8 +42,6 @@ const TASA_LABELS: Record<string, string> = {
   TCGPEV01: "VIP",
   TCGEC00: "Exclusivo",
 };
-
-const COMISION_APERTURA = 100;
 
 function today(): string {
   return new Date().toISOString().split("T")[0];
@@ -79,6 +78,7 @@ export function RefinanciarCreditoDialog({
   tipoCredito,
   tasaAsignada,
   diasPago,
+  comisionApertura,
   fechaEfectivaInicial,
   onSuccess,
   trigger,
@@ -100,6 +100,7 @@ export function RefinanciarCreditoDialog({
   });
 
   const saldo = Math.max(0, Number(saldoActual) || 0);
+  const comision = Math.max(0, Number(comisionApertura ?? 100) || 0);
 
   const plazosDisponibles: number[] = catalogo?.tasas
     ? [...new Set<number>(
@@ -165,14 +166,14 @@ export function RefinanciarCreditoDialog({
       : 0;
     const total = parseFloat((monto + interes).toFixed(2));
     const valorFicha = plazos > 0 ? parseFloat((total / plazos).toFixed(2)) : 0;
-    const montoNeto = parseFloat((monto - saldoAbsorbido - COMISION_APERTURA).toFixed(2));
+    const montoNeto = parseFloat((monto - saldoAbsorbido - comision).toFixed(2));
     const porcentajeInteres = monto > 0 ? parseFloat(((interes / monto) * 100).toFixed(2)) : 0;
     return { monto, plazos, interes, total, valorFicha, montoNeto, porcentajeInteres };
-  }, [form.monto_otorgado, selectedOption, plazosEditables, saldoAbsorbido]);
+  }, [form.monto_otorgado, selectedOption, plazosEditables, saldoAbsorbido, comision]);
 
   const canSubmit =
     !!selectedOption &&
-    calc.monto >= saldoAbsorbido + COMISION_APERTURA &&
+    calc.monto >= saldoAbsorbido + comision &&
     calc.plazos > 0 &&
     calc.total > 0 &&
     calc.valorFicha > 0 &&
@@ -218,7 +219,7 @@ export function RefinanciarCreditoDialog({
           fecha_primer_pago: form.fecha_primer_pago,
           dias_pago: getDiaPago(form.fecha_primer_pago) || diasPago || null,
           abono_efectivo: abonoEfectivo || null,
-          comision_apertura: COMISION_APERTURA,
+          comision_apertura: comision,
           notas: form.notas || null,
         }),
       });
@@ -260,7 +261,7 @@ export function RefinanciarCreditoDialog({
         <form onSubmit={handleSubmit} className="grid gap-4">
           <p className="text-sm text-muted-foreground">
             Define la renovación efectiva. Del nuevo monto se descuenta el saldo absorbido y la
-            comisión de apertura de $100; el abono efectivo, si existe, se registra como cobro independiente.
+            comisión de apertura de {`$${money(comision)}`}; el abono efectivo, si existe, se registra como cobro independiente.
           </p>
 
           <div className="rounded-lg border bg-muted/30 p-3 grid grid-cols-2 gap-3 text-sm">
@@ -274,7 +275,7 @@ export function RefinanciarCreditoDialog({
             </div>
             <div>
               <p className="text-xs text-muted-foreground uppercase">Comisión apertura</p>
-              <p className="font-semibold">${money(COMISION_APERTURA)}</p>
+              <p className="font-semibold">${money(comision)}</p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground uppercase">Monto neto a entregar</p>
@@ -289,14 +290,14 @@ export function RefinanciarCreditoDialog({
             <Input
               type="number"
               step="0.01"
-              min={saldoAbsorbido + COMISION_APERTURA}
+              min={saldoAbsorbido + comision}
               required
-              placeholder={`Mínimo ${money(saldoAbsorbido + COMISION_APERTURA)}`}
+              placeholder={`Mínimo ${money(saldoAbsorbido + comision)}`}
               value={form.monto_otorgado}
               onChange={(e) => setForm({ ...form, monto_otorgado: e.target.value })}
             />
-            {calc.monto > 0 && calc.monto < saldoAbsorbido + COMISION_APERTURA && (
-              <p className="text-xs text-destructive">Debe cubrir el saldo a absorber y la comisión de $100.</p>
+            {calc.monto > 0 && calc.monto < saldoAbsorbido + comision && (
+              <p className="text-xs text-destructive">Debe cubrir el saldo a absorber y la comisión de {`$${money(comision)}`}.</p>
             )}
           </div>
 
@@ -416,7 +417,7 @@ export function RefinanciarCreditoDialog({
             </div>
           </div>
 
-          {calc.monto >= saldoAbsorbido + COMISION_APERTURA && selectedOption && (
+          {calc.monto >= saldoAbsorbido + comision && selectedOption && (
             <div className="rounded-lg border divide-y text-sm">
               <div className="flex justify-between px-3 py-2">
                 <span className="text-muted-foreground">Plazos</span>

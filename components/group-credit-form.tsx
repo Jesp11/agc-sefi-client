@@ -33,6 +33,18 @@ export function GroupCreditForm({ group, onSuccess, onCancel }: GroupCreditFormP
   });
 
   const [simResult, setSimResult] = useState<any>(null);
+  const [distribucion, setDistribucion] = useState(() =>
+    (group.clientes || []).map((cliente: any) => ({
+      id_cliente: cliente.id_cliente,
+      nombre: cliente.nombre_completo,
+      capital: "",
+    }))
+  );
+
+  const capitalDistribuido = distribucion.reduce((total: number, item: any) => total + (Number(item.capital) || 0), 0);
+  const distribucionCompleta = distribucion.length === formData.cantidad_integrantes
+    && distribucion.every((item: any) => Number(item.capital) > 0)
+    && Math.round(capitalDistribuido * 100) === Math.round(Number(formData.monto_total_grupo || 0) * 100);
 
   // Carga inicial del catálogo y simulación recomendada
   useEffect(() => {
@@ -171,6 +183,10 @@ export function GroupCreditForm({ group, onSuccess, onCancel }: GroupCreditFormP
       toast.error("Debe seleccionar una opción de préstamo");
       return;
     }
+    if (!distribucionCompleta) {
+      toast.error("Asigna un capital mayor a cero a cada integrante y haz que la suma coincida con el monto grupal.");
+      return;
+    }
 
     setLoading(true);
     try {
@@ -186,7 +202,11 @@ export function GroupCreditForm({ group, onSuccess, onCancel }: GroupCreditFormP
           valor_ficha: selectedOption.pago_semanal_grupo,
           dias_pago: formData.dias_pago,
           tasa_asignada: simResult.tasa_elegible,
-          porcentaje_interes: selectedOption.porcentaje_interes
+          porcentaje_interes: selectedOption.porcentaje_interes,
+          distribucion_integrantes: distribucion.map((item: any) => ({
+            id_cliente: item.id_cliente,
+            capital: Number(item.capital),
+          })),
         }),
       });
       const data = await res.json();
@@ -344,6 +364,44 @@ export function GroupCreditForm({ group, onSuccess, onCancel }: GroupCreditFormP
         </div>
       )}
 
+      <div className="rounded-xl border p-4 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <p className="text-sm font-bold">Distribución por integrante</p>
+            <p className="text-xs text-muted-foreground">Esta distribución se usará para los documentos individuales; no crea créditos ni pagos separados.</p>
+          </div>
+          <Badge variant={distribucionCompleta ? "default" : "outline"} className={distribucionCompleta ? "bg-emerald-600" : ""}>
+            ${capitalDistribuido.toLocaleString("es-MX", { minimumFractionDigits: 2 })} / ${Number(formData.monto_total_grupo || 0).toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+          </Badge>
+        </div>
+        {distribucion.length === 0 ? (
+          <p className="text-sm text-destructive">El grupo no tiene integrantes. Agrega integrantes antes de otorgar el crédito.</p>
+        ) : (
+          <div className="grid gap-2">
+            {distribucion.map((item: any, index: number) => (
+              <div key={item.id_cliente} className="grid grid-cols-[1fr_9rem] gap-3 items-center">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate">{item.nombre}</p>
+                  <p className="text-[10px] font-mono text-muted-foreground">{item.id_cliente}</p>
+                </div>
+                <Input
+                  aria-label={`Capital de ${item.nombre}`}
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  placeholder="Capital"
+                  value={item.capital}
+                  onChange={(e) => setDistribucion((actual: any[]) => actual.map((fila, pos) => pos === index ? { ...fila, capital: e.target.value } : fila))}
+                />
+              </div>
+            ))}
+          </div>
+        )}
+        {!distribucionCompleta && (
+          <p className="text-xs text-amber-700">Faltan ${Math.max(0, Number(formData.monto_total_grupo || 0) - capitalDistribuido).toLocaleString("es-MX", { minimumFractionDigits: 2 })} por asignar, o la suma debe corregirse.</p>
+        )}
+      </div>
+
       {simResult && simResult.mensaje && (
         <div className="p-4 bg-amber-50 text-amber-800 text-xs rounded-xl border border-amber-200 flex gap-3 shadow-sm">
           <AlertCircle className="h-5 w-5 text-amber-600 shrink-0" />
@@ -358,7 +416,7 @@ export function GroupCreditForm({ group, onSuccess, onCancel }: GroupCreditFormP
         <Button variant="ghost" onClick={onCancel} disabled={loading}>Cancelar</Button>
         <Button 
           onClick={handleSubmit} 
-          disabled={loading || !selectedOption}
+          disabled={loading || !selectedOption || !distribucionCompleta}
           className="px-8 font-bold"
         >
           {loading ? (

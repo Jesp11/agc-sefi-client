@@ -32,6 +32,7 @@ import { RefinanciarCreditoDialog } from "@/components/refinanciar-credito-dialo
 import { DocumentoAdeudoDialog, type TipoDocumentoAdeudo } from "@/components/documento-adeudo-dialog";
 import { ExpedienteCreditoCard } from "@/components/expediente-credito-card";
 import { GrupoDocumentoDialog } from "@/components/grupo-documento-dialog";
+import { DistribucionIntegrantesDialog } from "@/components/distribucion-integrantes-dialog";
 import { EditarCreditoDialog } from "@/components/editar-credito-dialog";
 import { EliminarCreditoDialog } from "@/components/eliminar-credito-dialog";
 import { TablePagination, TableSearch } from "@/components/table-controls";
@@ -99,6 +100,9 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
   const [docAdeudoOpen, setDocAdeudoOpen] = useState(false);
   const [docAdeudoTipo, setDocAdeudoTipo] = useState<TipoDocumentoAdeudo>("pagare");
   const [grupoDocOpen, setGrupoDocOpen] = useState(false);
+  const [distribucionOpen, setDistribucionOpen] = useState(false);
+  const [documentoIntegrante, setDocumentoIntegrante] = useState<any>(null);
+  const [documentoIntegranteTipo, setDocumentoIntegranteTipo] = useState<TipoDocumentoAdeudo>("pagare");
   const [editingPago, setEditingPago] = useState<PagoHistorial | null>(null);
   const [pagoForm, setPagoForm] = useState({
     monto: "",
@@ -246,29 +250,9 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
 
   const isGrupal = credito.tipo_credito === "Grupal";
   const integrantesGrupo: any[] = credito.grupo?.clientes ?? [];
-  const tablaAmort = (() => {
-    if (!credito.tabla_amortizacion) return null;
-    const raw = typeof credito.tabla_amortizacion === "string"
-      ? JSON.parse(credito.tabla_amortizacion)
-      : credito.tabla_amortizacion;
-    return Array.isArray(raw) ? raw[0] : raw;
-  })();
-  const integrantesExcel: any[] = tablaAmort?.integrantes ?? [];
-  const integrantes = integrantesGrupo.length > 0
-    ? integrantesGrupo.map((c: any) => ({
-        id: c.id_cliente,
-        nombre: c.nombre_completo,
-        telefono: c.telefono,
-        monto: integrantesExcel.find((i: any) => i.id_cliente === c.id_cliente)?.monto_otorgado,
-        valor_ficha: integrantesExcel.find((i: any) => i.id_cliente === c.id_cliente)?.valor_ficha,
-      }))
-    : integrantesExcel.map((i: any) => ({
-        id: i.id_cliente,
-        nombre: i.nombre,
-        telefono: null,
-        monto: i.monto_otorgado,
-      valor_ficha: i.valor_ficha,
-    }));
+  const distribuciones: any[] = credito.distribuciones_integrantes ?? [];
+  const conciliacion = credito.distribucion_documental ?? {};
+  const documentosIntegrantesHabilitados = Boolean(conciliacion.documentos_habilitados);
   const renovacionComoNueva = Array.isArray(credito.refinanciamientos) ? credito.refinanciamientos[0] : null;
   const renovacionComoAnterior = Array.isArray(credito.refinanciamientos_como_anterior) ? credito.refinanciamientos_como_anterior[0] : null;
 
@@ -381,6 +365,7 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
               tipoCredito={credito.tipo_credito}
               tasaAsignada={credito.tasa_asignada}
               diasPago={credito.dias_pago}
+              comisionApertura={credito.comision_apertura}
               onSuccess={fetchData}
             />
           )}
@@ -629,16 +614,25 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
       {isGrupal && (
         <Card className="shadow-sm border-muted/40">
           <CardHeader className="bg-muted/30 border-b pb-3">
-            <CardTitle className="text-base flex items-center gap-2 font-bold">
-              <Users className="h-4 w-4 text-primary" />
-              Integrantes del Grupo
-              {integrantes.length > 0 && (
-                <Badge variant="secondary" className="ml-1 font-normal">{integrantes.length}</Badge>
-              )}
-            </CardTitle>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <CardTitle className="text-base flex items-center gap-2 font-bold">
+                <Users className="h-4 w-4 text-primary" />
+                Distribución documental por integrante
+                {integrantesGrupo.length > 0 && <Badge variant="secondary" className="ml-1 font-normal">{integrantesGrupo.length}</Badge>}
+              </CardTitle>
+              {isAdmin && <Button size="sm" variant={documentosIntegrantesHabilitados ? "outline" : "default"} onClick={() => setDistribucionOpen(true)}>
+                {documentosIntegrantesHabilitados ? "Corregir distribución" : "Registrar distribución"}
+              </Button>}
+            </div>
           </CardHeader>
           <CardContent className="pt-4">
-            {integrantes.length === 0 ? (
+            <div className={`mb-4 rounded-lg border p-3 text-xs grid gap-2 sm:grid-cols-4 ${documentosIntegrantesHabilitados ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50"}`}>
+              <div><span className="text-muted-foreground">Capital grupo</span><p className="font-semibold">${Number(conciliacion.capital_grupal ?? credito.monto_otorgado ?? 0).toLocaleString("es-MX", { minimumFractionDigits: 2 })}</p></div>
+              <div><span className="text-muted-foreground">Capital integrantes</span><p className="font-semibold">${Number(conciliacion.capital_integrantes ?? 0).toLocaleString("es-MX", { minimumFractionDigits: 2 })}</p></div>
+              <div><span className="text-muted-foreground">Total grupo / integrantes</span><p className="font-semibold">${Number(conciliacion.total_grupal ?? credito.total ?? 0).toLocaleString("es-MX", { minimumFractionDigits: 2 })} / ${Number(conciliacion.total_integrantes ?? 0).toLocaleString("es-MX", { minimumFractionDigits: 2 })}</p></div>
+              <div className={documentosIntegrantesHabilitados ? "text-emerald-700 font-semibold" : "text-amber-800 font-semibold"}>{documentosIntegrantesHabilitados ? "Documentos individuales habilitados" : "Captura requerida: los documentos están bloqueados"}</div>
+            </div>
+            {integrantesGrupo.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-6">
                 No hay integrantes registrados en este grupo.
               </p>
@@ -647,47 +641,34 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
                 <TableHeader className="bg-muted/50">
                   <TableRow>
                     <TableHead>ID</TableHead>
-                    <TableHead>Nombre</TableHead>
-                    <TableHead>Teléfono</TableHead>
-                    {integrantes.some((i) => i.monto != null) && (
-                      <>
-                        <TableHead className="text-right">Monto</TableHead>
-                        <TableHead className="text-right">Ficha sem.</TableHead>
-                      </>
-                    )}
+                    <TableHead>Cliente</TableHead>
+                    <TableHead className="text-right">Capital</TableHead>
+                    <TableHead className="text-right">Interés</TableHead>
+                    <TableHead className="text-right">Total a pagar</TableHead>
+                    <TableHead className="text-right">Ficha sem.</TableHead>
+                    <TableHead>Folio</TableHead>
                     <TableHead className="text-right">Acción</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {integrantes.map((integrante) => (
-                    <TableRow key={integrante.id}>
-                      <TableCell className="font-mono text-xs">{integrante.id}</TableCell>
-                      <TableCell className="font-medium">{integrante.nombre}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{integrante.telefono ?? "—"}</TableCell>
-                      {integrantes.some((i) => i.monto != null) && (
-                        <>
-                          <TableCell className="text-right text-sm">
-                            {integrante.monto != null ? `$${Number(integrante.monto).toLocaleString()}` : "—"}
-                          </TableCell>
-                          <TableCell className="text-right text-sm">
-                            {integrante.valor_ficha != null ? `$${Number(integrante.valor_ficha).toLocaleString()}` : "—"}
-                          </TableCell>
-                        </>
-                      )}
+                  {integrantesGrupo.map((cliente: any) => {
+                    const integrante = distribuciones.find((item) => item.id_cliente === cliente.id_cliente);
+                    return <TableRow key={cliente.id_cliente}>
+                      <TableCell className="font-mono text-xs">{cliente.id_cliente}</TableCell>
+                      <TableCell className="font-medium">{integrante?.nombre_cliente || cliente.nombre_completo}</TableCell>
+                      <TableCell className="text-right text-sm">{integrante ? `$${Number(integrante.capital).toLocaleString("es-MX", { minimumFractionDigits: 2 })}` : "—"}</TableCell>
+                      <TableCell className="text-right text-sm">{integrante ? `$${Number(integrante.interes).toLocaleString("es-MX", { minimumFractionDigits: 2 })}` : "—"}</TableCell>
+                      <TableCell className="text-right text-sm">{integrante ? `$${Number(integrante.total).toLocaleString("es-MX", { minimumFractionDigits: 2 })}` : "—"}</TableCell>
+                      <TableCell className="text-right text-sm">{integrante ? `$${Number(integrante.valor_ficha).toLocaleString("es-MX", { minimumFractionDigits: 2 })}` : "—"}</TableCell>
+                      <TableCell className="font-mono text-xs">{integrante?.folio_documental || "—"}</TableCell>
                       <TableCell className="text-right">
-                        {integrante.id && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="h-7 text-xs"
-                            onClick={() => router.push(`/dashboard/clientes/${integrante.id}`)}
-                          >
-                            Ver perfil
-                          </Button>
-                        )}
+                        <Button size="sm" variant="outline" className="h-7 text-xs" disabled={!documentosIntegrantesHabilitados || !integrante}
+                          onClick={() => { setDocumentoIntegrante(integrante); setDocumentoIntegranteTipo("pagare"); }}>
+                          Documentos
+                        </Button>
                       </TableCell>
-                    </TableRow>
-                  ))}
+                    </TableRow>;
+                  })}
                 </TableBody>
               </Table>
             )}
@@ -831,6 +812,40 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
           open={docAdeudoOpen}
           onOpenChange={setDocAdeudoOpen}
           defaultDoc={docAdeudoTipo}
+        />
+      )}
+      {isGrupal && (
+        <DistribucionIntegrantesDialog
+          credito={credito}
+          open={distribucionOpen}
+          onOpenChange={setDistribucionOpen}
+          onSaved={fetchData}
+        />
+      )}
+      {documentoIntegrante && (
+        <DocumentoAdeudoDialog
+          credito={{
+            ...credito,
+            cliente: {
+              ...(documentoIntegrante.cliente || {}),
+              id_cliente: documentoIntegrante.id_cliente,
+              nombre_completo: documentoIntegrante.nombre_cliente,
+              curp: documentoIntegrante.curp,
+              clave_elector: documentoIntegrante.clave_elector,
+              telefono: documentoIntegrante.telefono,
+              direccion: documentoIntegrante.direccion,
+            },
+            monto_otorgado: documentoIntegrante.capital,
+            interes: documentoIntegrante.interes,
+            total: documentoIntegrante.total,
+            saldo_pendiente: documentoIntegrante.total,
+            valor_ficha: documentoIntegrante.valor_ficha,
+            folio_documental: documentoIntegrante.folio_documental,
+            mora: {},
+          }}
+          open={Boolean(documentoIntegrante)}
+          onOpenChange={(open) => !open && setDocumentoIntegrante(null)}
+          defaultDoc={documentoIntegranteTipo}
         />
       )}
       <Dialog open={Boolean(editingPago)} onOpenChange={(open) => !open && setEditingPago(null)}>

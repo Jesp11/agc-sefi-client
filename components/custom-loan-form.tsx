@@ -43,6 +43,7 @@ export function CustomLoanForm({ type, onSuccess, onClose }: CustomLoanFormProps
   const [items, setItems] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [selected, setSelected] = useState<any>(null);
+  const [distribucion, setDistribucion] = useState<Array<{ id_cliente: string; nombre: string; capital: string }>>([]);
 
   const [catalogo, setCatalogo] = useState<any>(null);
   const [selectedOption, setSelectedOption] = useState<{ tasaKey: string; plazoCatalogo: number; factor: number } | null>(null);
@@ -186,9 +187,15 @@ export function CustomLoanForm({ type, onSuccess, onClose }: CustomLoanFormProps
   const valorFicha = plazos > 0 ? parseFloat((total / plazos).toFixed(2)) : 0;
   const diaPago = getDiaPago(formData.fecha_primer_pago);
   const porcentajeInteres = monto > 0 ? parseFloat(((interes / monto) * 100).toFixed(2)) : 0;
+  const capitalDistribuido = distribucion.reduce((acumulado, fila) => acumulado + (Number(fila.capital) || 0), 0);
+  const distribucionValida = type !== "grupal" || (
+    distribucion.length === (selected?.clientes?.length || 0)
+    && distribucion.every((fila) => Number(fila.capital) > 0)
+    && Math.round(capitalDistribuido * 100) === Math.round(monto * 100)
+  );
 
   const canSubmit =
-    selected && monto > 0 && formData.fecha_otorgacion && formData.fecha_primer_pago && formData.fecha_ultimo_pago && plazos > 0;
+    selected && monto > 0 && formData.fecha_otorgacion && formData.fecha_primer_pago && formData.fecha_ultimo_pago && plazos > 0 && distribucionValida;
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
@@ -208,7 +215,10 @@ export function CustomLoanForm({ type, onSuccess, onClose }: CustomLoanFormProps
         ...(selectedOption && { tasa_asignada: selectedOption.tasaKey }),
       };
       if (type === "individual") body.id_cliente = selected.id_cliente;
-      else body.id_grupo = selected.id;
+      else {
+        body.id_grupo = selected.id;
+        body.distribucion_integrantes = distribucion.map((fila) => ({ id_cliente: fila.id_cliente, capital: Number(fila.capital) }));
+      }
 
       const res = await apiFetch("/creditos", { method: "POST", body: JSON.stringify(body) });
       if (res.ok) {
@@ -290,7 +300,15 @@ export function CustomLoanForm({ type, onSuccess, onClose }: CustomLoanFormProps
                         return (
                           <tr
                             key={id}
-                            onClick={() => { setSelected(item); setStep(2); }}
+                            onClick={() => {
+                              setSelected(item);
+                              setDistribucion(type === "grupal" ? (item.clientes || []).map((cliente: any) => ({
+                                id_cliente: cliente.id_cliente,
+                                nombre: cliente.nombre_completo,
+                                capital: "",
+                              })) : []);
+                              setStep(2);
+                            }}
                             className="hover:bg-muted/50 transition-colors cursor-pointer"
                           >
                             <td className="p-3">
@@ -457,6 +475,28 @@ export function CustomLoanForm({ type, onSuccess, onClose }: CustomLoanFormProps
                 />
               </div>
             </div>
+
+            {type === "grupal" && (
+              <div className="rounded-lg border p-3 space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-semibold">Distribución por integrante</p>
+                    <p className="text-[11px] text-muted-foreground">Capital documental individual; la cobranza permanece grupal.</p>
+                  </div>
+                  <Badge variant={distribucionValida ? "default" : "outline"} className={distribucionValida ? "bg-emerald-600" : ""}>
+                    ${capitalDistribuido.toLocaleString("es-MX", { minimumFractionDigits: 2 })} / ${monto.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+                  </Badge>
+                </div>
+                {distribucion.map((fila, indice) => (
+                  <div key={fila.id_cliente} className="grid grid-cols-[1fr_8rem] gap-2 items-center">
+                    <div className="min-w-0"><p className="text-xs font-medium truncate">{fila.nombre}</p><p className="font-mono text-[10px] text-muted-foreground">{fila.id_cliente}</p></div>
+                    <Input aria-label={`Capital de ${fila.nombre}`} type="number" min="0.01" step="0.01" placeholder="Capital" value={fila.capital}
+                      onChange={(event) => setDistribucion((actual) => actual.map((item, pos) => pos === indice ? { ...item, capital: event.target.value } : item))} />
+                  </div>
+                ))}
+                {!distribucionValida && <p className="text-[11px] text-amber-700">Captura todos los capitales y haz que la suma coincida exactamente con el monto otorgado.</p>}
+              </div>
+            )}
 
             {/* Summary */}
             {monto > 0 && plazos > 0 && (

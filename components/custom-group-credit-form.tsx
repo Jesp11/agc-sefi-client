@@ -32,6 +32,7 @@ export function CustomGroupCreditForm({ onSuccess, onClose }: CustomGroupCreditF
   const [groups, setGroups] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedGroup, setSelectedGroup] = useState<any>(null);
+  const [distribucion, setDistribucion] = useState<Array<{ id_cliente: string; nombre: string; capital: string }>>([]);
   const [catalogo, setCatalogo] = useState<any>(null);
   const [simResult, setSimResult] = useState<any>(null);
   const [selectedOption, setSelectedOption] = useState<any>(null);
@@ -77,6 +78,11 @@ export function CustomGroupCreditForm({ onSuccess, onClose }: CustomGroupCreditF
 
   const handleSelectGroup = (group: any) => {
     setSelectedGroup(group);
+    setDistribucion((group.clientes || []).map((cliente: any) => ({
+      id_cliente: cliente.id_cliente,
+      nombre: cliente.nombre_completo,
+      capital: "",
+    })));
     const integrantes = group.clientes?.length || 0;
     const minMonto = catalogo?.montos_minimos?.[formData.origen] || 30000;
     setFormData((prev) => ({
@@ -175,6 +181,10 @@ export function CustomGroupCreditForm({ onSuccess, onClose }: CustomGroupCreditF
 
   const handleSubmit = async () => {
     if (!selectedOption || !selectedGroup) return;
+    if (!distribucionValida) {
+      toast.error("Captura el capital de cada integrante y haz que la suma coincida con el monto grupal.");
+      return;
+    }
     setLoading(true);
     try {
       const res = await apiFetch("/creditos", {
@@ -189,6 +199,7 @@ export function CustomGroupCreditForm({ onSuccess, onClose }: CustomGroupCreditF
           plazos: selectedOption.plazo_semanas,
           valor_ficha: selectedOption.pago_semanal_grupo,
           dias_pago: getDiaPago(formData.fecha_primer_pago),
+          distribucion_integrantes: distribucion.map((fila) => ({ id_cliente: fila.id_cliente, capital: Number(fila.capital) })),
         }),
       });
       if (res.ok) {
@@ -205,6 +216,12 @@ export function CustomGroupCreditForm({ onSuccess, onClose }: CustomGroupCreditF
       setLoading(false);
     }
   };
+
+  const capitalDistribuido = distribucion.reduce((acumulado, fila) => acumulado + (Number(fila.capital) || 0), 0);
+  const distribucionValida = distribucion.length === (selectedGroup?.clientes?.length || 0)
+    && distribucion.length > 0
+    && distribucion.every((fila) => Number(fila.capital) > 0)
+    && Math.round(capitalDistribuido * 100) === Math.round(Number(formData.monto_total_grupo || 0) * 100);
 
   return (
     <div className="flex flex-col flex-1 overflow-hidden min-h-0 gap-4">
@@ -426,6 +443,20 @@ export function CustomGroupCreditForm({ onSuccess, onClose }: CustomGroupCreditF
             </div>
           )}
 
+          <div className="rounded-lg border p-3 space-y-2">
+            <div className="flex flex-wrap justify-between gap-2 text-xs">
+              <span className="font-semibold">Distribución documental por integrante</span>
+              <span className={distribucionValida ? "font-semibold text-emerald-700" : "font-semibold text-amber-700"}>${capitalDistribuido.toLocaleString("es-MX", { minimumFractionDigits: 2 })} / ${Number(formData.monto_total_grupo || 0).toLocaleString("es-MX", { minimumFractionDigits: 2 })}</span>
+            </div>
+            {distribucion.map((fila, indice) => (
+              <div key={fila.id_cliente} className="grid grid-cols-[1fr_8rem] gap-2 items-center">
+                <div className="min-w-0"><p className="text-xs font-medium truncate">{fila.nombre}</p><p className="text-[10px] font-mono text-muted-foreground">{fila.id_cliente}</p></div>
+                <Input aria-label={`Capital de ${fila.nombre}`} type="number" min="0.01" step="0.01" placeholder="Capital" value={fila.capital}
+                  onChange={(event) => setDistribucion((actual) => actual.map((item, pos) => pos === indice ? { ...item, capital: event.target.value } : item))} />
+              </div>
+            ))}
+          </div>
+
           {simResult.mensaje && (
             <div className="p-3 bg-amber-50 text-amber-700 text-xs rounded-lg border border-amber-200 flex gap-2">
               <AlertCircle className="h-4 w-4 shrink-0" />
@@ -448,7 +479,7 @@ export function CustomGroupCreditForm({ onSuccess, onClose }: CustomGroupCreditF
           {step === 1 ? "Cancelar" : <><ChevronLeft className="mr-2 h-4 w-4" /> Anterior</>}
         </Button>
         {step === 3 ? (
-          <Button onClick={handleSubmit} disabled={loading || !selectedOption}>
+          <Button onClick={handleSubmit} disabled={loading || !selectedOption || !distribucionValida}>
             {loading ? "Procesando..." : <><Save className="mr-2 h-4 w-4" /> Finalizar Préstamo</>}
           </Button>
         ) : step === 2 ? (

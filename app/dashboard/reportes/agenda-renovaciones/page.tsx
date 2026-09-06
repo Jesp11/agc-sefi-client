@@ -31,6 +31,7 @@ type AgendaItem = {
   cuota: number;
   tasa_asignada?: string | null;
   dias_pago?: string | null;
+  comision_apertura?: number | string | null;
 };
 
 const money = (value: number) => `$${Number(value || 0).toLocaleString("es-MX", { minimumFractionDigits: 2 })}`;
@@ -140,7 +141,7 @@ export default function AgendaRenovacionesPage() {
                   <TableCell><Badge variant="outline">{item.renovacion_autorizada || "Pendiente"}</Badge><span className="ml-2 text-xs text-muted-foreground">{item.renovacion_tasa || "Sin tasa"}</span></TableCell>
                   <TableCell className="text-right"><div className="flex justify-end gap-2">
                     <AgendarRenovacionDialog numProg={item.num_prog} fecha={item.fecha_programada_renovacion} autorizacion={item.renovacion_autorizada} tasa={item.renovacion_tasa} onSaved={load} trigger={<Button size="sm" variant="outline">Reprogramar</Button>} />
-                    {isAdmin && <RefinanciarCreditoDialog numProg={item.num_prog} saldoActual={item.saldo_actual} tipoCredito={item.tipo_credito} tasaAsignada={item.renovacion_tasa || item.tasa_asignada} diasPago={item.dias_pago} fechaEfectivaInicial={item.fecha_programada_renovacion} onSuccess={load} trigger={<Button size="sm"><PlusCircle className="mr-1 size-3.5" />Crear renovación</Button>} />}
+                    {isAdmin && <RefinanciarCreditoDialog numProg={item.num_prog} saldoActual={item.saldo_actual} tipoCredito={item.tipo_credito} tasaAsignada={item.renovacion_tasa || item.tasa_asignada} diasPago={item.dias_pago} comisionApertura={item.comision_apertura} fechaEfectivaInicial={item.fecha_programada_renovacion} onSuccess={load} trigger={<Button size="sm"><PlusCircle className="mr-1 size-3.5" />Crear renovación</Button>} />}
                     <Button size="icon" variant="ghost" className="size-8 text-destructive" onClick={() => cancelar(item)} title="Cancelar agenda"><Trash2 className="size-4" /></Button>
                   </div></TableCell>
                 </TableRow>;

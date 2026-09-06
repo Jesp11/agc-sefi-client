@@ -53,6 +53,7 @@ export interface TarjetaCobroParams {
   domicilio: string;
   celCliente: string;
   idCliente: string;
+  folioDocumental?: string;
   cicloActual: number | string;
   cicloAnterior: number | string;
   fechaInicio: string;
@@ -357,7 +358,9 @@ export function buildDocumentoAdeudoParams(
 
   const numProgPadded = String(credito?.num_prog || "001").padStart(3, "0");
   const anioOtorgacion = fechaOtorgacion.anio || new Date().getFullYear().toString();
-  const noPagare = `${numProgPadded}/${anioOtorgacion}`;
+  const noPagare = credito?.folio_documental
+    ? `${credito.folio_documental}/${anioOtorgacion}`
+    : `${numProgPadded}/${anioOtorgacion}`;
 
   // Testigo por defecto: aval registrado o asesor
   const aval = cliente?.avales?.[0] || {};
@@ -466,7 +469,7 @@ export function generarCartaAdeudoMarkdown(p: DocumentoAdeudoParams): string {
 
 **A QUIEN CORRESPONDA:**
 
-…..EL (LA) QUE SUSCRIBE **${p.nombreCliente}**, ORIGINARIO (A) DE CIUDAD DE **${p.ciudadOrigen}**, CON DOMICILIO PARTICULAR EN **${p.direccion}**${p.entreCalles ? `, ENTRE ${p.entreCalles}` : ""}, RECONOZCO EL ADEUDO CONTRAIDO CON EL SR. (A) **${p.nombreAcreedor}**, AMPARADO EN EL PAGARE **${p.serieActual} DE ${p.serieTotal}** DE FECHA **${p.fechaExpedicionLetras}**, BAJO LAS CONDICIONES QUE INDICA REFERIDO PAGARE.
+…..EL (LA) QUE SUSCRIBE **${p.nombreCliente}**, ORIGINARIO (A) DE CIUDAD DE **${p.ciudadOrigen}**, CON DOMICILIO PARTICULAR EN **${p.direccion}**${p.entreCalles ? `, ENTRE ${p.entreCalles}` : ""}, RECONOZCO EL ADEUDO CONTRAIDO CON EL SR. (A) **${p.nombreAcreedor}**, AMPARADO EN EL PAGARE **${p.noPagare}** DE FECHA **${p.fechaExpedicionLetras}**, BAJO LAS CONDICIONES QUE INDICA REFERIDO PAGARE.
 
 PRESTAMO QUE FUE OTORGADO Y RECIBIDO A LA VEZ SIN FINES DE LUCRO, Y COMO APOYO PERSONAL EN FORMA DE CONFIANZA AMISTOSA.
 
@@ -566,6 +569,7 @@ export function buildTarjetaCobroParams(credito: any, overrides?: Partial<Tarjet
     domicilio: (cliente?.direccion ? `${cliente.direccion}${cliente.entreCalles ? `, ${cliente.entreCalles}` : ""}, TAMPICO, TAMPS.` : "DOMICILIO REGISTRADO").toUpperCase(),
     celCliente: cliente?.telefono || "—",
     idCliente: cliente?.id_cliente || `CLI-${credito?.num_prog || "001"}`,
+    folioDocumental: credito?.folio_documental || undefined,
     cicloActual: cicloActual,
     cicloAnterior: cicloAnterior,
     fechaInicio: fechaInicioDesc.texto,
@@ -618,6 +622,7 @@ export function generarTarjetaCobroMarkdown(p: TarjetaCobroParams): string {
 | **DOMICILIO:** | ${p.domicilio} | | |
 | **CEL. CLIENTE:** | ${p.celCliente} | **MONTO OTORGADO:** | $${montoFormat} |
 | **ID:** | ${p.idCliente} | **PLAZO:** | ${p.plazoSemanas} SEMANAS |
+| **FOLIO:** | ${p.folioDocumental || p.idCliente} | **PAGO SEMANAL:** | $${Number(p.valorFicha).toLocaleString("es-MX", { minimumFractionDigits: 2 })} |
 | **CICLO ACTUAL:** | ${p.cicloActual} | **CICLO ANTERIOR:** | ${p.cicloAnterior} |
 | **FECHA INICIO:** | ${p.fechaInicio} | **FECHA TERMINO:** | ${p.fechaTermino} |
 
@@ -837,6 +842,12 @@ export function generarTarjetaCobroHtml(p: TarjetaCobroParams): string {
         <td class="font-mono">${p.idCliente}</td>
         <td class="font-bold bg-gray">PLAZO:</td>
         <td class="font-bold">${p.plazoSemanas} SEMANAS</td>
+      </tr>
+      <tr>
+        <td class="font-bold bg-gray">FOLIO:</td>
+        <td class="font-mono">${p.folioDocumental || p.idCliente}</td>
+        <td class="font-bold bg-gray">FICHA:</td>
+        <td class="font-bold">$${Number(p.valorFicha).toLocaleString("es-MX", { minimumFractionDigits: 2 })}</td>
       </tr>
       <tr>
         <td class="font-bold bg-gray">CICLO ACTUAL:</td>
@@ -1259,7 +1270,7 @@ export function generarCartaAdeudoHtml(p: DocumentoAdeudoParams): string {
     <div class="recipient">A QUIEN CORRESPONDA:</div>
 
     <div class="body-paragraph">
-      …..EL (LA) QUE SUSCRIBE <strong>${p.nombreCliente}</strong>, ORIGINARIO (A) DE CIUDAD DE <strong>${p.ciudadOrigen}</strong>, CON DOMICILIO PARTICULAR EN <strong>${p.direccion}</strong>${p.entreCalles ? `, ENTRE ${p.entreCalles}` : ""}, RECONOZCO EL ADEUDO CONTRAIDO CON EL SR. (A) <strong>${p.nombreAcreedor}</strong>, AMPARADO EN EL PAGARE <strong>${p.serieActual} DE ${p.serieTotal}</strong> DE FECHA <strong>${p.fechaExpedicionLetras}</strong>, BAJO LAS CONDICIONES QUE INDICA REFERIDO PAGARE.
+      …..EL (LA) QUE SUSCRIBE <strong>${p.nombreCliente}</strong>, ORIGINARIO (A) DE CIUDAD DE <strong>${p.ciudadOrigen}</strong>, CON DOMICILIO PARTICULAR EN <strong>${p.direccion}</strong>${p.entreCalles ? `, ENTRE ${p.entreCalles}` : ""}, RECONOZCO EL ADEUDO CONTRAIDO CON EL SR. (A) <strong>${p.nombreAcreedor}</strong>, AMPARADO EN EL PAGARE <strong>${p.noPagare}</strong> DE FECHA <strong>${p.fechaExpedicionLetras}</strong>, BAJO LAS CONDICIONES QUE INDICA REFERIDO PAGARE.
     </div>
 
     <div class="body-paragraph-plain">
