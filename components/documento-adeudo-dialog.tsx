@@ -153,14 +153,23 @@ export function DocumentoAdeudoDialog({
     });
     return {
       ...base,
-      nombreCliente: (nombreCliente || base.nombreCliente).toUpperCase().trim(),
-      curp: (curp || base.curp).toUpperCase().trim(),
-      claveElector: (claveElector || base.claveElector).toUpperCase().trim(),
-      direccion: (direccion || base.direccion).toUpperCase().trim(),
-      entreCalles: (entreCalles || base.entreCalles).toUpperCase().trim(),
-      ciudadEstadoCp: (ciudadEstadoCp || base.ciudadEstadoCp).toUpperCase().trim(),
-      ciudadOrigen: (ciudadOrigen || base.ciudadOrigen).toUpperCase().trim(),
-      telefono: telefono || base.telefono,
+      // El formulario ya se precarga al abrirse. No usar `|| base.campo`:
+      // una cadena vacía es una edición deliberada y debe verse igual en la
+      // vista, el Markdown y el PDF.
+      nombreAcreedor: nombreAcreedor.toUpperCase().trim(),
+      domicilioPago: domicilioPago.toUpperCase().trim(),
+      nombreTestigo: nombreTestigo.toUpperCase().trim(),
+      tipoComprobante: tipoComprobante.toUpperCase().trim(),
+      tasaInteresMoratorio: tasaMoratoria.trim(),
+      lugarExpedicion: lugarExpedicion.toUpperCase().trim(),
+      nombreCliente: nombreCliente.toUpperCase().trim(),
+      curp: curp.toUpperCase().trim(),
+      claveElector: claveElector.toUpperCase().trim(),
+      direccion: direccion.toUpperCase().trim(),
+      entreCalles: entreCalles.toUpperCase().trim(),
+      ciudadEstadoCp: ciudadEstadoCp.toUpperCase().trim(),
+      ciudadOrigen: ciudadOrigen.toUpperCase().trim(),
+      telefono: telefono.trim(),
     };
   }, [
     credito,
@@ -192,14 +201,20 @@ export function DocumentoAdeudoDialog({
     });
     return {
       ...base,
-      nombreCliente: (nombreCliente || base.nombreCliente).toUpperCase().trim(),
-      curp: (curp || base.curp).toUpperCase().trim(),
-      claveElector: (claveElector || base.claveElector).toUpperCase().trim(),
-      direccion: (direccion || base.direccion).toUpperCase().trim(),
-      entreCalles: (entreCalles || base.entreCalles).toUpperCase().trim(),
-      ciudadEstadoCp: (ciudadEstadoCp || base.ciudadEstadoCp).toUpperCase().trim(),
-      ciudadOrigen: (ciudadOrigen || base.ciudadOrigen).toUpperCase().trim(),
-      telefono: telefono || base.telefono,
+      nombreAcreedor: nombreAcreedor.toUpperCase().trim(),
+      domicilioPago: domicilioPago.toUpperCase().trim(),
+      nombreTestigo: nombreTestigo.toUpperCase().trim(),
+      tipoComprobante: tipoComprobante.toUpperCase().trim(),
+      tasaInteresMoratorio: tasaMoratoria.trim(),
+      lugarExpedicion: lugarExpedicion.toUpperCase().trim(),
+      nombreCliente: nombreCliente.toUpperCase().trim(),
+      curp: curp.toUpperCase().trim(),
+      claveElector: claveElector.toUpperCase().trim(),
+      direccion: direccion.toUpperCase().trim(),
+      entreCalles: entreCalles.toUpperCase().trim(),
+      ciudadEstadoCp: ciudadEstadoCp.toUpperCase().trim(),
+      ciudadOrigen: ciudadOrigen.toUpperCase().trim(),
+      telefono: telefono.trim(),
     };
   }, [
     credito,
@@ -222,20 +237,20 @@ export function DocumentoAdeudoDialog({
   // Build parameters for Tarjeta de Cobro (FIXED TO ORIGINAL PLAN)
   const paramsTarjeta: TarjetaCobroParams = useMemo(() => {
     return buildTarjetaCobroParams(credito, {
-      nombreCliente: (nombreCliente || "CLIENTE NO ESPECIFICADO").toUpperCase().trim(),
-      domicilio: (direccion ? `${direccion}${entreCalles ? `, ${entreCalles}` : ""}, TAMPICO, TAMPS.` : "DOMICILIO REGISTRADO").toUpperCase().trim(),
-      celCliente: telefono || "—",
+      nombreCliente: nombreCliente.toUpperCase().trim(),
+      domicilio: (direccion ? `${direccion}${entreCalles ? `, ${entreCalles}` : ""}, TAMPICO, TAMPS.` : "").toUpperCase().trim(),
+      celCliente: telefono.trim(),
       montoOtorgado: montoOtorgadoOriginal || Number(credito?.monto_otorgado) || 0,
-      refFamParentesco: (refFamParentesco || "FAMILIAR").toUpperCase().trim(),
-      refFamNombre: (refFamNombre || "—").toUpperCase().trim(),
-      refFamCel: refFamCel || "—",
-      refFamDireccion: (refFamDireccion || "—").toUpperCase().trim(),
-      refPerTipo: (refPerTipo || "AMISTAD").toUpperCase().trim(),
-      refPerNombre: (refPerNombre || "—").toUpperCase().trim(),
-      refPerCel: refPerCel || "—",
-      refPerDireccion: (refPerDireccion || "—").toUpperCase().trim(),
-      multaHorario: multaHorario || "75",
-      multaDia: multaDia || "100",
+      refFamParentesco: refFamParentesco.toUpperCase().trim(),
+      refFamNombre: refFamNombre.toUpperCase().trim(),
+      refFamCel: refFamCel.trim(),
+      refFamDireccion: refFamDireccion.toUpperCase().trim(),
+      refPerTipo: refPerTipo.toUpperCase().trim(),
+      refPerNombre: refPerNombre.toUpperCase().trim(),
+      refPerCel: refPerCel.trim(),
+      refPerDireccion: refPerDireccion.toUpperCase().trim(),
+      multaHorario: multaHorario.trim(),
+      multaDia: multaDia.trim(),
     });
   }, [
     credito,

@@ -47,10 +47,12 @@ export function GrupoDocumentoDialog({ credito, open, onOpenChange }: GrupoDocum
     const base = buildTarjetaCobroGrupalParams(credito);
     return {
       ...base,
-      grupo: grupo || base.grupo,
-      idGrupo: idGrupo || base.idGrupo,
-      tasaAplicada: tasaAplicada || base.tasaAplicada,
-      asesor: asesor || base.asesor,
+      // Los campos se inicializan al abrir el diálogo; conservar una cadena
+      // vacía permite retirar un dato tanto del Markdown como del PDF.
+      grupo: grupo,
+      idGrupo: idGrupo,
+      tasaAplicada: tasaAplicada,
+      asesor: asesor,
     };
   }, [asesor, credito, grupo, idGrupo, tasaAplicada]);
 

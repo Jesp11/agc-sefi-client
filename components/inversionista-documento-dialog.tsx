@@ -70,11 +70,11 @@ export function InversionistaDocumentoDialog({
     const base = buildReciboInversionistaParams(inversionista);
     return {
       ...base,
-      folio: folio || base.folio,
+      folio,
       monto: Number(monto || 0),
-      beneficiario: (beneficiario || base.beneficiario).toUpperCase(),
-      periodoInicio: periodoInicio || base.periodoInicio,
-      periodoFin: periodoFin || base.periodoFin,
+      beneficiario: beneficiario.toUpperCase(),
+      periodoInicio,
+      periodoFin,
       entregantes: [
         { nombre: entregante1, participacion: "ENTREGUE: DEUDA COMPARTIDA 50%" },
         { nombre: entregante2, participacion: "ENTREGUE: DEUDA COMPARTIDA 50%" },
@@ -84,13 +84,13 @@ export function InversionistaDocumentoDialog({
 
   const contratoParams: ContratoInversionistaParams = useMemo(() => {
     const base = buildContratoInversionistaParams(inversionista);
-    const folioContrato = (folio || base.folio).replace(/^REC-/, "");
+    const folioContrato = folio.replace(/^REC-/, "");
     return {
       ...base,
       folio: folioContrato,
       monto: Number(monto || 0),
-      acreedor: (beneficiario || inversionista?.nombre || base.acreedor).toUpperCase(),
-      tasaMensual: tasaMensual || base.tasaMensual,
+      acreedor: beneficiario.toUpperCase(),
+      tasaMensual,
       responsables: [
         { nombre: entregante1, participacion: "ACEPTO DEUDA COMPARTIDA 50%" },
         { nombre: entregante2, participacion: "ACEPTO DEUDA COMPARTIDA 50%" },
