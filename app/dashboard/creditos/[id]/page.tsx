@@ -33,6 +33,7 @@ import { DocumentoAdeudoDialog, type TipoDocumentoAdeudo } from "@/components/do
 import { ExpedienteCreditoCard } from "@/components/expediente-credito-card";
 import { GrupoDocumentoDialog } from "@/components/grupo-documento-dialog";
 import { EditarCreditoDialog } from "@/components/editar-credito-dialog";
+import { EliminarCreditoDialog } from "@/components/eliminar-credito-dialog";
 import { TablePagination, TableSearch } from "@/components/table-controls";
 import { PAGE_SIZE, filterBySearch, paginateItems, useTableControls } from "@/hooks/use-paginated-list";
 import { marcarEstadoCuotas, totalAbonadoFromPagos } from "@/lib/table-utils";
@@ -301,6 +302,13 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {isAdmin && <EditarCreditoDialog credito={credito} onSuccess={fetchData} />}
+          {isAdmin && (
+            <EliminarCreditoDialog
+              numProg={credito.num_prog}
+              tipoCredito={credito.tipo_credito}
+              onDeleted={() => router.replace(credito.tipo_credito === "Grupal" ? "/dashboard/creditos-grupales" : "/dashboard/creditos-individuales")}
+            />
+          )}
           {credito.tipo_credito === "Individual" && saldoActual > 0 && (
             <DropdownMenu>
               <DropdownMenuTrigger
