@@ -113,6 +113,7 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
   });
   const [savingPago, setSavingPago] = useState(false);
   const [syncingPagoId, setSyncingPagoId] = useState<number | null>(null);
+  const [syncingRenovacion, setSyncingRenovacion] = useState(false);
   const scheduleControls = useTableControls();
   const pagosControls = useTableControls();
 
@@ -195,6 +196,27 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
       toast.error(error instanceof Error ? error.message : "No se pudo sincronizar el ingreso.");
     } finally {
       setSyncingPagoId(null);
+    }
+  };
+
+  const sincronizarRenovacion = async () => {
+    setSyncingRenovacion(true);
+    try {
+      // Usa la ruta estándar de actualización para que funcione incluso si la
+      // instancia conserva una caché de rutas previa.
+      const response = await apiFetch(`/creditos/${id}`, {
+        method: "PUT",
+        body: JSON.stringify({ sincronizar_refinanciamiento: true }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.message || "No se pudo sincronizar la renovación.");
+
+      toast.success(result.message || "Efectivo neto y egreso sincronizados.");
+      await fetchData();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No se pudo sincronizar la renovación.");
+    } finally {
+      setSyncingRenovacion(false);
     }
   };
 
@@ -419,7 +441,15 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
         <div className="space-y-4">
           {renovacionComoNueva && (
             <Card className="border-primary/25 bg-primary/5">
-              <CardHeader className="pb-2"><CardTitle className="text-base">Renovación</CardTitle></CardHeader>
+              <CardHeader className="pb-2 flex-row items-center justify-between gap-3 space-y-0">
+                <CardTitle className="text-base">Renovación</CardTitle>
+                {isAdmin && (
+                  <Button size="sm" variant="outline" disabled={syncingRenovacion} onClick={sincronizarRenovacion}>
+                    <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${syncingRenovacion ? "animate-spin" : ""}`} />
+                    {syncingRenovacion ? "Sincronizando" : "Actualizar efectivo"}
+                  </Button>
+                )}
+              </CardHeader>
               <CardContent className="grid gap-4 text-sm sm:grid-cols-2 xl:grid-cols-4">
                 <div className="grid gap-1"><span className="text-muted-foreground">Crédito anterior</span><Button variant="link" className="h-auto justify-start p-0" onClick={() => router.push(`/dashboard/creditos/${renovacionComoNueva.credito_anterior?.num_prog ?? renovacionComoNueva.num_prog_anterior}`)}>#{renovacionComoNueva.credito_anterior?.num_prog ?? renovacionComoNueva.num_prog_anterior}</Button></div>
                 <div className="grid gap-1"><span className="text-muted-foreground">Fecha efectiva</span><span>{fmtFecha(renovacionComoNueva.fecha_efectiva)}</span></div>
