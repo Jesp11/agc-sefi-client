@@ -717,6 +717,7 @@ export default function CreditosIndividualesPage() {
               <TableHead>Día Pago</TableHead>
               <TableHead>Gestor Cobranza</TableHead>
               <TableHead className="text-center">Plazos</TableHead>
+              <TableHead>Ficha semanal</TableHead>
               <TableHead>Monto</TableHead>
               <TableHead>Interés</TableHead>
               <TableHead>Total</TableHead>
@@ -726,7 +727,7 @@ export default function CreditosIndividualesPage() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={10} className="h-32 text-center">
+                <TableCell colSpan={11} className="h-32 text-center">
                   <div className="flex flex-col items-center gap-2">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
                     <p className="text-sm text-muted-foreground">Cargando créditos...</p>
@@ -735,7 +736,7 @@ export default function CreditosIndividualesPage() {
               </TableRow>
             ) : filtered.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={10} className="h-32 text-center text-muted-foreground">
+                <TableCell colSpan={11} className="h-32 text-center text-muted-foreground">
                   {searchTerm
                     ? "No se encontraron créditos con ese criterio."
                     : "No se encontraron créditos individuales para mostrar."}
@@ -759,6 +760,9 @@ export default function CreditosIndividualesPage() {
                   <TableCell className="text-xs">{c.dias_pago || "—"}</TableCell>
                   <TableCell className="text-xs">{c.asesor?.nombre_asesor || "—"}</TableCell>
                   <TableCell className="text-center text-xs">{c.plazos} sem</TableCell>
+                  <TableCell className="text-xs font-bold text-emerald-700">
+                    ${Number(c.valor_ficha ?? (c.plazos ? Number(c.total) / Number(c.plazos) : 0)).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </TableCell>
                   <TableCell className="text-xs font-semibold">${Number(c.monto_otorgado).toLocaleString("es-MX")}</TableCell>
                   <TableCell className="text-xs text-muted-foreground">${Number(c.interes).toLocaleString("es-MX")}</TableCell>
                   <TableCell className="text-xs font-bold text-primary">${Number(c.total).toLocaleString("es-MX")}</TableCell>
