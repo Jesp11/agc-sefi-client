@@ -86,6 +86,8 @@ type PagoHistorial = {
   metodo_pago?: string | null;
   notas?: string | null;
   tipo: string;
+  id_cliente_integrante?: string | null;
+  integrante?: { id_cliente: string; nombre_completo: string } | null;
 };
 
 export default function CreditoDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -112,6 +114,8 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
     notas: "",
   });
   const [savingPago, setSavingPago] = useState(false);
+  const [distribuirOpen, setDistribuirOpen] = useState(false);
+  const [asignaciones, setAsignaciones] = useState<Record<string, string>>({});
   const [syncingRenovacion, setSyncingRenovacion] = useState(false);
   const scheduleControls = useTableControls();
   const pagosControls = useTableControls();
@@ -254,8 +258,20 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
   const isGrupal = credito.tipo_credito === "Grupal";
   const integrantesGrupo: any[] = credito.grupo?.clientes ?? [];
   const distribuciones: any[] = credito.distribuciones_integrantes ?? [];
+  const cobranzaIntegrantes: any[] = credito.cobranza_individual?.integrantes ?? [];
   const conciliacion = credito.distribucion_documental ?? {};
   const documentosIntegrantesHabilitados = Boolean(conciliacion.documentos_habilitados);
+  const pagosSinAsignar = pagos.filter((p) => p.tipo === "Abono" && !p.id_cliente_integrante);
+  const abrirDistribucion = () => {
+    const values: Record<string, string> = {};
+    pagosSinAsignar.forEach((p) => (p.asignaciones_grupales || []).forEach((a: any) => { values[a.id_cliente_integrante] = String((Number(values[a.id_cliente_integrante]) || 0) + Number(a.monto)); }));
+    setAsignaciones(values); setDistribuirOpen(true);
+  };
+  const guardarDistribucionAbonos = async (distribucion: Array<{ id_cliente_integrante: string; monto: number }>) => {
+    const res = await apiFetch(`/creditos/${id}/pagos-grupales/distribuir`, { method: "PUT", body: JSON.stringify({ distribucion }) });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.message || "No se pudieron distribuir los abonos.");
+  };
   const renovacionComoNueva = Array.isArray(credito.refinanciamientos) ? credito.refinanciamientos[0] : null;
   const renovacionComoAnterior = Array.isArray(credito.refinanciamientos_como_anterior) ? credito.refinanciamientos_como_anterior[0] : null;
 
@@ -648,6 +664,8 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
                 No hay integrantes registrados en este grupo.
               </p>
             ) : (
+              <>
+              <div className="overflow-x-auto">
               <Table>
                 <TableHeader className="bg-muted/50">
                   <TableRow>
@@ -657,6 +675,9 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
                     <TableHead className="text-right">Interés</TableHead>
                     <TableHead className="text-right">Total a pagar</TableHead>
                     <TableHead className="text-right">Ficha sem.</TableHead>
+                    <TableHead className="text-right">Abonado</TableHead>
+                    <TableHead className="text-right">Saldo</TableHead>
+                    <TableHead className="text-center">Estado</TableHead>
                     <TableHead>Folio</TableHead>
                     <TableHead className="text-right">Acción</TableHead>
                   </TableRow>
@@ -664,6 +685,8 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
                 <TableBody>
                   {integrantesGrupo.map((cliente: any) => {
                     const integrante = distribuciones.find((item) => item.id_cliente === cliente.id_cliente);
+                    const cobranza = cobranzaIntegrantes.find((item) => item.id_cliente === cliente.id_cliente);
+                    const saldoIntegrante = Number(cobranza?.saldo_pendiente ?? integrante?.total ?? 0);
                     return <TableRow key={cliente.id_cliente}>
                       <TableCell className="font-mono text-xs">{cliente.id_cliente}</TableCell>
                       <TableCell className="font-medium">{integrante?.nombre_cliente || cliente.nombre_completo}</TableCell>
@@ -671,17 +694,37 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
                       <TableCell className="text-right text-sm">{integrante ? `$${Number(integrante.interes).toLocaleString("es-MX", { minimumFractionDigits: 2 })}` : "—"}</TableCell>
                       <TableCell className="text-right text-sm">{integrante ? `$${Number(integrante.total).toLocaleString("es-MX", { minimumFractionDigits: 2 })}` : "—"}</TableCell>
                       <TableCell className="text-right text-sm">{integrante ? `$${Number(integrante.valor_ficha).toLocaleString("es-MX", { minimumFractionDigits: 2 })}` : "—"}</TableCell>
+                      <TableCell className="text-right text-sm">{integrante ? `$${Number(cobranza?.abonado ?? 0).toLocaleString("es-MX", { minimumFractionDigits: 2 })}` : "—"}</TableCell>
+                      <TableCell className="text-right text-sm font-semibold">{integrante ? `$${saldoIntegrante.toLocaleString("es-MX", { minimumFractionDigits: 2 })}` : "—"}</TableCell>
+                      <TableCell className="text-center">{integrante && <Badge variant={cobranza?.liquidado ? "default" : "secondary"} className={cobranza?.liquidado ? "bg-emerald-600" : ""}>{cobranza?.liquidado ? "Liquidado" : "Pendiente"}</Badge>}</TableCell>
                       <TableCell className="font-mono text-xs">{integrante?.folio_documental || "—"}</TableCell>
                       <TableCell className="text-right">
-                        <Button size="sm" variant="outline" className="h-7 text-xs" disabled={!documentosIntegrantesHabilitados || !integrante}
-                          onClick={() => { setDocumentoIntegrante(integrante); setDocumentoIntegranteTipo("pagare"); }}>
-                          Documentos
-                        </Button>
+                        <div className="flex justify-end gap-1">
+                          {puedeRegistrarPago && integrante && saldoIntegrante > 0 && (
+                            <RegistrarPagoDialog
+                              numProg={credito.num_prog}
+                              valorFicha={integrante.valor_ficha}
+                              saldoPendiente={saldoIntegrante}
+                              integrante={{ id_cliente: integrante.id_cliente, nombre_cliente: integrante.nombre_cliente || cliente.nombre_completo }}
+                              onSuccess={fetchData}
+                              trigger={<Button size="sm" className="h-7 text-xs">Cobrar</Button>}
+                            />
+                          )}
+                          <Button size="sm" variant="outline" className="h-7 text-xs" disabled={!documentosIntegrantesHabilitados || !integrante}
+                            onClick={() => { setDocumentoIntegrante({ ...integrante, saldo_pendiente: saldoIntegrante }); setDocumentoIntegranteTipo("pagare"); }}>
+                            Documentos
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>;
                   })}
                 </TableBody>
               </Table>
+              </div>
+              {Number(credito.cobranza_individual?.abonos_grupales_sin_asignar ?? 0) > 0 && (
+                <div className="mt-3 flex items-center justify-between gap-3 text-xs text-amber-800"><span>Hay ${Number(credito.cobranza_individual.abonos_grupales_sin_asignar).toLocaleString("es-MX", { minimumFractionDigits: 2 })} de abonos históricos o grupales sin asignar.</span>{isAdmin && <Button size="sm" variant="outline" className="h-7" onClick={abrirDistribucion}>Distribuir abonos</Button>}</div>
+              )}
+              </>
             )}
           </CardContent>
         </Card>
@@ -752,6 +795,7 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
                       <TableHead>Fecha</TableHead>
                       <TableHead>Hora</TableHead>
                       <TableHead>Tipo</TableHead>
+                      {isGrupal && <TableHead>Integrante</TableHead>}
                       <TableHead>Método</TableHead>
                       <TableHead className="text-right">Monto</TableHead>
                       {isAdmin && <TableHead className="text-right">Acciones</TableHead>}
@@ -759,12 +803,13 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
                   </TableHeader>
                   <TableBody>
                     {pagosFiltered.length === 0 ? (
-                      <TableRow><TableCell colSpan={isAdmin ? 6 : 5} className="h-24 text-center text-muted-foreground">No se encontraron pagos.</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={(isAdmin ? 6 : 5) + (isGrupal ? 1 : 0)} className="h-24 text-center text-muted-foreground">No se encontraron pagos.</TableCell></TableRow>
                     ) : pagosPaginated.map((p) => (
                       <TableRow key={p.id}>
                         <TableCell>{fmtFecha(p.fecha)}</TableCell>
                         <TableCell className="text-xs">{p.hora?.slice(0, 5)}</TableCell>
                         <TableCell><Badge variant={p.tipo === "Multa" ? "destructive" : "outline"}>{p.tipo}</Badge></TableCell>
+                        {isGrupal && <TableCell className="text-xs">{p.integrante?.nombre_completo || "Grupo"}</TableCell>}
                         <TableCell className="text-xs">{p.metodo_pago}</TableCell>
                         <TableCell className="text-right font-semibold">${Number(p.monto).toLocaleString()}</TableCell>
                         {isAdmin && (
@@ -823,6 +868,18 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
           onSaved={fetchData}
         />
       )}
+      {isGrupal && (
+        <DistribucionIntegrantesDialog
+          credito={credito}
+          open={distribuirOpen}
+          onOpenChange={setDistribuirOpen}
+          onSaved={fetchData}
+          modo="abonos"
+          totalAbonos={pagosSinAsignar.reduce((total, pago) => total + Number(pago.monto), 0)}
+          asignacionesIniciales={asignaciones}
+          onGuardarAbonos={guardarDistribucionAbonos}
+        />
+      )}
       {documentoIntegrante && (
         <DocumentoAdeudoDialog
           credito={{
@@ -839,7 +896,7 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
             monto_otorgado: documentoIntegrante.capital,
             interes: documentoIntegrante.interes,
             total: documentoIntegrante.total,
-            saldo_pendiente: documentoIntegrante.total,
+            saldo_pendiente: documentoIntegrante.saldo_pendiente ?? documentoIntegrante.total,
             valor_ficha: documentoIntegrante.valor_ficha,
             folio_documental: documentoIntegrante.folio_documental,
             mora: {},

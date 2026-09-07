@@ -15,7 +15,16 @@ import { TablePagination, TableSearch } from "@/components/table-controls";
 import { PAGE_SIZE, filterBySearch, paginateItems, useTableControls } from "@/hooks/use-paginated-list";
 import { creditoSearchFields, fetchAllPages } from "@/lib/table-utils";
 
-function CerradosTable({ tipo }: { tipo: "individual" | "grupal" }) {
+type TipoCerrado = "individual" | "grupal";
+type SeccionCerrados = "con-derecho-renovacion" | "sin-derecho-renovacion" | "cerrados-con-saldo";
+
+const emptyMessage: Record<SeccionCerrados, string> = {
+  "con-derecho-renovacion": "Sin créditos liquidados con derecho a renovación.",
+  "sin-derecho-renovacion": "Sin créditos liquidados sin derecho a renovación.",
+  "cerrados-con-saldo": "Sin créditos cerrados con saldo pendiente.",
+};
+
+function CerradosTable({ tipo, seccion }: { tipo: TipoCerrado; seccion: SeccionCerrados }) {
   const router = useRouter();
   const { user } = useAuth();
   const isAsesor = isFieldRoleName(user?.role?.nombre);
@@ -27,7 +36,7 @@ function CerradosTable({ tipo }: { tipo: "individual" | "grupal" }) {
   const fetchCerrados = async () => {
     setLoading(true);
     try {
-      const rows = await fetchAllPages(`/cartera/cerrados?tipo=${tipo}`);
+      const rows = await fetchAllPages(`/cartera/cerrados?tipo=${tipo}&seccion=${seccion}`);
       setCreditos(rows);
     } catch {
       setCreditos([]);
@@ -38,7 +47,7 @@ function CerradosTable({ tipo }: { tipo: "individual" | "grupal" }) {
 
   useEffect(() => {
     fetchCerrados();
-  }, [tipo]);
+  }, [tipo, seccion]);
 
   const handleReactivar = async (numProg: number) => {
     setReactivando(numProg);
@@ -79,7 +88,7 @@ function CerradosTable({ tipo }: { tipo: "individual" | "grupal" }) {
             {loading ? (
               <TableRow><TableCell colSpan={6} className="h-32 text-center text-muted-foreground">Cargando...</TableCell></TableRow>
             ) : filtered.length === 0 ? (
-              <TableRow><TableCell colSpan={6} className="h-32 text-center text-muted-foreground">{search ? "No se encontraron resultados." : "Sin créditos cerrados."}</TableCell></TableRow>
+              <TableRow><TableCell colSpan={6} className="h-32 text-center text-muted-foreground">{search ? "No se encontraron resultados." : emptyMessage[seccion]}</TableCell></TableRow>
             ) : paginated.map((c) => (
               <TableRow key={c.num_prog}>
                 <TableCell className="font-mono text-xs">#{c.num_prog}</TableCell>
@@ -111,16 +120,45 @@ export default function CarteraCerradosPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Clientes Cerrados sin Renovación</h1>
-        <p className="text-muted-foreground">Préstamos cerrados — individuales y grupales.</p>
+        <h1 className="text-3xl font-bold">Clientes Cerrados</h1>
+        <p className="text-muted-foreground">Clasificados por su liquidación, historial de mora y derecho a renovación.</p>
       </div>
-      <Tabs defaultValue="individual">
+      <Tabs defaultValue="con-derecho-renovacion" className="space-y-4">
         <TabsList>
-          <TabsTrigger value="individual"><User className="h-4 w-4 mr-2" />Individual</TabsTrigger>
-          <TabsTrigger value="grupal"><Users className="h-4 w-4 mr-2" />Grupal</TabsTrigger>
+          <TabsTrigger value="con-derecho-renovacion">Con derecho a renovación</TabsTrigger>
+          <TabsTrigger value="sin-derecho-renovacion">Sin derecho a renovación</TabsTrigger>
+          <TabsTrigger value="cerrados-con-saldo">Cerrados con saldo</TabsTrigger>
         </TabsList>
-        <TabsContent value="individual"><CerradosTable tipo="individual" /></TabsContent>
-        <TabsContent value="grupal"><CerradosTable tipo="grupal" /></TabsContent>
+        <TabsContent value="con-derecho-renovacion">
+          <Tabs defaultValue="individual" className="space-y-4">
+            <TabsList>
+              <TabsTrigger value="individual"><User className="h-4 w-4 mr-2" />Individual</TabsTrigger>
+              <TabsTrigger value="grupal"><Users className="h-4 w-4 mr-2" />Grupal</TabsTrigger>
+            </TabsList>
+            <TabsContent value="individual"><CerradosTable tipo="individual" seccion="con-derecho-renovacion" /></TabsContent>
+            <TabsContent value="grupal"><CerradosTable tipo="grupal" seccion="con-derecho-renovacion" /></TabsContent>
+          </Tabs>
+        </TabsContent>
+        <TabsContent value="sin-derecho-renovacion">
+          <Tabs defaultValue="individual" className="space-y-4">
+            <TabsList>
+              <TabsTrigger value="individual"><User className="h-4 w-4 mr-2" />Individual</TabsTrigger>
+              <TabsTrigger value="grupal"><Users className="h-4 w-4 mr-2" />Grupal</TabsTrigger>
+            </TabsList>
+            <TabsContent value="individual"><CerradosTable tipo="individual" seccion="sin-derecho-renovacion" /></TabsContent>
+            <TabsContent value="grupal"><CerradosTable tipo="grupal" seccion="sin-derecho-renovacion" /></TabsContent>
+          </Tabs>
+        </TabsContent>
+        <TabsContent value="cerrados-con-saldo">
+          <Tabs defaultValue="individual" className="space-y-4">
+            <TabsList>
+              <TabsTrigger value="individual"><User className="h-4 w-4 mr-2" />Individual</TabsTrigger>
+              <TabsTrigger value="grupal"><Users className="h-4 w-4 mr-2" />Grupal</TabsTrigger>
+            </TabsList>
+            <TabsContent value="individual"><CerradosTable tipo="individual" seccion="cerrados-con-saldo" /></TabsContent>
+            <TabsContent value="grupal"><CerradosTable tipo="grupal" seccion="cerrados-con-saldo" /></TabsContent>
+          </Tabs>
+        </TabsContent>
       </Tabs>
     </div>
   );

@@ -25,7 +25,7 @@ import { cn, fmtFecha } from "@/lib/utils";
 import { downloadRoutePaymentTemplate } from "@/lib/pagos-ruta-xlsx";
 import { exportarCorteDiarioPdf } from "@/lib/reporte-corte-diario-pdf";
 import { ImportarPagosRutaDialog } from "@/components/importar-pagos-ruta-dialog";
-import { User, Users, Banknote, ChevronDown, ChevronUp, ChevronsUpDown, Download, Upload, RefreshCw, Plus, Printer } from "lucide-react";
+import { User, Users, Banknote, ChevronDown, ChevronUp, ChevronsUpDown, Download, Upload, RefreshCw, Plus, Printer, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 type Cobro = {
@@ -283,6 +283,7 @@ function AdminPagosView({
   const [montoRecibido, setMontoRecibido] = useState("");
   const [notasRecepcion, setNotasRecepcion] = useState("");
   const [savingRecepcion, setSavingRecepcion] = useState(false);
+  const [eliminandoPagoId, setEliminandoPagoId] = useState<number | null>(null);
   const [importandoRuta, setImportandoRuta] = useState(false);
   const montoPosteriorCorte = Math.max(0, Number(recibiendo?.monto_posterior_corte ?? 0));
   const montoActual = Number(recibiendo?.monto_recibido ?? 0);
@@ -361,6 +362,28 @@ function AdminPagosView({
       toast.error("Error de conexión");
     } finally {
       setSavingRecepcion(false);
+    }
+  };
+
+  const eliminarAbono = async (pago: any) => {
+    const folio = pago.credito?.num_prog ?? pago.num_prog;
+    if (!folio || !pago.id) return;
+    if (!window.confirm(`¿Eliminar el abono de ${money(pago.monto)}? El crédito volverá a quedar pendiente.`)) return;
+
+    setEliminandoPagoId(Number(pago.id));
+    try {
+      const res = await apiFetch(`/creditos/${folio}/pagos/${pago.id}`, { method: "DELETE" });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(body.message || "No se pudo eliminar el abono.");
+        return;
+      }
+      toast.success(body.message || "Abono eliminado.");
+      onRefresh();
+    } catch {
+      toast.error("Error de conexión al eliminar el abono.");
+    } finally {
+      setEliminandoPagoId(null);
     }
   };
 
@@ -533,6 +556,23 @@ function AdminPagosView({
                   );
                   const moraAsesor = a.creditos_mora || [];
                   const foliosRutaDelDia = new Set(rutaDelDiaAsesor.map((c: any) => String(c.num_prog)));
+                  const foliosAtrasados = new Set(atrasadosAsesor.map((c: any) => String(c.num_prog)));
+                  const foliosMora = new Set(moraAsesor.map((c: any) => String(c.num_prog)));
+                  const pagosDelFolio = (folio: number | string) => pagosAsesor.filter(
+                    (p: any) => String(p.credito?.num_prog ?? p.num_prog) === String(folio),
+                  );
+                  const botonEliminarAbono = (pago: any) => isAdmin && !Boolean(pago.recibido_en_caja) && (
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      className="h-7 px-2 text-[11px]"
+                      disabled={eliminandoPagoId === Number(pago.id)}
+                      onClick={() => eliminarAbono(pago)}
+                    >
+                      <Trash2 className="mr-1 h-3 w-3" />
+                      {eliminandoPagoId === Number(pago.id) ? "Eliminando" : "Eliminar"}
+                    </Button>
+                  );
                   // La sección de abonos es exclusivamente para la ruta del
                   // día. Un abono a un atrasado conserva su lugar en la lista
                   // de atrasados, donde se mostrará como pagado en verde.
@@ -676,6 +716,7 @@ function AdminPagosView({
                                         <TableHead className="text-xs h-8">Tipo</TableHead>
                                         <TableHead className="text-xs h-8">Método</TableHead>
                                         <TableHead className="text-xs h-8 text-right">Abono</TableHead>
+                                        {isAdmin && <TableHead className="text-xs h-8 text-right">Acción</TableHead>}
                                       </TableRow>
                                     </TableHeader>
                                     <TableBody>
@@ -702,6 +743,7 @@ function AdminPagosView({
                                           <TableCell className="text-right font-bold text-emerald-700">
                                             {money(p.monto)}
                                           </TableCell>
+                                          {isAdmin && <TableCell className="text-right">{botonEliminarAbono(p)}</TableCell>}
                                         </TableRow>
                                       ))}
                                     </TableBody>
@@ -763,11 +805,15 @@ function AdminPagosView({
                                         <TableHead className="text-xs h-8 text-center">Atraso</TableHead>
                                         <TableHead className="text-xs h-8 text-right">A cobrar</TableHead>
                                         <TableHead className="text-xs h-8 text-center">Estado</TableHead>
+                                        {isAdmin && <TableHead className="text-xs h-8 text-right">Acción</TableHead>}
                                       </TableRow>
                                     </TableHeader>
                                     <TableBody>
                                       {atrasadosMostrados.map((c: any) => {
                                         const pagadoHoy = Boolean(c.pagado_hoy);
+                                        const abonosAtrasados = pagosDelFolio(c.num_prog).filter((p: any) =>
+                                          foliosAtrasados.has(String(p.credito?.num_prog ?? p.num_prog)),
+                                        );
                                         return (
                                           <TableRow key={c.num_prog} className={cn("text-xs hover:bg-muted/30", pagadoHoy && "bg-emerald-100 text-emerald-950 hover:bg-emerald-200/80 [&_a]:text-emerald-800 [&_a]:decoration-emerald-600/50")}>
                                             <TableCell className="font-mono font-medium"><FolioLink folio={c.num_prog} /></TableCell>
@@ -788,6 +834,13 @@ function AdminPagosView({
                                                 <Badge variant="outline" className="border-amber-300 text-amber-800">Pendiente</Badge>
                                               )}
                                             </TableCell>
+                                            {isAdmin && (
+                                              <TableCell className="text-right">
+                                                <div className="flex justify-end gap-1">
+                                                  {abonosAtrasados.map((pago: any) => <React.Fragment key={pago.id}>{botonEliminarAbono(pago)}</React.Fragment>)}
+                                                </div>
+                                              </TableCell>
+                                            )}
                                           </TableRow>
                                         );
                                       })}
@@ -812,11 +865,15 @@ function AdminPagosView({
                                         <TableHead className="text-xs h-8 text-center">Días mora</TableHead>
                                         <TableHead className="text-xs h-8 text-right">Saldo</TableHead>
                                         <TableHead className="text-xs h-8 text-center">Estado</TableHead>
+                                        {isAdmin && <TableHead className="text-xs h-8 text-right">Acción</TableHead>}
                                       </TableRow>
                                     </TableHeader>
                                     <TableBody>
                                       {moraMostrada.map((c: any) => {
                                         const pagadoHoy = Boolean(c.pagado_hoy);
+                                        const abonosMora = pagosDelFolio(c.num_prog).filter((p: any) =>
+                                          foliosMora.has(String(p.credito?.num_prog ?? p.num_prog)),
+                                        );
                                         return (
                                           <TableRow key={c.num_prog} className={cn("text-xs hover:bg-muted/30", pagadoHoy && "bg-emerald-100 text-emerald-950 hover:bg-emerald-200/80 [&_a]:text-emerald-800 [&_a]:decoration-emerald-600/50")}>
                                             <TableCell className="font-mono font-medium"><FolioLink folio={c.num_prog} /></TableCell>
@@ -837,6 +894,13 @@ function AdminPagosView({
                                                 <Badge variant="outline" className="border-red-300 text-red-800">En mora</Badge>
                                               )}
                                             </TableCell>
+                                            {isAdmin && (
+                                              <TableCell className="text-right">
+                                                <div className="flex justify-end gap-1">
+                                                  {abonosMora.map((pago: any) => <React.Fragment key={pago.id}>{botonEliminarAbono(pago)}</React.Fragment>)}
+                                                </div>
+                                              </TableCell>
+                                            )}
                                           </TableRow>
                                         );
                                       })}

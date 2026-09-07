@@ -1,18 +1,20 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/context/auth-context";
 import { isAdminRoleName } from "@/lib/authz";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowLeft, User, Phone, MapPin, Briefcase, ShieldCheck, ClipboardList, CreditCard, Component, Cake, FileUp, Upload, Trash2, FileText } from "lucide-react";
+import { ArrowLeft, User, Phone, MapPin, Briefcase, ShieldCheck, ClipboardList, CreditCard, Component, Cake, FileUp, Upload, Trash2, FileText, Pencil } from "lucide-react";
 import { toast } from "sonner";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "../../../../components/ui/badge";
 import { fmtFecha, fmtTelefono } from "@/lib/utils";
 import { HistorialUnificadoModal } from "@/components/historial-unificado-modal";
@@ -29,6 +31,11 @@ import {
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
 const STORAGE_BASE = API_BASE.replace("/api", "") + "/storage";
+type TipoContacto = "aval" | "referencia";
+
+const formularioContactoVacio = (tipo: TipoContacto): Record<string, string> => tipo === "aval"
+  ? { nombre: "", parentesco: "", telefono: "", direccion: "", ocupacion_laboral: "", empresa: "", tiempo_conocer: "" }
+  : { tipo_referencia: "Familiar", nombre: "", parentesco: "", telefono: "", direccion: "", años_amistad: "" };
 
 export default function ClienteDetallePage() {
   const { id } = useParams();
@@ -42,6 +49,15 @@ export default function ClienteDetallePage() {
   const [asesores, setAsesores] = useState<any[]>([]);
   const [asesorSeleccionado, setAsesorSeleccionado] = useState("");
   const [guardandoAsesor, setGuardandoAsesor] = useState(false);
+  const [seccionEditando, setSeccionEditando] = useState<"personal" | "domicilio" | "laboral" | null>(null);
+  const [guardandoCliente, setGuardandoCliente] = useState(false);
+  const [clienteForm, setClienteForm] = useState<Record<string, string>>({});
+  const [contactoEditando, setContactoEditando] = useState<{ tipo: TipoContacto; registro?: any } | null>(null);
+  const [contactoForm, setContactoForm] = useState<Record<string, string>>({});
+  const [nuevoAvalForm, setNuevoAvalForm] = useState(formularioContactoVacio("aval"));
+  const [nuevaReferenciaForm, setNuevaReferenciaForm] = useState(formularioContactoVacio("referencia"));
+  const [guardandoContacto, setGuardandoContacto] = useState(false);
+  const [eliminandoContactoId, setEliminandoContactoId] = useState<string | number | null>(null);
   const creditosControls = useTableControls();
 
   const fetchDocumentos = async () => {
@@ -112,6 +128,113 @@ export default function ClienteDetallePage() {
       toast.error("Error de conexión");
     } finally {
       setGuardandoAsesor(false);
+    }
+  };
+
+  const abrirEdicionCliente = (seccion: "personal" | "domicilio" | "laboral") => {
+    setSeccionEditando(seccion);
+    const campos = seccion === "personal"
+      ? ["nombre_completo", "telefono", "curp", "clave_elector", "fecha_nacimiento"]
+      : seccion === "domicilio"
+        ? ["direccion", "entre_calles"]
+        : ["ocupacion", "telefono_trabajo", "direccion_trabajo"];
+    setClienteForm(Object.fromEntries(campos.map((campo) => [campo, String(cliente?.[campo] ?? "")] )));
+  };
+
+  const guardarSeccionCliente = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!seccionEditando) return;
+
+    setGuardandoCliente(true);
+    try {
+      const res = await apiFetch(`/clientes/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(clienteForm),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.message || "No se pudo actualizar la información.");
+        return;
+      }
+      toast.success(data.message || "Información actualizada.");
+      setSeccionEditando(null);
+      if (data.data) setCliente(data.data);
+      else fetchCliente();
+    } catch {
+      toast.error("Error de conexión al actualizar el cliente.");
+    } finally {
+      setGuardandoCliente(false);
+    }
+  };
+
+  const abrirContacto = (tipo: TipoContacto, registro?: any) => {
+    setContactoEditando({ tipo, registro });
+    const base = formularioContactoVacio(tipo);
+    setContactoForm(Object.fromEntries(Object.keys(base).map((campo) => [campo, String(registro?.[campo] ?? base[campo])])));
+  };
+
+  const guardarContacto = async (tipo: TipoContacto, form: Record<string, string>, registro?: any): Promise<boolean> => {
+    setGuardandoContacto(true);
+    try {
+      const endpoint = tipo === "aval" ? "/avales" : "/referencias";
+      const res = await apiFetch(registro?.id ? `${endpoint}/${registro.id}` : endpoint, {
+        method: registro?.id ? "PUT" : "POST",
+        body: JSON.stringify(registro?.id ? form : { id_cliente: cliente.id_cliente, ...form }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.message || `No se pudo guardar el ${tipo}.`);
+        return false;
+      }
+      toast.success(data.message || `${tipo === "aval" ? "Aval" : "Referencia"} guardado correctamente.`);
+      await fetchCliente();
+      return true;
+    } catch {
+      toast.error("Error de conexión al guardar.");
+      return false;
+    } finally {
+      setGuardandoContacto(false);
+    }
+  };
+
+  const guardarContactoDialog = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!contactoEditando) return;
+    if (await guardarContacto(contactoEditando.tipo, contactoForm, contactoEditando.registro)) {
+      setContactoEditando(null);
+    }
+  };
+
+  const guardarContactoNuevo = async (e: React.FormEvent, tipo: TipoContacto) => {
+    e.preventDefault();
+    const form = tipo === "aval" ? nuevoAvalForm : nuevaReferenciaForm;
+    if (await guardarContacto(tipo, form)) {
+      if (tipo === "aval") setNuevoAvalForm(formularioContactoVacio("aval"));
+      else setNuevaReferenciaForm(formularioContactoVacio("referencia"));
+    }
+  };
+
+  const eliminarContacto = async (tipo: TipoContacto, registro: any) => {
+    const registroId = registro?.id ?? registro?.id_aval ?? registro?.id_referencia;
+    if (!registroId) return;
+    const etiqueta = tipo === "aval" ? "aval" : "referencia";
+    if (!window.confirm(`¿Eliminar este ${etiqueta}? Esta acción no se puede deshacer.`)) return;
+
+    setEliminandoContactoId(registroId);
+    try {
+      const endpoint = tipo === "aval" ? "/avales" : "/referencias";
+      const res = await apiFetch(`${endpoint}/${registroId}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.message || `No se pudo eliminar el ${etiqueta}.`);
+        return;
+      }
+      toast.success(data.message || `${etiqueta === "aval" ? "Aval" : "Referencia"} eliminado correctamente.`);
+      await fetchCliente();
+    } catch {
+      toast.error("Error de conexión al eliminar.");
+    } finally {
+      setEliminandoContactoId(null);
     }
   };
 
@@ -204,6 +327,10 @@ export default function ClienteDetallePage() {
         {/* Personal */}
         <TabsContent value="personal" className="mt-4">
           <Card>
+            <CardHeader className="flex flex-row items-center justify-between py-4">
+              <CardTitle className="text-lg">Información personal</CardTitle>
+              {isAdmin && <Button variant="outline" size="sm" onClick={() => abrirEdicionCliente("personal")}><Pencil className="mr-1.5 h-3.5 w-3.5" />Editar</Button>}
+            </CardHeader>
             <CardContent className="pt-6 grid grid-cols-2 gap-6 text-sm">
               <div className="flex flex-col gap-1">
                 <span className="text-xs text-muted-foreground font-medium">Grupo</span>
@@ -249,6 +376,10 @@ export default function ClienteDetallePage() {
         {/* Domicilio */}
         <TabsContent value="domicilio" className="mt-4">
           <Card>
+            <CardHeader className="flex flex-row items-center justify-between py-4">
+              <CardTitle className="text-lg">Domicilio</CardTitle>
+              {isAdmin && <Button variant="outline" size="sm" onClick={() => abrirEdicionCliente("domicilio")}><Pencil className="mr-1.5 h-3.5 w-3.5" />Editar</Button>}
+            </CardHeader>
             <CardContent className="pt-6 grid grid-cols-1 gap-6 text-sm">
               <div className="flex flex-col gap-1">
                 <span className="text-xs text-muted-foreground font-medium">Dirección</span>
@@ -265,6 +396,10 @@ export default function ClienteDetallePage() {
         {/* Laboral */}
         <TabsContent value="laboral" className="mt-4">
           <Card>
+            <CardHeader className="flex flex-row items-center justify-between py-4">
+              <CardTitle className="text-lg">Información laboral</CardTitle>
+              {isAdmin && <Button variant="outline" size="sm" onClick={() => abrirEdicionCliente("laboral")}><Pencil className="mr-1.5 h-3.5 w-3.5" />Editar</Button>}
+            </CardHeader>
             <CardContent className="pt-6 grid grid-cols-2 gap-6 text-sm">
               <div className="flex flex-col gap-1">
                 <span className="text-xs text-muted-foreground font-medium">Ocupación</span>
@@ -295,6 +430,7 @@ export default function ClienteDetallePage() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead>Folio</TableHead>
                     <TableHead>Ciclo</TableHead>
                     <TableHead>Dia Pago</TableHead>
                     <TableHead>Gestor Cobranza</TableHead>
@@ -310,6 +446,9 @@ export default function ClienteDetallePage() {
                   {creditosFiltered.length > 0 ? (
                     creditosPaginated.map((c: any, index: number) => (
                       <TableRow key={c.id_credito || c.id || index}>
+                        <TableCell className="font-mono font-medium">
+                          <Link href={`/dashboard/creditos/${c.num_prog}`} className="text-primary underline underline-offset-2 hover:opacity-80">#{c.num_prog}</Link>
+                        </TableCell>
                         <TableCell>{c.ciclo}</TableCell>
                         <TableCell>{c.dias_pago}</TableCell>
                         <TableCell>{c.asesor?.nombre_asesor || "N/A"}</TableCell>
@@ -382,7 +521,7 @@ export default function ClienteDetallePage() {
                     ))
                   ) : (
                     <TableRow key="empty-creditos">
-                      <TableCell colSpan={9} className="text-center">{creditosControls.search ? "No se encontraron préstamos." : "Sin préstamos registrados"}</TableCell>
+                      <TableCell colSpan={10} className="text-center">{creditosControls.search ? "No se encontraron préstamos." : "Sin préstamos registrados"}</TableCell>
                     </TableRow>
                   )}
                 </TableBody>
@@ -503,17 +642,18 @@ export default function ClienteDetallePage() {
         {/* Avales */}
         <TabsContent value="avales" className="mt-4">
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="flex items-center gap-2 text-lg">
                 <ShieldCheck className="h-5 w-5" /> Avales
               </CardTitle>
+              {isAdmin && <Button size="sm" variant="outline" onClick={() => abrirContacto("aval")}><Pencil className="mr-1.5 h-3.5 w-3.5" />Agregar aval</Button>}
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
                 {cliente.avales && cliente.avales.length > 0 ? (
                   cliente.avales.map((a: any, index: number) => (
                     <div key={a.id_aval || a.id || index} className="border rounded-lg p-4 grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
-                      <div className="col-span-2 font-semibold text-base">{a.nombre}</div>
+                      <div className="col-span-2 flex items-center justify-between gap-3 font-semibold text-base"><span>{a.nombre}</span>{isAdmin && <div className="flex gap-2"><Button size="sm" variant="outline" onClick={() => abrirContacto("aval", a)}><Pencil className="mr-1.5 h-3.5 w-3.5" />Editar</Button><Button size="sm" variant="destructive" disabled={eliminandoContactoId === (a.id ?? a.id_aval)} onClick={() => eliminarContacto("aval", a)}><Trash2 className="mr-1.5 h-3.5 w-3.5" />{eliminandoContactoId === (a.id ?? a.id_aval) ? "Eliminando" : "Eliminar"}</Button></div>}</div>
                       <div className="flex flex-col gap-0.5">
                         <span className="text-xs text-muted-foreground">Parentesco</span>
                         <span>{a.parentesco || "—"}</span>
@@ -544,6 +684,12 @@ export default function ClienteDetallePage() {
                       )}
                     </div>
                   ))
+                ) : isAdmin ? (
+                  <form onSubmit={(e) => guardarContactoNuevo(e, "aval")} className="grid gap-4 rounded-lg border border-dashed p-4">
+                    <p className="text-sm text-muted-foreground">Aún no hay avales. Captura los datos del primer aval.</p>
+                    <ContactoFields tipo="aval" form={nuevoAvalForm} onChange={setNuevoAvalForm} />
+                    <Button type="submit" className="w-fit" disabled={guardandoContacto}>{guardandoContacto ? "Guardando..." : "Guardar aval"}</Button>
+                  </form>
                 ) : (
                   <p className="text-center text-muted-foreground py-4 text-sm">Sin avales registrados</p>
                 )}
@@ -555,17 +701,18 @@ export default function ClienteDetallePage() {
         {/* Referencias */}
         <TabsContent value="referencias" className="mt-4">
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="flex items-center gap-2 text-lg">
                 <ClipboardList className="h-5 w-5" /> Referencias
               </CardTitle>
+              {isAdmin && <Button size="sm" variant="outline" onClick={() => abrirContacto("referencia")}><Pencil className="mr-1.5 h-3.5 w-3.5" />Agregar referencia</Button>}
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
                 {cliente.referencias && cliente.referencias.length > 0 ? (
                   cliente.referencias.map((r: any, index: number) => (
                     <div key={r.id_referencia || r.id || index} className="border rounded-lg p-4 grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
-                      <div className="col-span-2 font-semibold text-base">{r.nombre}</div>
+                      <div className="col-span-2 flex items-center justify-between gap-3 font-semibold text-base"><span>{r.nombre}</span>{isAdmin && <div className="flex gap-2"><Button size="sm" variant="outline" onClick={() => abrirContacto("referencia", r)}><Pencil className="mr-1.5 h-3.5 w-3.5" />Editar</Button><Button size="sm" variant="destructive" disabled={eliminandoContactoId === (r.id ?? r.id_referencia)} onClick={() => eliminarContacto("referencia", r)}><Trash2 className="mr-1.5 h-3.5 w-3.5" />{eliminandoContactoId === (r.id ?? r.id_referencia) ? "Eliminando" : "Eliminar"}</Button></div>}</div>
                       <div className="flex flex-col gap-0.5">
                         <span className="text-xs text-muted-foreground">Parentesco</span>
                         <span>{r.parentesco || "—"}</span>
@@ -588,6 +735,12 @@ export default function ClienteDetallePage() {
                       </div>
                     </div>
                   ))
+                ) : isAdmin ? (
+                  <form onSubmit={(e) => guardarContactoNuevo(e, "referencia")} className="grid gap-4 rounded-lg border border-dashed p-4">
+                    <p className="text-sm text-muted-foreground">Aún no hay referencias. Captura los datos de la primera referencia.</p>
+                    <ContactoFields tipo="referencia" form={nuevaReferenciaForm} onChange={setNuevaReferenciaForm} />
+                    <Button type="submit" className="w-fit" disabled={guardandoContacto}>{guardandoContacto ? "Guardando..." : "Guardar referencia"}</Button>
+                  </form>
                 ) : (
                   <p className="text-center text-muted-foreground py-4 text-sm">Sin referencias registradas</p>
                 )}
@@ -647,6 +800,94 @@ export default function ClienteDetallePage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      <Dialog open={Boolean(seccionEditando)} onOpenChange={(open) => !open && setSeccionEditando(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Editar {seccionEditando === "personal" ? "información personal" : seccionEditando === "domicilio" ? "domicilio" : "información laboral"}</DialogTitle>
+            <DialogDescription>Solo se muestran los campos correspondientes a esta sección.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={guardarSeccionCliente} className="grid gap-4">
+            {seccionEditando === "personal" && <>
+              <div className="grid gap-2"><Label htmlFor="cliente-nombre">Nombre completo</Label><Input id="cliente-nombre" required value={clienteForm.nombre_completo ?? ""} onChange={(e) => setClienteForm({ ...clienteForm, nombre_completo: e.target.value })} /></div>
+              <div className="grid gap-2"><Label htmlFor="cliente-telefono">Teléfono</Label><Input id="cliente-telefono" value={clienteForm.telefono ?? ""} onChange={(e) => setClienteForm({ ...clienteForm, telefono: e.target.value })} /></div>
+              <div className="grid gap-2"><Label htmlFor="cliente-curp">CURP</Label><Input id="cliente-curp" maxLength={18} value={clienteForm.curp ?? ""} onChange={(e) => setClienteForm({ ...clienteForm, curp: e.target.value.toUpperCase() })} /></div>
+              <div className="grid gap-2"><Label htmlFor="cliente-elector">Clave de elector</Label><Input id="cliente-elector" value={clienteForm.clave_elector ?? ""} onChange={(e) => setClienteForm({ ...clienteForm, clave_elector: e.target.value })} /></div>
+              <div className="grid gap-2"><Label htmlFor="cliente-nacimiento">Fecha de nacimiento</Label><Input id="cliente-nacimiento" type="date" value={clienteForm.fecha_nacimiento ?? ""} onChange={(e) => setClienteForm({ ...clienteForm, fecha_nacimiento: e.target.value })} /></div>
+            </>}
+            {seccionEditando === "domicilio" && <>
+              <div className="grid gap-2"><Label htmlFor="cliente-direccion">Dirección</Label><textarea id="cliente-direccion" className="min-h-20 rounded-md border border-input bg-background px-3 py-2 text-sm" value={clienteForm.direccion ?? ""} onChange={(e) => setClienteForm({ ...clienteForm, direccion: e.target.value })} /></div>
+              <div className="grid gap-2"><Label htmlFor="cliente-entre-calles">Entre calles</Label><Input id="cliente-entre-calles" value={clienteForm.entre_calles ?? ""} onChange={(e) => setClienteForm({ ...clienteForm, entre_calles: e.target.value })} /></div>
+            </>}
+            {seccionEditando === "laboral" && <>
+              <div className="grid gap-2"><Label htmlFor="cliente-ocupacion">Ocupación</Label><Input id="cliente-ocupacion" value={clienteForm.ocupacion ?? ""} onChange={(e) => setClienteForm({ ...clienteForm, ocupacion: e.target.value })} /></div>
+              <div className="grid gap-2"><Label htmlFor="cliente-telefono-trabajo">Teléfono de trabajo</Label><Input id="cliente-telefono-trabajo" value={clienteForm.telefono_trabajo ?? ""} onChange={(e) => setClienteForm({ ...clienteForm, telefono_trabajo: e.target.value })} /></div>
+              <div className="grid gap-2"><Label htmlFor="cliente-direccion-trabajo">Dirección de trabajo</Label><textarea id="cliente-direccion-trabajo" className="min-h-20 rounded-md border border-input bg-background px-3 py-2 text-sm" value={clienteForm.direccion_trabajo ?? ""} onChange={(e) => setClienteForm({ ...clienteForm, direccion_trabajo: e.target.value })} /></div>
+            </>}
+            <DialogFooter>
+              <Button type="button" variant="ghost" onClick={() => setSeccionEditando(null)} disabled={guardandoCliente}>Cancelar</Button>
+              <Button type="submit" disabled={guardandoCliente}>{guardandoCliente ? "Guardando..." : "Guardar cambios"}</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(contactoEditando)} onOpenChange={(open) => !open && setContactoEditando(null)}>
+        <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{contactoEditando?.registro ? "Editar" : "Agregar"} {contactoEditando?.tipo === "aval" ? "aval" : "referencia"}</DialogTitle>
+            <DialogDescription>Completa únicamente los datos de esta sección del cliente.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={guardarContactoDialog} className="grid gap-4">
+            {contactoEditando && <ContactoFields tipo={contactoEditando.tipo} form={contactoForm} onChange={setContactoForm} />}
+            <DialogFooter>
+              <Button type="button" variant="ghost" onClick={() => setContactoEditando(null)} disabled={guardandoContacto}>Cancelar</Button>
+              <Button type="submit" disabled={guardandoContacto}>{guardandoContacto ? "Guardando..." : "Guardar"}</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
+  );
+}
+
+function ContactoFields({
+  tipo,
+  form,
+  onChange,
+}: {
+  tipo: TipoContacto;
+  form: Record<string, string>;
+  onChange: (form: Record<string, string>) => void;
+}) {
+  const set = (campo: string, valor: string) => onChange({ ...form, [campo]: valor });
+
+  return (
+    <>
+      {tipo === "referencia" && (
+        <div className="grid gap-2">
+          <Label>Tipo de referencia</Label>
+          <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={form.tipo_referencia ?? "Familiar"} onChange={(e) => set("tipo_referencia", e.target.value)}>
+            <option value="Familiar">Familiar</option>
+            <option value="Amistad">Amistad</option>
+          </select>
+        </div>
+      )}
+      <div className="grid gap-2"><Label>Nombre completo</Label><Input required value={form.nombre ?? ""} onChange={(e) => set("nombre", e.target.value)} /></div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="grid gap-2"><Label>Parentesco</Label><Input required value={form.parentesco ?? ""} onChange={(e) => set("parentesco", e.target.value)} /></div>
+        <div className="grid gap-2"><Label>Teléfono</Label><Input required value={form.telefono ?? ""} onChange={(e) => set("telefono", e.target.value)} /></div>
+      </div>
+      <div className="grid gap-2"><Label>Dirección</Label><textarea required className="min-h-20 rounded-md border border-input bg-background px-3 py-2 text-sm" value={form.direccion ?? ""} onChange={(e) => set("direccion", e.target.value)} /></div>
+      {tipo === "aval" ? <>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-2"><Label>Ocupación laboral</Label><Input value={form.ocupacion_laboral ?? ""} onChange={(e) => set("ocupacion_laboral", e.target.value)} /></div>
+          <div className="grid gap-2"><Label>Empresa / negocio</Label><Input value={form.empresa ?? ""} onChange={(e) => set("empresa", e.target.value)} /></div>
+        </div>
+        <div className="grid gap-2"><Label>Tiempo de conocerlo</Label><Input value={form.tiempo_conocer ?? ""} onChange={(e) => set("tiempo_conocer", e.target.value)} /></div>
+      </> : (
+        <div className="grid gap-2"><Label>Años de amistad</Label><Input type="number" min="0" value={form.años_amistad ?? ""} onChange={(e) => set("años_amistad", e.target.value)} /></div>
+      )}
+    </>
   );
 }

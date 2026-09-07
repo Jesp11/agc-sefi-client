@@ -109,7 +109,7 @@ export function CarteraAcciones({ credito, onSuccess, variant = "outline", size 
           <DialogHeader>
             <DialogTitle>Cerrar sin renovación</DialogTitle>
             <DialogDescription>
-              El préstamo #{credito.num_prog} pasará a Clientes Cerrados. El cliente o integrantes del grupo quedarán marcados como cerrados sin renovación.
+              El préstamo #{credito.num_prog} se clasificará en Clientes Cerrados. Si conserva saldo, aparecerá en “Cerrados con saldo”; si está liquidado, quedará sin derecho a renovación.
             </DialogDescription>
           </DialogHeader>
           <div className="flex justify-end gap-2 pt-2">

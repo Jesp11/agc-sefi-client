@@ -28,6 +28,8 @@ interface RegistrarPagoDialogProps {
   valorFicha?: number | string | null;
   /** Saldo pendiente del préstamo; si es menor a la ficha, se precarga el saldo. */
   saldoPendiente?: number | string | null;
+  /** En un crédito grupal, identifica el documento individual al que aplica el abono. */
+  integrante?: { id_cliente: string; nombre_cliente: string } | null;
   onSuccess?: () => void;
   trigger?: React.ReactElement;
 }
@@ -66,6 +68,7 @@ export function RegistrarPagoDialog({
   numProg,
   valorFicha,
   saldoPendiente,
+  integrante,
   onSuccess,
   trigger,
 }: RegistrarPagoDialogProps) {
@@ -146,6 +149,9 @@ export function RegistrarPagoDialog({
         tipo: "Abono",
         notas: form.notas || null,
       };
+      if (integrante) {
+        payload.id_cliente_integrante = integrante.id_cliente;
+      }
       if (multa > 0) {
         payload.monto_multa = multa;
       }
@@ -172,6 +178,7 @@ export function RegistrarPagoDialog({
             multa,
             total: abono + multa,
             notas: form.notas || null,
+            beneficiario: integrante?.nombre_cliente,
           });
         }
       } else {
@@ -246,8 +253,9 @@ export function RegistrarPagoDialog({
         ) : (
           <>
             <DialogHeader>
-              <DialogTitle>Registrar Pago — Folio #{numProg}</DialogTitle>
+              <DialogTitle>Registrar Pago — {integrante ? integrante.nombre_cliente : `Folio #${numProg}`}</DialogTitle>
             </DialogHeader>
+            {integrante && <p className="text-xs text-muted-foreground -mt-2">Abono individual del crédito grupal #{numProg}.</p>}
             <form onSubmit={handleSubmit} className="grid gap-4">
               <div className="grid gap-2">
                 <Label>Método</Label>

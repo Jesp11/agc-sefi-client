@@ -50,9 +50,20 @@ import { fmtFecha, fmtTelefono, cleanTelefono } from "@/lib/utils";
 import * as XLSX from "xlsx";
 
 import { ClientFormWizard } from "@/components/cliente-form-wizard";
+import { CarteraAcciones } from "@/components/cartera-acciones";
 import { TablePagination, TableSearch } from "@/components/table-controls";
 import { PAGE_SIZE, filterBySearch, paginateItems, useTableControls } from "@/hooks/use-paginated-list";
 import { clienteSearchFields, fetchAllPages } from "@/lib/table-utils";
+
+function creditosDelCliente(cliente: any): any[] {
+  const directos = Array.isArray(cliente.creditos) ? cliente.creditos : [];
+  const grupales = (Array.isArray(cliente.grupos) ? cliente.grupos : [])
+    .flatMap((grupo: any) => Array.isArray(grupo.creditos) ? grupo.creditos : []);
+
+  return [...directos, ...grupales]
+    .filter((credito, index, creditos) => creditos.findIndex((item) => item.num_prog === credito.num_prog) === index)
+    .sort((a, b) => Number(a.num_prog) - Number(b.num_prog));
+}
 
 export default function ClientesPage() {
   const [clientes, setClientes] = useState<any[]>([]);
@@ -150,9 +161,9 @@ export default function ClientesPage() {
 
     // 5. Crédito Activo
     if (filtroCredito === "con_credito") {
-      list = list.filter((c) => (c.creditos || []).some((cr: any) => cr.estado === "Activo"));
+      list = list.filter((c) => creditosDelCliente(c).some((cr: any) => cr.estado === "Activo"));
     } else if (filtroCredito === "sin_credito") {
-      list = list.filter((c) => !(c.creditos || []).some((cr: any) => cr.estado === "Activo"));
+      list = list.filter((c) => !creditosDelCliente(c).some((cr: any) => cr.estado === "Activo"));
     }
 
     // 6. Búsqueda por texto libre
@@ -251,7 +262,7 @@ export default function ClientesPage() {
 
   // KPIs superiores
   const totalConCredito = useMemo(() => {
-    return clientes.filter((c) => (c.creditos || []).some((cr: any) => cr.estado === "Activo")).length;
+    return clientes.filter((c) => creditosDelCliente(c).some((cr: any) => cr.estado === "Activo")).length;
   }, [clientes]);
 
   const totalPreferenciales = useMemo(() => {
@@ -340,7 +351,7 @@ export default function ClientesPage() {
       ];
 
       const dataRows = filtered.map((c: any) => {
-        const creditoActivo = (c.creditos || []).find((cr: any) => cr.estado === "Activo");
+        const creditoActivo = creditosDelCliente(c).find((cr: any) => cr.estado === "Activo");
         const creditoTexto = creditoActivo
           ? `#${creditoActivo.num_prog} (${creditoActivo.tipo_credito || "Individual"})`
           : "Sin crédito activo";
@@ -896,9 +907,10 @@ export default function ClientesPage() {
               </TableRow>
             ) : (
               paginated.map((cliente: any, index: number) => {
-                const creditos = cliente.creditos || [];
+                const creditos = creditosDelCliente(cliente);
                 const ultimoCredito = creditos.length > 0 ? creditos[creditos.length - 1] : null;
                 const creditoActivo = creditos.find((cr: any) => cr.estado === "Activo");
+                const creditoParaCartera = creditos.find((cr: any) => cr.estado === "Activo" || cr.estado === "EnMora");
                 const grupo = (cliente.grupos && cliente.grupos.length > 0) ? cliente.grupos[0] : null;
                 const esPreferencial = Boolean(cliente.es_socio_preferencial);
 
@@ -976,14 +988,23 @@ export default function ClientesPage() {
                       )}
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 text-xs"
-                        onClick={() => router.push(`/dashboard/clientes/${cliente.id_cliente || cliente.id}`)}
-                      >
-                        Ver perfil
-                      </Button>
+                      <div className="flex justify-end gap-1">
+                        {creditoParaCartera && (
+                          <CarteraAcciones
+                            credito={creditoParaCartera}
+                            onSuccess={fetchClientes}
+                            variant="ghost"
+                          />
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 text-xs"
+                          onClick={() => router.push(`/dashboard/clientes/${cliente.id_cliente || cliente.id}`)}
+                        >
+                          Ver perfil
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 );
