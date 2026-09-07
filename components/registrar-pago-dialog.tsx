@@ -36,6 +36,13 @@ function nowTime(): string {
   return new Date().toTimeString().slice(0, 8);
 }
 
+function todayLocal(): string {
+  const now = new Date();
+  return new Date(now.getTime() - now.getTimezoneOffset() * 60_000)
+    .toISOString()
+    .slice(0, 10);
+}
+
 function montoAbonoSugerido(
   valorFicha?: number | string | null,
   saldoPendiente?: number | string | null,
@@ -72,7 +79,10 @@ export function RegistrarPagoDialog({
     monto: montoAbonoSugerido(valorFicha, saldoPendiente),
     monto_multa: "",
     ahorro_personal_monto: "",
-    fecha: new Date().toISOString().split("T")[0],
+    // La fecha del abono debe ser la fecha local del gestor. Usar UTC aquí
+    // podía guardarlo como el día siguiente después de las 18:00 y dejarlo
+    // fuera del "Cobrado App" de la jornada que se estaba consultando.
+    fecha: todayLocal(),
     hora: nowTime(),
     metodo_pago: "Efectivo",
     notas: "",

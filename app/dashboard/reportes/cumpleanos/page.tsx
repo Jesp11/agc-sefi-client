@@ -227,7 +227,7 @@ export default function ReporteCumpleanosPage() {
     if (!clean) return "#";
     const primerNombre = nombre.split(" ")[0] || "estimado cliente";
     const msg = encodeURIComponent(
-      `¡Hola ${primerNombre}! 🎂🎉 De parte de todo el equipo de AGC SEFI te deseamos un muy feliz cumpleaños. Esperamos que pases un excelente día rodeado de tus seres queridos.`
+      `¡Hola ${primerNombre}! 🎂🎉 De parte de todo el equipo de AGC SERVICIOS FINANCIEROS te deseamos un muy feliz cumpleaños. Esperamos que pases un excelente día rodeado de tus seres queridos.`
     );
     return `https://wa.me/52${clean}?text=${msg}`;
   };

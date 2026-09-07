@@ -112,7 +112,6 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
     notas: "",
   });
   const [savingPago, setSavingPago] = useState(false);
-  const [syncingPagoId, setSyncingPagoId] = useState<number | null>(null);
   const [syncingRenovacion, setSyncingRenovacion] = useState(false);
   const scheduleControls = useTableControls();
   const pagosControls = useTableControls();
@@ -178,24 +177,6 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
       toast.error(error instanceof Error ? error.message : "No se pudo actualizar el abono.");
     } finally {
       setSavingPago(false);
-    }
-  };
-
-  const sincronizarPagoEnCaja = async (pago: PagoHistorial) => {
-    setSyncingPagoId(pago.id);
-    try {
-      const response = await apiFetch(`/creditos/${id}/pagos/${pago.id}/sincronizar-caja`, {
-        method: "POST",
-      });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.message || "No se pudo sincronizar el ingreso.");
-
-      toast.success(result.message || "Ingreso sincronizado con Flujo de Caja.");
-      await fetchData();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "No se pudo sincronizar el ingreso.");
-    } finally {
-      setSyncingPagoId(null);
     }
   };
 
@@ -797,16 +778,6 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
                                   onClick={() => abrirEdicionPago(p)}
                                 >
                                   <Pencil className="mr-1 h-3.5 w-3.5" /> Editar
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-8"
-                                  disabled={syncingPagoId === p.id}
-                                  onClick={() => sincronizarPagoEnCaja(p)}
-                                >
-                                  <RefreshCw className={`mr-1 h-3.5 w-3.5 ${syncingPagoId === p.id ? "animate-spin" : ""}`} />
-                                  {syncingPagoId === p.id ? "Sincronizando" : "Sincronizar caja"}
                                 </Button>
                               </div>
                             ) : "—"}

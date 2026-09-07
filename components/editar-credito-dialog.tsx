@@ -34,6 +34,7 @@ type CreditoEditable = Record<string, unknown> & {
 
 type ClienteCatalogo = { id_cliente: string; nombre_completo: string };
 type GrupoCatalogo = { id: number; nombre_grupo: string };
+type AsesorCatalogo = { id: number; id_asesor?: string | null; nombre_asesor: string; activo?: boolean | null };
 
 const dateValue = (value: unknown) => value ? String(value).slice(0, 10) : "";
 const stringValue = (value: unknown) => value == null ? "" : String(value);
@@ -59,6 +60,7 @@ function buildForm(credito: CreditoEditable) {
     tipo_credito: credito.tipo_credito === "Grupal" ? "Grupal" : "Individual",
     id_cliente: stringValue(credito.id_cliente),
     id_grupo: stringValue(credito.id_grupo),
+    id_asesor: stringValue(credito.id_asesor),
     fecha_otorgacion: dateValue(credito.fecha_otorgacion),
     fecha_primer_pago: dateValue(credito.fecha_primer_pago),
     ciclo: stringValue(credito.ciclo),
@@ -95,18 +97,20 @@ export function EditarCreditoDialog({ credito, onSuccess }: EditarCreditoDialogP
   const [loadingCatalogs, setLoadingCatalogs] = useState(false);
   const [clientes, setClientes] = useState<ClienteCatalogo[]>([]);
   const [grupos, setGrupos] = useState<GrupoCatalogo[]>([]);
+  const [asesores, setAsesores] = useState<AsesorCatalogo[]>([]);
   const [form, setForm] = useState(() => buildForm(credito));
   const [tablaInicial, setTablaInicial] = useState(() => amortizacionText(credito.tabla_amortizacion));
 
   useEffect(() => {
     if (!open) return;
-    if (clientes.length || grupos.length) return;
+    if (clientes.length || grupos.length || asesores.length) return;
 
     queueMicrotask(() => setLoadingCatalogs(true));
-    Promise.all([fetchAllPages("/clientes"), fetchAllPages("/grupos")])
-      .then(([clientesData, gruposData]) => {
+    Promise.all([fetchAllPages("/clientes"), fetchAllPages("/grupos"), fetchAllPages("/asesores")])
+      .then(([clientesData, gruposData, asesoresData]) => {
         setClientes(clientesData as ClienteCatalogo[]);
         setGrupos(gruposData as GrupoCatalogo[]);
+        setAsesores(asesoresData as AsesorCatalogo[]);
       })
       .catch(() => toast.error("No se pudieron cargar clientes y grupos"))
       .finally(() => setLoadingCatalogs(false));
@@ -153,6 +157,7 @@ export function EditarCreditoDialog({ credito, onSuccess }: EditarCreditoDialogP
       const payload = {
         id_cliente: form.tipo_credito === "Individual" ? form.id_cliente : null,
         id_grupo: form.tipo_credito === "Grupal" ? Number(form.id_grupo) : null,
+        id_asesor: Number(form.id_asesor),
         fecha_otorgacion: form.fecha_otorgacion,
         fecha_primer_pago: form.fecha_primer_pago || null,
         ciclo: Number(form.ciclo),
@@ -219,6 +224,7 @@ export function EditarCreditoDialog({ credito, onSuccess }: EditarCreditoDialogP
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               <div className="grid gap-1.5"><Label>Tipo de crédito</Label><select className={selectClass} value={form.tipo_credito} onChange={(e) => setField("tipo_credito", e.target.value)}><option value="Individual">Individual</option><option value="Grupal">Grupal</option></select></div>
               {form.tipo_credito === "Individual" ? <div className="grid gap-1.5 sm:col-span-2"><Label>Cliente titular</Label><select className={selectClass} value={form.id_cliente} disabled={loadingCatalogs} onChange={(e) => setField("id_cliente", e.target.value)}><option value="">Selecciona un cliente</option>{clientes.map((cliente) => <option key={cliente.id_cliente} value={cliente.id_cliente}>{cliente.nombre_completo} · {cliente.id_cliente}</option>)}</select></div> : <div className="grid gap-1.5 sm:col-span-2"><Label>Grupo titular</Label><select className={selectClass} value={form.id_grupo} disabled={loadingCatalogs} onChange={(e) => setField("id_grupo", e.target.value)}><option value="">Selecciona un grupo</option>{grupos.map((grupo) => <option key={grupo.id} value={grupo.id}>{grupo.nombre_grupo}</option>)}</select></div>}
+              <div className="grid gap-1.5 sm:col-span-2"><Label>Asesor responsable</Label><select className={selectClass} value={form.id_asesor} disabled={loadingCatalogs} onChange={(e) => setField("id_asesor", e.target.value)} required><option value="">Selecciona un asesor</option>{asesores.filter((asesor) => asesor.activo !== false || String(asesor.id) === form.id_asesor).map((asesor) => <option key={asesor.id} value={asesor.id}>{asesor.nombre_asesor}{asesor.id_asesor ? ` · ${asesor.id_asesor}` : ""}</option>)}</select><p className="text-xs text-muted-foreground">Este cambio sólo reasigna el crédito; no modifica al cliente ni al grupo.</p></div>
               <Field label="Fecha de desembolso" type="date" value={form.fecha_otorgacion} onChange={(v) => setField("fecha_otorgacion", v)} required />
               <Field label="Primer pago" type="date" value={form.fecha_primer_pago} onChange={(v) => setField("fecha_primer_pago", v)} />
               <Field label="Día de pago" value={form.dias_pago} onChange={(v) => setField("dias_pago", v)} required />
@@ -258,7 +264,7 @@ export function EditarCreditoDialog({ credito, onSuccess }: EditarCreditoDialogP
             <div className="flex flex-wrap gap-5 text-sm"><label className="flex items-center gap-2"><input type="checkbox" checked={form.es_personalizado} onChange={(e) => setField("es_personalizado", e.target.checked)} /> Crédito personalizado</label><label className="flex items-center gap-2"><input type="checkbox" checked={form.es_adicional} onChange={(e) => setField("es_adicional", e.target.checked)} /> Crédito adicional</label></div>
           </section>
 
-          <DialogFooter><Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={saving}>Cancelar</Button><Button type="submit" disabled={saving || loadingCatalogs}>{saving ? "Guardando..." : <><Save className="mr-2 h-4 w-4" />Guardar cambios</>}</Button></DialogFooter>
+          <DialogFooter><Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={saving}>Cancelar</Button><Button type="submit" disabled={saving || loadingCatalogs || !form.id_asesor}>{saving ? "Guardando..." : <><Save className="mr-2 h-4 w-4" />Guardar cambios</>}</Button></DialogFooter>
         </form>
       </DialogContent>
     </Dialog>

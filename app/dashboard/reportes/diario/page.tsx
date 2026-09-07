@@ -23,8 +23,9 @@ import { TablePagination, TableSearch } from "@/components/table-controls";
 import { PAGE_SIZE, filterBySearch, paginateItems, useTableControls } from "@/hooks/use-paginated-list";
 import { cn, fmtFecha } from "@/lib/utils";
 import { downloadRoutePaymentTemplate } from "@/lib/pagos-ruta-xlsx";
+import { exportarCorteDiarioPdf } from "@/lib/reporte-corte-diario-pdf";
 import { ImportarPagosRutaDialog } from "@/components/importar-pagos-ruta-dialog";
-import { User, Users, Banknote, ChevronDown, ChevronUp, ChevronsUpDown, Download, Upload, RefreshCw } from "lucide-react";
+import { User, Users, Banknote, ChevronDown, ChevronUp, ChevronsUpDown, Download, Upload, RefreshCw, Plus, Printer } from "lucide-react";
 import { toast } from "sonner";
 
 type Cobro = {
@@ -43,6 +44,17 @@ type Cobro = {
   id_cliente?: string | number;
   id_grupo?: string | number;
   asesor?: { nombre_asesor?: string | null } | null;
+};
+
+type CreditoMora = {
+  num_prog: number;
+  tipo_credito?: string;
+  dias_pago?: string | null;
+  saldo_actual?: number | string | null;
+  dias_mora?: number;
+  pagado_hoy?: boolean;
+  cliente?: { id_cliente?: string | number; nombre_completo?: string | null } | null;
+  grupo?: { id?: string | number; nombre_grupo?: string | null } | null;
 };
 
 const cobroSearchFields = (c: Cobro) => [
@@ -66,6 +78,13 @@ function labelDia(dia: string) {
     SABADO: "Sábado",
   };
   return map[dia] ?? dia;
+}
+
+function todayLocal(): string {
+  const now = new Date();
+  return new Date(now.getTime() - now.getTimezoneOffset() * 60_000)
+    .toISOString()
+    .slice(0, 10);
 }
 
 function FolioLink({ folio }: { folio?: number | string | null }) {
@@ -112,7 +131,7 @@ export default function ReporteDiarioPage() {
   const router = useRouter();
   const { user, isAdmin, loading: authLoading } = useAuth();
   const isAsesor = isFieldRoleName(user?.role?.nombre);
-  const [fecha, setFecha] = useState(() => new Date().toISOString().split("T")[0]);
+  const [fecha, setFecha] = useState(todayLocal);
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const { search, handleSearch, page, setPage } = useTableControls();
@@ -143,6 +162,27 @@ export default function ReporteDiarioPage() {
     setPage(1);
     loadData();
   }, [loadData, setPage]);
+
+  // Al registrar desde una ficha se navega a otra pantalla. Next puede
+  // conservar esta vista en caché al volver, por lo que se vuelve a consultar
+  // para mostrar el abono recién registrado en "Cobrado App".
+  useEffect(() => {
+    const refreshWhenVisible = () => {
+      if (document.visibilityState !== "hidden") {
+        loadData();
+      }
+    };
+
+    window.addEventListener("focus", refreshWhenVisible);
+    window.addEventListener("pageshow", refreshWhenVisible);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+
+    return () => {
+      window.removeEventListener("focus", refreshWhenVisible);
+      window.removeEventListener("pageshow", refreshWhenVisible);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
+  }, [loadData]);
 
   if (authLoading) {
     return <div className="p-8 text-muted-foreground">Cargando...</div>;
@@ -227,6 +267,10 @@ function AdminPagosView({
         c.cliente?.nombre_completo,
         c.grupo?.nombre_grupo,
       ]),
+      ...(a.creditos_mora || []).flatMap((c: any) => [
+        c.cliente?.nombre_completo,
+        c.grupo?.nombre_grupo,
+      ]),
     ];
   });
   const paginated = paginateItems(filtered, page);
@@ -235,10 +279,16 @@ function AdminPagosView({
 
   const [expandedAsesores, setExpandedAsesores] = useState<Record<string, boolean>>({});
   const [recibiendo, setRecibiendo] = useState<any | null>(null);
+  const [modoRecepcion, setModoRecepcion] = useState<"recibir" | "editar" | "agregar">("recibir");
   const [montoRecibido, setMontoRecibido] = useState("");
   const [notasRecepcion, setNotasRecepcion] = useState("");
   const [savingRecepcion, setSavingRecepcion] = useState(false);
   const [importandoRuta, setImportandoRuta] = useState(false);
+  const montoPosteriorCorte = Math.max(0, Number(recibiendo?.monto_posterior_corte ?? 0));
+  const montoActual = Number(recibiendo?.monto_recibido ?? 0);
+  const montoPropuesto = modoRecepcion === "agregar"
+    ? montoActual + (parseFloat(montoRecibido) || 0)
+    : parseFloat(montoRecibido) || 0;
 
   const toggleAsesor = (key: string) => {
     setExpandedAsesores((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -259,11 +309,19 @@ function AdminPagosView({
 
   const openRecibir = (asesorRow: any) => {
     setRecibiendo(asesorRow);
+    setModoRecepcion(asesorRow.recibido ? "editar" : "recibir");
     setMontoRecibido(
       asesorRow.monto_recibido != null
         ? String(asesorRow.monto_recibido)
         : String(asesorRow.a_recibir ?? 0),
     );
+    setNotasRecepcion(asesorRow.recepcion_notas ?? "");
+  };
+
+  const openAgregar = (asesorRow: any) => {
+    setRecibiendo(asesorRow);
+    setModoRecepcion("agregar");
+    setMontoRecibido("");
     setNotasRecepcion(asesorRow.recepcion_notas ?? "");
   };
 
@@ -287,6 +345,7 @@ function AdminPagosView({
           fecha,
           id_asesor: recibiendo.id_asesor,
           monto_recibido: monto,
+          agregar: modoRecepcion === "agregar",
           notas: notasRecepcion.trim() || null,
         }),
       });
@@ -305,6 +364,14 @@ function AdminPagosView({
     }
   };
 
+  const exportarPdf = () => {
+    if (!data?.por_asesor?.length) {
+      toast.error("No hay información de gestores para exportar.");
+      return;
+    }
+    exportarCorteDiarioPdf(data);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -320,6 +387,9 @@ function AdminPagosView({
             <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />Actualizar
           </Button>
           {isAdmin && <>
+            <Button variant="outline" className="gap-2" onClick={exportarPdf} disabled={!data}>
+              <Printer className="size-4" />Exportar corte PDF
+            </Button>
             <Button
               variant="outline"
               className="gap-2"
@@ -404,7 +474,7 @@ function AdminPagosView({
           <div>
             <CardTitle>Desglose de Cobranza por Gestor Cobranza</CardTitle>
             <p className="text-sm font-normal text-muted-foreground">
-              Haz clic en cada asesor para ver sus abonos registrados y la ruta que aún queda por cobrar.
+              Haz clic en cada asesor para ver la ruta del día, sus abonos de ruta, atrasados y créditos en mora.
             </p>
           </div>
           <div className="flex gap-2">
@@ -458,15 +528,27 @@ function AdminPagosView({
                   const rutaDelDiaAsesor = (a.clientes_programados || []).filter(
                     (c: any) => c.categoria === "del_dia",
                   );
-                  // La ruta y los abonos son listas excluyentes: en cuanto un
-                  // crédito recibe un abono del día, deja de aparecer en ruta.
-                  const foliosConAbono = new Set(
-                    pagosAsesor
+                  const atrasadosAsesor = (a.clientes_programados || []).filter(
+                    (c: any) => c.categoria === "atrasado",
+                  );
+                  const moraAsesor = a.creditos_mora || [];
+                  const foliosRutaDelDia = new Set(rutaDelDiaAsesor.map((c: any) => String(c.num_prog)));
+                  // La sección de abonos es exclusivamente para la ruta del
+                  // día. Un abono a un atrasado conserva su lugar en la lista
+                  // de atrasados, donde se mostrará como pagado en verde.
+                  const pagosRutaAsesor = pagosAsesor.filter((p: any) =>
+                    foliosRutaDelDia.has(String(p.credito?.num_prog ?? "")),
+                  );
+                  // La ruta y sus abonos son listas excluyentes: en cuanto un
+                  // crédito de la ruta recibe un abono, deja de aparecer como
+                  // pendiente de ruta.
+                  const foliosRutaConAbono = new Set(
+                    pagosRutaAsesor
                       .filter((p: any) => Number(p.monto || 0) > 0)
                       .map((p: any) => String(p.credito?.num_prog ?? "")),
                   );
                   const rutaPendienteAsesor = rutaDelDiaAsesor.filter(
-                    (c: any) => !foliosConAbono.has(String(c.num_prog)),
+                    (c: any) => !foliosRutaConAbono.has(String(c.num_prog)),
                   );
                   const creditosAsesor = (data?.creditos || []).filter(
                     (c: any) => (c.id_asesor ?? 0) === Number(a.id_asesor)
@@ -486,12 +568,18 @@ function AdminPagosView({
                     c.cliente?.nombre_completo,
                     c.grupo?.nombre_grupo,
                   ]);
-                  const pagosMostrados = asesorCoincide
-                    ? pagosAsesor
-                    : pagosAsesor.filter(pagoCoincide);
+                  const pagosRutaMostrados = asesorCoincide
+                    ? pagosRutaAsesor
+                    : pagosRutaAsesor.filter(pagoCoincide);
                   const clientesProgramadosMostrados = asesorCoincide
                     ? rutaPendienteAsesor
                     : rutaPendienteAsesor.filter(clienteProgramadoCoincide);
+                  const atrasadosMostrados = asesorCoincide
+                    ? atrasadosAsesor
+                    : atrasadosAsesor.filter(clienteProgramadoCoincide);
+                  const moraMostrada = asesorCoincide
+                    ? moraAsesor
+                    : moraAsesor.filter(clienteProgramadoCoincide);
                   const creditosOtorgadosMostrados = asesorCoincide
                     ? creditosAsesor
                     : creditosAsesor.filter((c: any) => matchesSearch([
@@ -519,14 +607,6 @@ function AdminPagosView({
                               {a.nombre_asesor}
                               {a.codigo_asesor && <Badge variant="outline" className="text-[10px] bg-background">#{a.codigo_asesor}</Badge>}
                             </div>
-                            <Badge variant="outline" className="w-fit text-[11px] font-normal py-0">
-                              {rutaPendienteAsesor.length} {rutaPendienteAsesor.length === 1 ? "pendiente en ruta hoy" : "pendientes en ruta hoy"}
-                            </Badge>
-                            {pagosAsesor.length > 0 && (
-                              <Badge variant="outline" className="w-fit border-emerald-200 bg-emerald-50 text-[11px] font-normal py-0 text-emerald-700">
-                                {pagosAsesor.length} {pagosAsesor.length === 1 ? "abono registrado" : "abonos registrados"}
-                              </Badge>
-                            )}
                           </div>
                         </TableCell>
                         <TableCell className="text-right font-medium text-blue-600">
@@ -556,10 +636,19 @@ function AdminPagosView({
                           )}
                         </TableCell>
                         <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                          {a.id_asesor ? (
+                          {a.id_asesor ? a.recibido ? (
+                            <div className="flex justify-end gap-2">
+                              <Button size="sm" variant="outline" onClick={() => openRecibir(a)}>
+                                <Banknote className="mr-1.5 h-3.5 w-3.5" />Editar
+                              </Button>
+                              <Button size="sm" onClick={() => openAgregar(a)}>
+                                <Plus className="mr-1.5 h-3.5 w-3.5" />Agregar
+                              </Button>
+                            </div>
+                          ) : (
                             <Button size="sm" variant={a.recibido ? "outline" : "default"} onClick={() => openRecibir(a)}>
                               <Banknote className="mr-1.5 h-3.5 w-3.5" />
-                              {a.recibido ? "Editar" : "Recibir"}
+                              Recibir
                             </Button>
                           ) : (
                             "—"
@@ -567,25 +656,18 @@ function AdminPagosView({
                         </TableCell>
                       </TableRow>
 
-                      {/* Abonos y ruta pendiente son excluyentes para no duplicar clientes. */}
+                      {/* La ruta, sus abonos y los atrasados se muestran por separado. */}
                       {isExpanded && (
                         <TableRow className="bg-muted/15 hover:bg-muted/15 border-b-2">
                           <TableCell colSpan={9} className="p-3 pl-8">
                             <div className="rounded-lg border bg-background p-4 shadow-sm space-y-4">
-                              {/* Pagos registrados */}
-                              {pagosMostrados.length > 0 && (
-                                <div className="space-y-2">
-                                  <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-2">
-                                    <div className="flex items-center gap-2">
-                                      <Users className="h-4 w-4 text-emerald-600" />
-                                      <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                                        Abonos Registrados — {a.nombre_asesor} ({pagosMostrados.length})
-                                      </span>
-                                    </div>
-                                    <span className="text-xs font-semibold text-emerald-700">
-                                      Cobrado en caja: {money(pagosMostrados.reduce((total: number, p: any) => total + Number(p.monto || 0), 0))}
-                                    </span>
-                                  </div>
+                              {/* Solo los abonos de la ruta del día van en esta sección. */}
+                              {pagosRutaMostrados.length > 0 && (
+                                <ExpandableReportSection
+                                  title={`Abonos de ruta (${pagosRutaMostrados.length})`}
+                                  toneClass="text-emerald-600"
+                                  summary={<span className="text-emerald-700">{money(pagosRutaMostrados.reduce((total: number, p: any) => total + Number(p.monto || 0), 0))}</span>}
+                                >
                                   <Table>
                                     <TableHeader>
                                       <TableRow className="border-b bg-muted/40 hover:bg-muted/40">
@@ -597,7 +679,7 @@ function AdminPagosView({
                                       </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                      {pagosMostrados.map((p: any) => (
+                                      {pagosRutaMostrados.map((p: any) => (
                                         <TableRow key={p.id} className="text-xs hover:bg-muted/30">
                                           <TableCell className="font-mono font-medium">
                                             <FolioLink folio={p.credito?.num_prog ?? p.id} />
@@ -624,23 +706,16 @@ function AdminPagosView({
                                       ))}
                                     </TableBody>
                                   </Table>
-                                </div>
+                                </ExpandableReportSection>
                               )}
 
                               {/* Ruta pendiente: los clientes con abono ya están en la sección anterior. */}
                               {clientesProgramadosMostrados.length > 0 && (
-                                <div className="space-y-2">
-                                  <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-2">
-                                    <div className="flex items-center gap-2">
-                                      <Users className="h-4 w-4 text-primary" />
-                                      <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                                        Ruta del día / Clientes programados para cobro ({clientesProgramadosMostrados.length})
-                                      </span>
-                                    </div>
-                                    <span className="text-xs font-semibold text-primary">
-                                      Pendiente de ruta: {money(clientesProgramadosMostrados.reduce((total: number, c: any) => total + Number(c.monto_a_cobrar || 0), 0))}
-                                    </span>
-                                  </div>
+                                <ExpandableReportSection
+                                  title={`Ruta del día (${clientesProgramadosMostrados.length})`}
+                                  toneClass="text-primary"
+                                  summary={<span className="text-primary">{money(clientesProgramadosMostrados.reduce((total: number, c: any) => total + Number(c.monto_a_cobrar || 0), 0))}</span>}
+                                >
                                   <Table>
                                     <TableHeader>
                                       <TableRow className="border-b bg-muted/40 hover:bg-muted/40">
@@ -669,7 +744,105 @@ function AdminPagosView({
                                       ))}
                                     </TableBody>
                                   </Table>
-                                </div>
+                                </ExpandableReportSection>
+                              )}
+
+                              {/* Los atrasados permanecen aquí aunque se cobren hoy. */}
+                              {atrasadosMostrados.length > 0 && (
+                                <ExpandableReportSection
+                                  title={`Pagos atrasados (${atrasadosMostrados.length})`}
+                                  toneClass="text-amber-600"
+                                  summary={<span className="text-amber-700">{money(atrasadosMostrados.filter((c: any) => !c.pagado_hoy).reduce((total: number, c: any) => total + Number(c.monto_a_cobrar || 0), 0))}</span>}
+                                >
+                                  <Table>
+                                    <TableHeader>
+                                      <TableRow className="border-b bg-muted/40 hover:bg-muted/40">
+                                        <TableHead className="text-xs h-8">Folio</TableHead>
+                                        <TableHead className="text-xs h-8">Cliente / Grupo</TableHead>
+                                        <TableHead className="text-xs h-8">Vencimiento</TableHead>
+                                        <TableHead className="text-xs h-8 text-center">Atraso</TableHead>
+                                        <TableHead className="text-xs h-8 text-right">A cobrar</TableHead>
+                                        <TableHead className="text-xs h-8 text-center">Estado</TableHead>
+                                      </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                      {atrasadosMostrados.map((c: any) => {
+                                        const pagadoHoy = Boolean(c.pagado_hoy);
+                                        return (
+                                          <TableRow key={c.num_prog} className={cn("text-xs hover:bg-muted/30", pagadoHoy && "bg-emerald-100 text-emerald-950 hover:bg-emerald-200/80 [&_a]:text-emerald-800 [&_a]:decoration-emerald-600/50")}>
+                                            <TableCell className="font-mono font-medium"><FolioLink folio={c.num_prog} /></TableCell>
+                                            <TableCell className="font-medium text-foreground">
+                                              <BeneficiarioLink
+                                                nombre={c.cliente?.nombre_completo || c.grupo?.nombre_grupo}
+                                                clienteId={c.cliente?.id_cliente ?? c.id_cliente}
+                                                grupoId={c.grupo?.id ?? c.id_grupo}
+                                              />
+                                            </TableCell>
+                                            <TableCell className="text-muted-foreground">{c.pendientes?.[0]?.fecha ? fmtFecha(c.pendientes[0].fecha) : "—"}</TableCell>
+                                            <TableCell className="text-center text-amber-800 font-medium">{c.dias_atraso ? `${c.dias_atraso} d` : "—"}</TableCell>
+                                            <TableCell className="text-right font-bold text-amber-700">{money(c.monto_a_cobrar)}</TableCell>
+                                            <TableCell className="text-center">
+                                              {pagadoHoy ? (
+                                                <Badge className="border-emerald-300 bg-emerald-200 text-emerald-900 hover:bg-emerald-200">Pagado</Badge>
+                                              ) : (
+                                                <Badge variant="outline" className="border-amber-300 text-amber-800">Pendiente</Badge>
+                                              )}
+                                            </TableCell>
+                                          </TableRow>
+                                        );
+                                      })}
+                                    </TableBody>
+                                  </Table>
+                                </ExpandableReportSection>
+                              )}
+
+                              {/* La mora se consulta aparte de la ruta; un abono sólo cambia su estado visual. */}
+                              {moraMostrada.length > 0 && (
+                                <ExpandableReportSection
+                                  title={`Mora (${moraMostrada.length})`}
+                                  toneClass="text-red-600"
+                                  summary={<span className="text-red-700">{money(moraMostrada.reduce((total: number, c: any) => total + Number(c.saldo_actual || 0), 0))}</span>}
+                                >
+                                  <Table>
+                                    <TableHeader>
+                                      <TableRow className="border-b bg-muted/40 hover:bg-muted/40">
+                                        <TableHead className="text-xs h-8">Folio</TableHead>
+                                        <TableHead className="text-xs h-8">Cliente / Grupo</TableHead>
+                                        <TableHead className="text-xs h-8">Día de pago</TableHead>
+                                        <TableHead className="text-xs h-8 text-center">Días mora</TableHead>
+                                        <TableHead className="text-xs h-8 text-right">Saldo</TableHead>
+                                        <TableHead className="text-xs h-8 text-center">Estado</TableHead>
+                                      </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                      {moraMostrada.map((c: any) => {
+                                        const pagadoHoy = Boolean(c.pagado_hoy);
+                                        return (
+                                          <TableRow key={c.num_prog} className={cn("text-xs hover:bg-muted/30", pagadoHoy && "bg-emerald-100 text-emerald-950 hover:bg-emerald-200/80 [&_a]:text-emerald-800 [&_a]:decoration-emerald-600/50")}>
+                                            <TableCell className="font-mono font-medium"><FolioLink folio={c.num_prog} /></TableCell>
+                                            <TableCell className="font-medium text-foreground">
+                                              <BeneficiarioLink
+                                                nombre={c.cliente?.nombre_completo || c.grupo?.nombre_grupo}
+                                                clienteId={c.cliente?.id_cliente ?? c.id_cliente}
+                                                grupoId={c.grupo?.id ?? c.id_grupo}
+                                              />
+                                            </TableCell>
+                                            <TableCell className="text-muted-foreground">{c.dias_pago || "—"}</TableCell>
+                                            <TableCell className="text-center text-red-800 font-medium">{c.dias_mora ? `${c.dias_mora} d` : "—"}</TableCell>
+                                            <TableCell className="text-right font-bold text-red-700">{money(c.saldo_actual)}</TableCell>
+                                            <TableCell className="text-center">
+                                              {pagadoHoy ? (
+                                                <Badge className="border-emerald-300 bg-emerald-200 text-emerald-900 hover:bg-emerald-200">Pagado</Badge>
+                                              ) : (
+                                                <Badge variant="outline" className="border-red-300 text-red-800">En mora</Badge>
+                                              )}
+                                            </TableCell>
+                                          </TableRow>
+                                        );
+                                      })}
+                                    </TableBody>
+                                  </Table>
+                                </ExpandableReportSection>
                               )}
 
                               {rutaPendienteAsesor.length === 0 && rutaDelDiaAsesor.length > 0 && (
@@ -678,17 +851,18 @@ function AdminPagosView({
                                 </div>
                               )}
 
-                              {pagosMostrados.length === 0 && clientesProgramadosMostrados.length === 0 && creditosOtorgadosMostrados.length === 0 && (
+                              {pagosRutaMostrados.length === 0 && clientesProgramadosMostrados.length === 0 && atrasadosMostrados.length === 0 && moraMostrada.length === 0 && creditosOtorgadosMostrados.length === 0 && (
                                 <p className="text-xs text-muted-foreground text-center py-3">
                                   Sin cobranza programada ni pagos registrados para este gestor de cobranza.
                                 </p>
                               )}
 
                               {creditosOtorgadosMostrados.length > 0 && (
-                                <div className="mt-3 pt-3 border-t">
-                                  <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-2">
-                                    Préstamos nuevos otorgados hoy ({creditosOtorgadosMostrados.length})
-                                  </span>
+                                <ExpandableReportSection
+                                  title={`Préstamos nuevos (${creditosOtorgadosMostrados.length})`}
+                                  toneClass="text-primary"
+                                  summary={<span className="text-primary">{money(creditosOtorgadosMostrados.reduce((total: number, credito: any) => total + Number(credito.monto_otorgado || 0), 0))}</span>}
+                                >
                                   <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-2">
                                     {creditosOtorgadosMostrados.map((cr: any) => (
                                       <div key={cr.id_credito ?? cr.num_prog} className="flex items-center justify-between p-2 rounded border bg-muted/20 text-xs">
@@ -706,7 +880,7 @@ function AdminPagosView({
                                       </div>
                                     ))}
                                   </div>
-                                </div>
+                                </ExpandableReportSection>
                               )}
                             </div>
                           </TableCell>
@@ -733,15 +907,24 @@ function AdminPagosView({
       <Dialog open={Boolean(recibiendo)} onOpenChange={(o) => !o && setRecibiendo(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Recibir de {recibiendo?.nombre_asesor}</DialogTitle>
+            <DialogTitle>{modoRecepcion === "agregar" ? "Agregar recepción de" : "Recibir de"} {recibiendo?.nombre_asesor}</DialogTitle>
             <DialogDescription>
-              Indica el efectivo que entregó el gestor de cobranza el {fmtFecha(fecha)}.
-              Esperado (abonos): {money(recibiendo?.a_recibir ?? 0)}.
+              {modoRecepcion === "agregar" ? (
+                <>Registra únicamente el efectivo adicional entregado por el gestor. Ya se recibieron: {money(montoActual)}.</>
+              ) : (
+                <>Indica el efectivo que entregó el gestor de cobranza el {fmtFecha(fecha)}. Esperado (abonos): {money(recibiendo?.a_recibir ?? 0)}.</>
+              )}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleRecibir} className="grid gap-4">
+            {montoPosteriorCorte > 0.009 && (
+              <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                Desde el último corte se registraron abonos por <strong>{money(montoPosteriorCorte)}</strong>.
+                Falta recibir esa cantidad para llevarla a caja.
+              </div>
+            )}
             <div className="grid gap-2">
-              <Label htmlFor="monto-recibido">Monto recibido</Label>
+              <Label htmlFor="monto-recibido">{modoRecepcion === "agregar" ? "Monto a agregar" : "Monto recibido acumulado"}</Label>
               <Input
                 id="monto-recibido"
                 type="number"
@@ -752,6 +935,13 @@ function AdminPagosView({
                 onChange={(e) => setMontoRecibido(e.target.value)}
                 autoFocus
               />
+              {modoRecepcion === "agregar" ? (
+                <p className="text-xs text-muted-foreground">Se sumará al efectivo ya recibido; no reemplaza el total del corte.</p>
+              ) : recibiendo?.recibido && (
+                <p className="text-xs text-muted-foreground">
+                  Conserva o actualiza el total entregado por el gestor; no se precarga la diferencia.
+                </p>
+              )}
             </div>
             <div className="grid gap-2">
               <Label htmlFor="notas-recepcion">
@@ -768,7 +958,7 @@ function AdminPagosView({
               <p className="text-sm text-muted-foreground">
                 Diferencia vs esperado:{" "}
                 <span className="font-semibold text-foreground">
-                  {money(parseFloat(montoRecibido) - Number(recibiendo?.a_recibir ?? 0))}
+                  {money(montoPropuesto - Number(recibiendo?.a_recibir ?? 0))}
                 </span>
               </p>
             )}
@@ -777,7 +967,7 @@ function AdminPagosView({
                 Cancelar
               </Button>
               <Button type="submit" disabled={savingRecepcion}>
-                {savingRecepcion ? "Guardando..." : "Confirmar recepción"}
+                {savingRecepcion ? "Guardando..." : modoRecepcion === "agregar" ? "Agregar efectivo" : "Confirmar recepción"}
               </Button>
             </div>
           </form>
@@ -792,6 +982,34 @@ function AdminPagosView({
         onImported={onRefresh}
       />}
     </div>
+  );
+}
+
+function ExpandableReportSection({
+  title,
+  summary,
+  toneClass,
+  children,
+}: {
+  title: string;
+  summary?: React.ReactNode;
+  toneClass: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <details className="group rounded-md border bg-background">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 hover:bg-muted/40 [&::-webkit-details-marker]:hidden">
+        <span className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+          <Users className={cn("h-4 w-4", toneClass)} />
+          {title}
+        </span>
+        <span className="flex items-center gap-2 text-xs font-semibold">
+          {summary}
+          <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
+        </span>
+      </summary>
+      <div className="border-t p-3">{children}</div>
+    </details>
   );
 }
 
@@ -828,6 +1046,19 @@ function AsesorCobrosView({
     Math.max(1, Math.ceil(atrasadosFiltrados.length / PAGE_SIZE)),
   );
   const atrasadosPaginados = paginateItems(atrasadosFiltrados, atrasadosPage);
+  const creditosMora: CreditoMora[] = data?.creditos_mora ?? [];
+  const moraControls = useTableControls();
+  const moraFiltrada = filterBySearch(creditosMora, moraControls.search, (credito) => [
+    credito.num_prog,
+    credito.cliente?.nombre_completo,
+    credito.grupo?.nombre_grupo,
+    credito.dias_pago,
+  ]);
+  const moraPage = Math.min(
+    moraControls.page,
+    Math.max(1, Math.ceil(moraFiltrada.length / PAGE_SIZE)),
+  );
+  const moraPaginada = paginateItems(moraFiltrada, moraPage);
 
   return (
     <div className="space-y-6">
@@ -837,7 +1068,7 @@ function AsesorCobrosView({
           <p className="text-muted-foreground">
             Ruta de cobros del día
             {data?.dia_semana ? ` — ${labelDia(data.dia_semana)}` : ""}
-            {" "}y pagos atrasados por recuperar.
+            {" "}con pagos atrasados y mora por recuperar.
           </p>
         </div>
         <Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className="w-40" />
@@ -903,7 +1134,96 @@ function AsesorCobrosView({
         loading={loading}
         onCobrar={onCobrar}
       />
+
+      <MoraSection
+        search={moraControls.search}
+        onSearchChange={moraControls.handleSearch}
+        page={moraPage}
+        onPageChange={moraControls.setPage}
+        filtered={moraFiltrada}
+        paginated={moraPaginada}
+        loading={loading}
+        onCobrar={onCobrar}
+      />
     </div>
+  );
+}
+
+function MoraSection({
+  search,
+  onSearchChange,
+  page,
+  onPageChange,
+  filtered,
+  paginated,
+  loading,
+  onCobrar,
+}: {
+  search: string;
+  onSearchChange: (value: string) => void;
+  page: number;
+  onPageChange: (value: number) => void;
+  filtered: CreditoMora[];
+  paginated: CreditoMora[];
+  loading: boolean;
+  onCobrar: (numProg: number) => void;
+}) {
+  return (
+    <Card>
+      <details className="group">
+        <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+          <CardHeader className="flex-row items-center justify-between gap-3 hover:bg-muted/40">
+            <div>
+              <CardTitle>Mora</CardTitle>
+              <p className="text-sm text-muted-foreground">Créditos en mora asignados al gestor.</p>
+            </div>
+            <ChevronDown className="h-5 w-5 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
+          </CardHeader>
+        </summary>
+        <CardContent className="space-y-4 border-t pt-4">
+          <TableSearch placeholder="Buscar por folio, cliente o grupo..." value={search} onChange={onSearchChange} />
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Folio</TableHead>
+                <TableHead>Cliente / Grupo</TableHead>
+                <TableHead>Día pago</TableHead>
+                <TableHead className="text-center">Días mora</TableHead>
+                <TableHead className="text-right">Saldo</TableHead>
+                <TableHead className="text-center">Estado</TableHead>
+                <TableHead className="text-right">Acción</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {loading ? (
+                <TableRow><TableCell colSpan={7} className="h-24 text-center text-muted-foreground">Cargando...</TableCell></TableRow>
+              ) : filtered.length === 0 ? (
+                <TableRow><TableCell colSpan={7} className="h-24 text-center text-muted-foreground">{search ? "No se encontraron créditos en mora." : "No hay créditos en mora."}</TableCell></TableRow>
+              ) : (
+                paginated.map((credito) => {
+                  const pagadoHoy = Boolean(credito.pagado_hoy);
+                  const nombre = credito.tipo_credito === "Grupal"
+                    ? (credito.grupo?.nombre_grupo ?? "Grupo")
+                    : (credito.cliente?.nombre_completo ?? "Cliente");
+                  return (
+                    <TableRow key={credito.num_prog} className={cn(pagadoHoy && "bg-emerald-100 text-emerald-950 hover:bg-emerald-200/80 [&_a]:text-emerald-800 [&_a]:decoration-emerald-600/50")}>
+                      <TableCell className="font-mono text-xs"><FolioLink folio={credito.num_prog} /></TableCell>
+                      <TableCell className="font-medium whitespace-nowrap"><BeneficiarioLink nombre={nombre} clienteId={credito.cliente?.id_cliente} grupoId={credito.grupo?.id} /></TableCell>
+                      <TableCell className="text-xs">{credito.dias_pago ?? "—"}</TableCell>
+                      <TableCell className="text-center text-xs font-medium text-red-800">{credito.dias_mora ? `${credito.dias_mora} d` : "—"}</TableCell>
+                      <TableCell className="text-right text-xs font-bold text-red-700">${Number(credito.saldo_actual || 0).toLocaleString("es-MX", { minimumFractionDigits: 2 })}</TableCell>
+                      <TableCell className="text-center">{pagadoHoy ? <Badge className="border-emerald-300 bg-emerald-200 text-emerald-900 hover:bg-emerald-200">Pagado</Badge> : <Badge variant="outline" className="border-red-300 text-red-800">En mora</Badge>}</TableCell>
+                      <TableCell className="text-right"><Button size="sm" className="h-8 text-xs" onClick={() => onCobrar(credito.num_prog)}>{pagadoHoy ? "Otro pago" : "Cobrar"}</Button></TableCell>
+                    </TableRow>
+                  );
+                })
+              )}
+            </TableBody>
+          </Table>
+          {!loading && <TablePagination page={page} totalItems={filtered.length} pageSize={PAGE_SIZE} onPageChange={onPageChange} label="créditos en mora" />}
+        </CardContent>
+      </details>
+    </Card>
   );
 }
 
@@ -934,11 +1254,17 @@ function CobrosSection({
 }) {
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-        <p className="text-sm text-muted-foreground">{description}</p>
-      </CardHeader>
-      <CardContent className="space-y-4">
+      <details className="group">
+        <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+          <CardHeader className="flex-row items-center justify-between gap-3 hover:bg-muted/40">
+            <div>
+              <CardTitle>{title}</CardTitle>
+              <p className="text-sm text-muted-foreground">{description}</p>
+            </div>
+            <ChevronDown className="h-5 w-5 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
+          </CardHeader>
+        </summary>
+        <CardContent className="space-y-4 border-t pt-4">
         <TableSearch placeholder="Buscar por folio, cliente o grupo..." value={search} onChange={onSearchChange} />
         <Table>
           <TableHeader>
@@ -1040,7 +1366,8 @@ function CobrosSection({
             label="cobros"
           />
         )}
-      </CardContent>
+        </CardContent>
+      </details>
     </Card>
   );
 }
