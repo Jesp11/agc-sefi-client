@@ -519,7 +519,7 @@ function AdminPagosView({
                 <TableHead>Gestor Cobranza</TableHead>
                 <TableHead className="text-right">Cobrado App</TableHead>
                 <TableHead className="text-right">A recibir</TableHead>
-                <TableHead className="text-right">Ajuste comisión</TableHead>
+                <TableHead className="text-right">Ajuste comisión (informativo)</TableHead>
                 <TableHead className="text-right">Entregó Caja</TableHead>
                 <TableHead className="text-right">Faltante</TableHead>
                 <TableHead className="text-center">Estado</TableHead>
@@ -656,7 +656,7 @@ function AdminPagosView({
                           {money(a.a_recibir)}
                         </TableCell>
                         <TableCell className="text-right font-medium text-amber-700">
-                          {a.comisiones_renovacion > 0 ? `-${money(a.comisiones_renovacion)}` : "—"}
+                          {a.comisiones_renovacion > 0 ? money(a.comisiones_renovacion) : "—"}
                         </TableCell>
                         <TableCell className="text-right font-medium text-emerald-700">
                           {a.recibido ? money(a.monto_recibido) : "—"}
