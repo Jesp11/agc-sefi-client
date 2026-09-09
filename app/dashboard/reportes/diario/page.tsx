@@ -25,6 +25,7 @@ import { cn, fmtFecha } from "@/lib/utils";
 import { downloadRoutePaymentTemplate } from "@/lib/pagos-ruta-xlsx";
 import { exportarCorteDiarioPdf } from "@/lib/reporte-corte-diario-pdf";
 import { ImportarPagosRutaDialog } from "@/components/importar-pagos-ruta-dialog";
+import { PrintTicket, buildPagoTicketProps, type PagoTicketData } from "@/components/print-ticket";
 import { User, Users, Banknote, ChevronDown, ChevronUp, ChevronsUpDown, Download, Upload, RefreshCw, Plus, Printer, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -39,6 +40,7 @@ type Cobro = {
   cuotas_atrasadas?: number;
   dias_atraso?: number;
   pagado_hoy?: boolean;
+  monto_abonado_hoy?: number | string;
   cliente?: { id_cliente?: string | number; nombre_completo?: string | null } | null;
   grupo?: { id?: string | number; nombre_grupo?: string | null } | null;
   id_cliente?: string | number;
@@ -55,6 +57,37 @@ type CreditoMora = {
   pagado_hoy?: boolean;
   cliente?: { id_cliente?: string | number; nombre_completo?: string | null } | null;
   grupo?: { id?: string | number; nombre_grupo?: string | null } | null;
+};
+
+type PagoDelDia = {
+  id: number;
+  num_prog: number | string;
+  monto: number | string;
+  fecha: string;
+  hora?: string | null;
+  metodo_pago?: string | null;
+  notas?: string | null;
+  credito?: {
+    num_prog?: number | string;
+    tipo_credito?: string | null;
+    saldo_pendiente?: number | string | null;
+    cliente?: { nombre_completo?: string | null } | null;
+    grupo?: { nombre_grupo?: string | null } | null;
+    asesor?: { nombre_asesor?: string | null } | null;
+  } | null;
+};
+
+type DesembolsoRenovacionPendiente = {
+  id: number;
+  fecha: string;
+  estado: "EntregadoGestor" | "Confirmado" | "PendienteReintegro" | "Reintegrado" | "Cancelado";
+  num_prog?: number | string | null;
+  motivo?: string | null;
+  monto: number | string;
+  credito?: {
+    cliente?: { nombre_completo?: string | null } | null;
+    grupo?: { nombre_grupo?: string | null } | null;
+  } | null;
 };
 
 const cobroSearchFields = (c: Cobro) => [
@@ -124,6 +157,31 @@ function BeneficiarioLink({
     >
       {nombre || "—"}
     </Link>
+  );
+}
+
+function ReimprimirTicketPago({ pago }: { pago: PagoDelDia }) {
+  const credito = pago.credito;
+  const ticket: PagoTicketData = {
+    num_prog: credito?.num_prog ?? pago.num_prog,
+    tipo_credito: credito?.tipo_credito ?? undefined,
+    beneficiario: credito?.cliente?.nombre_completo || credito?.grupo?.nombre_grupo || undefined,
+    asesor: credito?.asesor?.nombre_asesor ?? null,
+    fecha: pago.fecha,
+    hora: pago.hora,
+    metodo_pago: pago.metodo_pago ?? undefined,
+    abono: Number(pago.monto || 0),
+    total: Number(pago.monto || 0),
+    notas: pago.notas ?? null,
+    saldo_pendiente: credito?.saldo_pendiente == null ? undefined : Number(credito.saldo_pendiente),
+  };
+
+  return (
+    <PrintTicket
+      {...buildPagoTicketProps(ticket)}
+      ticketId={`reimpresion-pago-${pago.id}`}
+      buttonLabel="Reimprimir ticket"
+    />
   );
 }
 
@@ -245,6 +303,10 @@ function AdminPagosView({
 }) {
   const porAsesor = data?.por_asesor || [];
   const pagos = data?.pagos || [];
+  const foliosPrestamosNuevos = new Set((data?.creditos || []).map((credito: any) => String(credito.num_prog)));
+  const renovacionesVisibles = (data?.renovaciones_del_dia || []).filter(
+    (renovacion: any) => foliosPrestamosNuevos.has(String(renovacion.num_prog_nuevo)),
+  );
   const searchTerm = search.toLowerCase().trim();
   const matchesSearch = (fields: unknown[]) =>
     fields.some((field) => String(field ?? "").toLowerCase().includes(searchTerm));
@@ -446,21 +508,21 @@ function AdminPagosView({
             </CardContent>
           </Card>
           <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm">Efectivo Recibido (Caja)</CardTitle></CardHeader>
-            <CardContent className="text-xl font-bold text-emerald-700">
-              {money(data.total_recibido ?? 0)}
-            </CardContent>
-          </Card>
-          <Card>
             <CardHeader className="pb-2"><CardTitle className="text-sm">Diferencia por Entregar</CardTitle></CardHeader>
             <CardContent className="text-xl font-bold text-red-600">
               {money(data.diferencia_cobrado_recibido ?? ((data.total_abonos ?? 0) - (data.total_recibido ?? 0)))}
             </CardContent>
           </Card>
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-sm">Monto Pendiente</CardTitle></CardHeader>
+            <CardContent className="text-xl font-bold text-amber-700">
+              {money(data.total_pendiente_cobro ?? 0)}
+            </CardContent>
+          </Card>
         </div>
       )}
 
-      {(data?.renovaciones_del_dia?.length ?? 0) > 0 && (
+      {renovacionesVisibles.length > 0 && (
         <Card className="border-primary/30">
           <CardHeader className="pb-3">
             <CardTitle>Renovaciones del día</CardTitle>
@@ -469,7 +531,7 @@ function AdminPagosView({
           <CardContent>
             <Table>
               <TableHeader><TableRow><TableHead>Cliente / Grupo</TableHead><TableHead>Crédito anterior</TableHead><TableHead>Crédito nuevo</TableHead><TableHead className="text-right">Saldo absorbido</TableHead><TableHead className="text-right">Comisión</TableHead><TableHead className="text-right">Efectivo neto</TableHead><TableHead>Plazo</TableHead><TableHead>Gestor</TableHead></TableRow></TableHeader>
-              <TableBody>{data.renovaciones_del_dia.map((renovacion: any) => (
+              <TableBody>{renovacionesVisibles.map((renovacion: any) => (
                 <TableRow key={renovacion.id}>
                   <TableCell className="font-medium">
                     <BeneficiarioLink
@@ -519,9 +581,10 @@ function AdminPagosView({
                 <TableHead>Gestor Cobranza</TableHead>
                 <TableHead className="text-right">Cobrado App</TableHead>
                 <TableHead className="text-right">A recibir</TableHead>
-                <TableHead className="text-right">Ajuste comisión (informativo)</TableHead>
+                <TableHead className="text-right">Saldo favor clientes</TableHead>
+                <TableHead className="text-right">Comisión</TableHead>
                 <TableHead className="text-right">Entregó Caja</TableHead>
-                <TableHead className="text-right">Faltante</TableHead>
+                <TableHead className="text-right">Monto pendiente</TableHead>
                 <TableHead className="text-center">Estado</TableHead>
                 <TableHead className="text-right">Acción</TableHead>
               </TableRow>
@@ -529,19 +592,20 @@ function AdminPagosView({
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">Cargando...</TableCell>
+                  <TableCell colSpan={10} className="h-24 text-center text-muted-foreground">Cargando...</TableCell>
                 </TableRow>
               ) : filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">
+                  <TableCell colSpan={10} className="h-24 text-center text-muted-foreground">
                     {search ? "No se encontraron gestores de cobranza." : "Sin movimientos del día."}
                   </TableCell>
                 </TableRow>
               ) : (
                 paginated.map((a: any) => {
                   const asesorKey = String(a.id_asesor ?? a.nombre_asesor);
-                  const pendiente = a.pendiente_entrega ?? a.a_recibir ?? 0;
-                  const completo = a.recibido && pendiente <= 0.009;
+                  const pendienteEntrega = a.pendiente_entrega ?? a.a_recibir ?? 0;
+                  const pendienteCobro = a.monto_pendiente_cobro ?? 0;
+                  const completo = a.recibido && pendienteEntrega <= 0.009;
                   const pagosAsesor = (data?.pagos || []).filter(
                     (p: any) => (p.credito?.id_asesor ?? 0) === Number(a.id_asesor)
                   );
@@ -555,12 +619,20 @@ function AdminPagosView({
                     (c: any) => c.categoria === "atrasado",
                   );
                   const moraAsesor = a.creditos_mora || [];
+                  const pagosAnticipadosAsesor = a.pagos_anticipados || [];
                   const foliosRutaDelDia = new Set(rutaDelDiaAsesor.map((c: any) => String(c.num_prog)));
-                  const foliosAtrasados = new Set(atrasadosAsesor.map((c: any) => String(c.num_prog)));
                   const foliosMora = new Set(moraAsesor.map((c: any) => String(c.num_prog)));
                   const pagosDelFolio = (folio: number | string) => pagosAsesor.filter(
                     (p: any) => String(p.credito?.num_prog ?? p.num_prog) === String(folio),
                   );
+                  const montoRutaDelPago = (pago: any) => {
+                    const montoClasificado = Number(pago.monto_del_dia_hoy || 0);
+                    return montoClasificado > 0.009
+                      ? montoClasificado
+                      : (foliosRutaDelDia.has(String(pago.credito?.num_prog ?? pago.num_prog)) ? Number(pago.monto || 0) : 0);
+                  };
+                  const montoAtrasadoDelPago = (pago: any) => Number(pago.monto_atrasado_hoy || 0);
+                  const montoAnticipadoDelPago = (pago: any) => Number(pago.monto_adelantado_hoy || 0);
                   const botonEliminarAbono = (pago: any) => isAdmin && !Boolean(pago.recibido_en_caja) && (
                     <Button
                       size="sm"
@@ -577,14 +649,14 @@ function AdminPagosView({
                   // día. Un abono a un atrasado conserva su lugar en la lista
                   // de atrasados, donde se mostrará como pagado en verde.
                   const pagosRutaAsesor = pagosAsesor.filter((p: any) =>
-                    foliosRutaDelDia.has(String(p.credito?.num_prog ?? "")),
+                    foliosRutaDelDia.has(String(p.credito?.num_prog ?? p.num_prog)),
                   );
                   // La ruta y sus abonos son listas excluyentes: en cuanto un
                   // crédito de la ruta recibe un abono, deja de aparecer como
                   // pendiente de ruta.
                   const foliosRutaConAbono = new Set(
                     pagosRutaAsesor
-                      .filter((p: any) => Number(p.monto || 0) > 0)
+                      .filter((p: any) => montoRutaDelPago(p) > 0.009)
                       .map((p: any) => String(p.credito?.num_prog ?? "")),
                   );
                   const rutaPendienteAsesor = rutaDelDiaAsesor.filter(
@@ -617,9 +689,16 @@ function AdminPagosView({
                   const atrasadosMostrados = asesorCoincide
                     ? atrasadosAsesor
                     : atrasadosAsesor.filter(clienteProgramadoCoincide);
+                  const totalAbonadoAtrasados = atrasadosMostrados.reduce(
+                    (total: number, cobro: any) => total + Number(cobro.monto_abonado_atrasado_hoy ?? cobro.monto_abonado_hoy ?? 0),
+                    0,
+                  );
                   const moraMostrada = asesorCoincide
                     ? moraAsesor
                     : moraAsesor.filter(clienteProgramadoCoincide);
+                  const pagosAnticipadosMostrados = asesorCoincide
+                    ? pagosAnticipadosAsesor
+                    : pagosAnticipadosAsesor.filter(pagoCoincide);
                   const creditosOtorgadosMostrados = asesorCoincide
                     ? creditosAsesor
                     : creditosAsesor.filter((c: any) => matchesSearch([
@@ -655,6 +734,9 @@ function AdminPagosView({
                         <TableCell className="text-right font-semibold text-primary">
                           {money(a.a_recibir)}
                         </TableCell>
+                        <TableCell className="text-right font-medium text-sky-700">
+                          {a.saldo_favor_clientes > 0 ? money(a.saldo_favor_clientes) : "—"}
+                        </TableCell>
                         <TableCell className="text-right font-medium text-amber-700">
                           {a.comisiones_renovacion > 0 ? money(a.comisiones_renovacion) : "—"}
                         </TableCell>
@@ -662,8 +744,8 @@ function AdminPagosView({
                           {a.recibido ? money(a.monto_recibido) : "—"}
                         </TableCell>
                         <TableCell className="text-right font-medium">
-                          {pendiente > 0.009 ? (
-                            <span className="font-medium text-red-600">{money(pendiente)}</span>
+                          {pendienteCobro > 0.009 ? (
+                            <span className="font-medium text-red-600">{money(pendienteCobro)}</span>
                           ) : (
                             <span className="text-muted-foreground">{money(0)}</span>
                           )}
@@ -699,15 +781,76 @@ function AdminPagosView({
                       {/* La ruta, sus abonos y los atrasados se muestran por separado. */}
                       {isExpanded && (
                         <TableRow className="bg-muted/15 hover:bg-muted/15 border-b-2">
-                          <TableCell colSpan={9} className="p-3 pl-8">
+                          <TableCell colSpan={10} className="p-3 pl-8">
                             <div className="rounded-lg border bg-background p-4 shadow-sm space-y-4">
                               {/* Solo los abonos de la ruta del día van en esta sección. */}
                               {pagosRutaMostrados.length > 0 && (
                                 <ExpandableReportSection
-                                  title={`Abonos de ruta (${pagosRutaMostrados.length})`}
+                                  title={`Abonos de ruta diaria (${pagosRutaMostrados.length})`}
                                   toneClass="text-emerald-600"
-                                  summary={<span className="text-emerald-700">{money(pagosRutaMostrados.reduce((total: number, p: any) => total + Number(p.monto || 0), 0))}</span>}
+                                  summary={<span className="text-emerald-700">{money(pagosRutaMostrados.reduce((total: number, p: any) => total + montoRutaDelPago(p), 0))}</span>}
                                 >
+                                  <Table>
+                                    <TableHeader>
+                                      <TableRow className="border-b bg-muted/40 hover:bg-muted/40">
+                                        <TableHead className="text-xs h-8">Folio</TableHead>
+                                        <TableHead className="text-xs h-8">Cliente / Grupo</TableHead>
+                                        <TableHead className="text-xs h-8">Tipo</TableHead>
+                                        <TableHead className="text-xs h-8">Método</TableHead>
+                                        <TableHead className="text-xs h-8 text-right">Abono</TableHead>
+                                        <TableHead className="text-xs h-8 text-right">Saldo a favor</TableHead>
+                                        {isAdmin && <TableHead className="text-xs h-8 text-right">Acción</TableHead>}
+                                      </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                      {pagosRutaMostrados.map((p: any) => (
+                                        <TableRow key={p.id} className="text-xs hover:bg-muted/30">
+                                          <TableCell className="font-mono font-medium">
+                                            <FolioLink folio={p.credito?.num_prog ?? p.id} />
+                                          </TableCell>
+                                          <TableCell className="font-medium text-foreground">
+                                            <BeneficiarioLink
+                                              nombre={p.credito?.cliente?.nombre_completo || p.credito?.grupo?.nombre_grupo || "Cliente sin nombre"}
+                                              clienteId={p.credito?.cliente?.id_cliente ?? p.credito?.id_cliente}
+                                              grupoId={p.credito?.grupo?.id ?? p.credito?.id_grupo}
+                                            />
+                                            {Number(p.saldo_favor_cliente || 0) > 0 && (
+                                              <div className="mt-1 text-[11px] font-semibold text-sky-700">
+                                                Saldo a favor: {money(p.saldo_favor_cliente)}
+                                              </div>
+                                            )}
+                                          </TableCell>
+                                          <TableCell>
+                                            <Badge variant="outline" className="text-[10px] py-0">
+                                              {p.credito?.tipo_credito || "Individual"}
+                                            </Badge>
+                                          </TableCell>
+                                          <TableCell className="text-muted-foreground">
+                                            {p.metodo_pago || "Efectivo"}
+                                          </TableCell>
+                                          <TableCell className="text-right font-bold text-emerald-700">
+                                            {money(montoRutaDelPago(p))}
+                                          </TableCell>
+                                          <TableCell className="text-right font-medium text-sky-700">
+                                            {Number(p.saldo_favor_cliente || 0) > 0 ? money(p.saldo_favor_cliente) : "—"}
+                                          </TableCell>
+                                          {isAdmin && <TableCell className="text-right">{botonEliminarAbono(p)}</TableCell>}
+                                        </TableRow>
+                                      ))}
+                                    </TableBody>
+                                  </Table>
+                                </ExpandableReportSection>
+                              )}
+
+                              {pagosAnticipadosMostrados.length > 0 && (
+                                <ExpandableReportSection
+                                  title={`Pagos anticipados (${pagosAnticipadosMostrados.length})`}
+                                  toneClass="text-violet-700"
+                                  summary={<span className="text-violet-700">{money(pagosAnticipadosMostrados.reduce((total: number, p: any) => total + montoAnticipadoDelPago(p), 0))}</span>}
+                                >
+                                  <p className="mb-2 text-xs text-muted-foreground">
+                                    Estos abonos ya se aplicarán a su cuota futura y no volverán a aparecer como pendientes al llegar su fecha de pago.
+                                  </p>
                                   <Table>
                                     <TableHeader>
                                       <TableRow className="border-b bg-muted/40 hover:bg-muted/40">
@@ -720,10 +863,10 @@ function AdminPagosView({
                                       </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                      {pagosRutaMostrados.map((p: any) => (
+                                      {pagosAnticipadosMostrados.map((p: any) => (
                                         <TableRow key={p.id} className="text-xs hover:bg-muted/30">
                                           <TableCell className="font-mono font-medium">
-                                            <FolioLink folio={p.credito?.num_prog ?? p.id} />
+                                            <FolioLink folio={p.credito?.num_prog ?? p.num_prog} />
                                           </TableCell>
                                           <TableCell className="font-medium text-foreground">
                                             <BeneficiarioLink
@@ -740,8 +883,8 @@ function AdminPagosView({
                                           <TableCell className="text-muted-foreground">
                                             {p.metodo_pago || "Efectivo"}
                                           </TableCell>
-                                          <TableCell className="text-right font-bold text-emerald-700">
-                                            {money(p.monto)}
+                                          <TableCell className="text-right font-bold text-violet-700">
+                                            {money(montoAnticipadoDelPago(p))}
                                           </TableCell>
                                           {isAdmin && <TableCell className="text-right">{botonEliminarAbono(p)}</TableCell>}
                                         </TableRow>
@@ -794,7 +937,7 @@ function AdminPagosView({
                                 <ExpandableReportSection
                                   title={`Pagos atrasados (${atrasadosMostrados.length})`}
                                   toneClass="text-amber-600"
-                                  summary={<span className="text-amber-700">{money(atrasadosMostrados.filter((c: any) => !c.pagado_hoy).reduce((total: number, c: any) => total + Number(c.monto_a_cobrar || 0), 0))}</span>}
+                                  summary={<span className="text-amber-700">Abonado: {money(totalAbonadoAtrasados)}</span>}
                                 >
                                   <Table>
                                     <TableHeader>
@@ -804,16 +947,16 @@ function AdminPagosView({
                                         <TableHead className="text-xs h-8">Vencimiento</TableHead>
                                         <TableHead className="text-xs h-8 text-center">Atraso</TableHead>
                                         <TableHead className="text-xs h-8 text-right">A cobrar</TableHead>
+                                        <TableHead className="text-xs h-8 text-right">Abonado hoy</TableHead>
                                         <TableHead className="text-xs h-8 text-center">Estado</TableHead>
                                         {isAdmin && <TableHead className="text-xs h-8 text-right">Acción</TableHead>}
                                       </TableRow>
                                     </TableHeader>
                                     <TableBody>
                                       {atrasadosMostrados.map((c: any) => {
-                                        const pagadoHoy = Boolean(c.pagado_hoy);
-                                        const abonosAtrasados = pagosDelFolio(c.num_prog).filter((p: any) =>
-                                          foliosAtrasados.has(String(p.credito?.num_prog ?? p.num_prog)),
-                                        );
+                                        const montoAbonadoHoy = Number(c.monto_abonado_atrasado_hoy ?? c.monto_abonado_hoy ?? 0);
+                                        const pagadoHoy = montoAbonadoHoy >= Number(c.monto_a_cobrar || 0) - 0.009;
+                                        const abonosAtrasados = pagosDelFolio(c.num_prog).filter((p: any) => montoAtrasadoDelPago(p) > 0.009);
                                         return (
                                           <TableRow key={c.num_prog} className={cn("text-xs hover:bg-muted/30", pagadoHoy && "bg-emerald-100 text-emerald-950 hover:bg-emerald-200/80 [&_a]:text-emerald-800 [&_a]:decoration-emerald-600/50")}>
                                             <TableCell className="font-mono font-medium"><FolioLink folio={c.num_prog} /></TableCell>
@@ -827,9 +970,14 @@ function AdminPagosView({
                                             <TableCell className="text-muted-foreground">{c.pendientes?.[0]?.fecha ? fmtFecha(c.pendientes[0].fecha) : "—"}</TableCell>
                                             <TableCell className="text-center text-amber-800 font-medium">{c.dias_atraso ? `${c.dias_atraso} d` : "—"}</TableCell>
                                             <TableCell className="text-right font-bold text-amber-700">{money(c.monto_a_cobrar)}</TableCell>
+                                            <TableCell className="text-right font-bold text-emerald-700">
+                                              {montoAbonadoHoy > 0 ? money(montoAbonadoHoy) : "—"}
+                                            </TableCell>
                                             <TableCell className="text-center">
                                               {pagadoHoy ? (
                                                 <Badge className="border-emerald-300 bg-emerald-200 text-emerald-900 hover:bg-emerald-200">Pagado</Badge>
+                                              ) : montoAbonadoHoy > 0 ? (
+                                                <Badge className="border-amber-300 bg-amber-100 text-amber-900 hover:bg-amber-100">Abono parcial</Badge>
                                               ) : (
                                                 <Badge variant="outline" className="border-amber-300 text-amber-800">Pendiente</Badge>
                                               )}
@@ -915,7 +1063,7 @@ function AdminPagosView({
                                 </div>
                               )}
 
-                              {pagosRutaMostrados.length === 0 && clientesProgramadosMostrados.length === 0 && atrasadosMostrados.length === 0 && moraMostrada.length === 0 && creditosOtorgadosMostrados.length === 0 && (
+                              {pagosRutaMostrados.length === 0 && pagosAnticipadosMostrados.length === 0 && clientesProgramadosMostrados.length === 0 && atrasadosMostrados.length === 0 && moraMostrada.length === 0 && creditosOtorgadosMostrados.length === 0 && (
                                 <p className="text-xs text-muted-foreground text-center py-3">
                                   Sin cobranza programada ni pagos registrados para este gestor de cobranza.
                                 </p>
@@ -1099,6 +1247,62 @@ function AsesorCobrosView({
   onCobrar: (numProg: number) => void;
 }) {
   const cobros: Cobro[] = data?.cobros ?? [];
+  const abonosDelDia: PagoDelDia[] = data?.pagos ?? [];
+  const [desembolsosPendientes, setDesembolsosPendientes] = useState<DesembolsoRenovacionPendiente[]>([]);
+  const [loadingDesembolsos, setLoadingDesembolsos] = useState(true);
+  const [confirmandoDesembolsoId, setConfirmandoDesembolsoId] = useState<number | null>(null);
+  const cargarDesembolsosPendientes = useCallback(async () => {
+    setLoadingDesembolsos(true);
+    try {
+      const response = await apiFetch(`/confirmaciones-movimientos/gestor?fecha=${fecha}`);
+      if (!response.ok) throw new Error();
+      setDesembolsosPendientes(await response.json());
+    } catch {
+      toast.error("No se pudieron cargar los desembolsos pendientes.");
+    } finally {
+      setLoadingDesembolsos(false);
+    }
+  }, [fecha]);
+  useEffect(() => {
+    cargarDesembolsosPendientes();
+  }, [cargarDesembolsosPendientes]);
+  const confirmarDesembolso = async (desembolso: DesembolsoRenovacionPendiente) => {
+    if (!window.confirm(`¿Confirmas que entregaste $${Number(desembolso.monto || 0).toLocaleString("es-MX", { minimumFractionDigits: 2 })} al cliente?`)) return;
+    setConfirmandoDesembolsoId(desembolso.id);
+    try {
+      const response = await apiFetch(`/confirmaciones-movimientos/${desembolso.id}/confirmar-desembolso`, { method: "POST" });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        toast.error(body.message || "No se pudo confirmar el desembolso.");
+        return;
+      }
+      toast.success(body.message || "Desembolso confirmado.");
+      setDesembolsosPendientes((actuales) => actuales.map((item) => item.id === desembolso.id ? body.data : item));
+    } catch {
+      toast.error("Error de conexión.");
+    } finally {
+      setConfirmandoDesembolsoId(null);
+    }
+  };
+  const cancelarDesembolso = async (desembolso: DesembolsoRenovacionPendiente) => {
+    if (!window.confirm("¿Confirmas que no lograste realizar este desembolso? El egreso seguirá registrado porque el recurso ya fue entregado al gestor.")) return;
+    setConfirmandoDesembolsoId(desembolso.id);
+    try {
+      const response = await apiFetch(`/confirmaciones-movimientos/${desembolso.id}/cancelar-desembolso`, { method: "POST" });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        toast.error(body.message || "No se pudo cancelar el desembolso.");
+        return;
+      }
+      toast.success(body.message || "Desembolso cancelado.");
+      setDesembolsosPendientes((actuales) => actuales.map((item) => item.id === desembolso.id ? body.data : item));
+    } catch {
+      toast.error("Error de conexión.");
+    } finally {
+      setConfirmandoDesembolsoId(null);
+    }
+  };
+  const totalAbonosDelDia = abonosDelDia.reduce((total, pago) => total + Number(pago.monto || 0), 0);
   const rutaDelDia = cobros.filter((c) => c.categoria === "del_dia");
   const pagosAtrasados = cobros.filter((c) => c.categoria === "atrasado");
   const rutaFiltrada = filterBySearch(rutaDelDia, search, cobroSearchFields);
@@ -1170,6 +1374,119 @@ function AsesorCobrosView({
           </Card>
         </div>
       )}
+
+      {(loadingDesembolsos || desembolsosPendientes.length > 0) && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Desembolsos de renovación</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Seguimiento de las renovaciones entregadas al gestor en la fecha seleccionada.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Fecha</TableHead>
+                  <TableHead>Folio</TableHead>
+                  <TableHead>Cliente / Grupo</TableHead>
+                  <TableHead>Concepto</TableHead>
+                  <TableHead className="text-right">Monto</TableHead>
+                  <TableHead>Estado</TableHead>
+                  <TableHead className="text-right">Acción</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loadingDesembolsos ? (
+                  <TableRow><TableCell colSpan={7} className="h-20 text-center text-sm text-muted-foreground">Cargando desembolsos...</TableCell></TableRow>
+                ) : desembolsosPendientes.map((desembolso) => (
+                  <TableRow key={desembolso.id}>
+                    <TableCell>{String(desembolso.fecha).slice(0, 10)}</TableCell>
+                    <TableCell className="font-mono text-xs"><FolioLink folio={desembolso.num_prog} /></TableCell>
+                    <TableCell className="font-medium">{desembolso.credito?.cliente?.nombre_completo || desembolso.credito?.grupo?.nombre_grupo || "—"}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{desembolso.motivo || "Renovación"}</TableCell>
+                    <TableCell className="text-right font-bold text-amber-700">${Number(desembolso.monto || 0).toLocaleString("es-MX", { minimumFractionDigits: 2 })}</TableCell>
+                    <TableCell>
+                      {desembolso.estado === "Confirmado" ? <Badge className="border-emerald-300 bg-emerald-200 text-emerald-900 hover:bg-emerald-200">Entregado al cliente</Badge>
+                        : desembolso.estado === "PendienteReintegro" ? <Badge className="border-red-300 bg-red-100 text-red-900 hover:bg-red-100">Pendiente de reintegro</Badge>
+                          : desembolso.estado === "Reintegrado" ? <Badge className="border-sky-300 bg-sky-100 text-sky-900 hover:bg-sky-100">Reintegrado a caja</Badge>
+                            : desembolso.estado === "Cancelado" ? <Badge variant="outline" className="border-red-300 text-red-800">Cancelado</Badge>
+                          : <Badge className="border-amber-300 bg-amber-100 text-amber-900 hover:bg-amber-100">Pendiente de entrega</Badge>}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {desembolso.estado === "EntregadoGestor" ? (
+                        <div className="flex justify-end gap-2">
+                          <Button size="sm" onClick={() => confirmarDesembolso(desembolso)} disabled={confirmandoDesembolsoId === desembolso.id}>
+                            {confirmandoDesembolsoId === desembolso.id ? "Confirmando..." : "Confirmar entrega"}
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={() => cancelarDesembolso(desembolso)} disabled={confirmandoDesembolsoId === desembolso.id}>Cancelar</Button>
+                        </div>
+                      ) : <span className="text-xs text-muted-foreground">Sin acciones pendientes</span>}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+
+      <Card>
+        <details className="group" open={abonosDelDia.length > 0}>
+          <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+            <CardHeader className="flex-row items-center justify-between gap-3 hover:bg-muted/40">
+              <div>
+                <CardTitle>Abonos del día</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Pagos registrados hoy. Puedes reimprimir el comprobante de cualquiera de ellos.
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-semibold text-emerald-700">
+                  ${totalAbonosDelDia.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+                </span>
+                <ChevronDown className="h-5 w-5 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
+              </div>
+            </CardHeader>
+          </summary>
+          <CardContent className="border-t pt-4">
+            {abonosDelDia.length === 0 ? (
+              <p className="py-3 text-center text-sm text-muted-foreground">Sin abonos registrados en esta fecha.</p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Folio</TableHead>
+                    <TableHead>Cliente / Grupo</TableHead>
+                    <TableHead>Hora</TableHead>
+                    <TableHead>Método</TableHead>
+                    <TableHead className="text-right">Abono</TableHead>
+                    <TableHead className="text-right">Ticket</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {abonosDelDia.map((pago) => (
+                    <TableRow key={pago.id}>
+                      <TableCell className="font-mono text-xs"><FolioLink folio={pago.credito?.num_prog ?? pago.num_prog} /></TableCell>
+                      <TableCell className="font-medium">
+                        <BeneficiarioLink
+                          nombre={pago.credito?.cliente?.nombre_completo || pago.credito?.grupo?.nombre_grupo || "Cliente sin nombre"}
+                        />
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{pago.hora ? String(pago.hora).slice(0, 5) : "—"}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{pago.metodo_pago || "Efectivo"}</TableCell>
+                      <TableCell className="text-right font-bold text-emerald-700">
+                        ${Number(pago.monto || 0).toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+                      </TableCell>
+                      <TableCell className="text-right"><ReimprimirTicketPago pago={pago} /></TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </details>
+      </Card>
 
       <CobrosSection
         title="Ruta de cobros del día"
@@ -1338,6 +1655,7 @@ function CobrosSection({
               <TableHead>Día pago</TableHead>
               <TableHead className="text-right">Valor ficha</TableHead>
               <TableHead className="text-right">A cobrar</TableHead>
+              <TableHead className="text-right">Abonado hoy</TableHead>
               <TableHead className="text-center">Cuotas pend.</TableHead>
               <TableHead className="text-center">Atraso</TableHead>
               <TableHead className="text-center">Estado</TableHead>
@@ -1347,11 +1665,11 @@ function CobrosSection({
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">Cargando...</TableCell>
+                <TableCell colSpan={10} className="h-24 text-center text-muted-foreground">Cargando...</TableCell>
               </TableRow>
             ) : filtered.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">
+                <TableCell colSpan={10} className="h-24 text-center text-muted-foreground">
                   {search ? "No se encontraron cobros." : emptyMessage}
                 </TableCell>
               </TableRow>
@@ -1361,7 +1679,8 @@ function CobrosSection({
                 const nombre = isGrupal
                   ? (c.grupo?.nombre_grupo ?? "Grupo")
                   : (c.cliente?.nombre_completo ?? "Cliente");
-                const pagadoHoy = Boolean(c.pagado_hoy);
+                const montoAbonadoHoy = Number(c.monto_abonado_hoy || 0);
+                const pagadoHoy = montoAbonadoHoy >= Number(c.monto_a_cobrar || 0) - 0.009;
 
                 return (
                   <TableRow
@@ -1390,6 +1709,11 @@ function CobrosSection({
                     <TableCell className="text-right text-xs font-bold text-primary">
                       ${Number(c.monto_a_cobrar || 0).toLocaleString("es-MX", { minimumFractionDigits: 2 })}
                     </TableCell>
+                    <TableCell className="text-right text-xs font-bold text-emerald-700">
+                      {montoAbonadoHoy > 0
+                        ? `$${montoAbonadoHoy.toLocaleString("es-MX", { minimumFractionDigits: 2 })}`
+                        : "—"}
+                    </TableCell>
                     <TableCell className="text-center text-xs">
                       {c.cuotas_pendientes}
                       {(c.cuotas_atrasadas ?? 0) > 0 && (
@@ -1405,6 +1729,10 @@ function CobrosSection({
                       {pagadoHoy ? (
                         <Badge className="border-emerald-300 bg-emerald-200 text-emerald-900 hover:bg-emerald-200">
                           Pagado
+                        </Badge>
+                      ) : montoAbonadoHoy > 0 ? (
+                        <Badge className="border-amber-300 bg-amber-100 text-amber-900 hover:bg-amber-100">
+                          Abono parcial
                         </Badge>
                       ) : (
                         <Badge variant="outline">Pendiente</Badge>

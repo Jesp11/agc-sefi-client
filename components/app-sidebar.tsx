@@ -21,7 +21,7 @@ import {
   Users, UserCircle, User, Component, ClipboardList, LayoutList,
   AlertTriangle, UserX, FileText, BarChart3, TrendingUp,
   Receipt, Banknote, PiggyBank, CalendarDays, ArrowLeftRight, Cake,
-  CircleAlert,
+  CircleAlert, ClipboardCheck,
 } from "lucide-react";
 
 const catalogItems = [
@@ -45,6 +45,7 @@ const contabilidadItems = [
   { title: "Gastos Operativos", url: "/dashboard/gastos", icon: Receipt },
   { title: "Nómina", url: "/dashboard/nomina", icon: Banknote },
   { title: "Ahorro Personal", url: "/dashboard/ahorros-personal", icon: PiggyBank },
+  { title: "Confirmación de Movimientos", url: "/dashboard/confirmacion-movimientos", icon: ClipboardCheck },
 ];
 
 const reporteItems = [

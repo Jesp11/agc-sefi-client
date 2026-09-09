@@ -80,6 +80,8 @@ export default function FlujoCajaPage() {
   const now = new Date();
   const [anio, setAnio] = useState(now.getFullYear());
   const [mes, setMes] = useState(now.getMonth() + 1);
+  const [periodo, setPeriodo] = useState<"dia" | "mes">("dia");
+  const [fecha, setFecha] = useState(() => new Date(now.getTime() - now.getTimezoneOffset() * 60_000).toISOString().slice(0, 10));
   const [movimientos, setMovimientos] = useState<any[]>([]);
   const [resumen, setResumen] = useState<any>(null);
   const [capitalInversionistas, setCapitalInversionistas] = useState<number | null>(null);
@@ -99,9 +101,10 @@ export default function FlujoCajaPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
+      const filtro = periodo === "dia" ? `fecha=${fecha}` : `mes=${mes}&anio=${anio}`;
       const [movRows, resRes, capitalRes] = await Promise.all([
-        fetchAllPages(`/flujo-caja?mes=${mes}&anio=${anio}`),
-        apiFetch(`/flujo-caja/resumen?mes=${mes}&anio=${anio}`),
+        fetchAllPages(`/flujo-caja?${filtro}`),
+        apiFetch(`/flujo-caja/resumen?${filtro}`),
         apiFetch("/capital"),
       ]);
       setMovimientos(movRows);
@@ -115,7 +118,7 @@ export default function FlujoCajaPage() {
     } finally {
       setLoading(false);
     }
-  }, [mes, anio]);
+  }, [periodo, fecha, mes, anio]);
 
   useEffect(() => {
     fetchData();
@@ -337,7 +340,7 @@ export default function FlujoCajaPage() {
         <div>
           <h1 className="text-3xl font-bold">Ingresos y Egresos</h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Control de caja — movimientos diarios con saldo acumulado. Importa solo el mes seleccionado de este módulo.
+            Control de caja — consulta los movimientos de un día o de un mes completo.
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -348,23 +351,16 @@ export default function FlujoCajaPage() {
             className="hidden"
             onChange={handleImportFile}
           />
-          <div className="flex items-center gap-2">
-            <Label htmlFor="mes">Mes</Label>
-            <select
-              id="mes"
-              className="border rounded-md px-3 py-2 text-sm bg-background h-9"
-              value={mes}
-              onChange={(e) => setMes(parseInt(e.target.value))}
-            >
-              {MESES.map((nombre, i) => (
-                <option key={nombre} value={i + 1}>{nombre}</option>
-              ))}
-            </select>
+          <div className="flex rounded-md border p-0.5">
+            <Button size="sm" variant={periodo === "dia" ? "default" : "ghost"} onClick={() => setPeriodo("dia")}>Día</Button>
+            <Button size="sm" variant={periodo === "mes" ? "default" : "ghost"} onClick={() => setPeriodo("mes")}>Mes</Button>
           </div>
-          <div className="flex items-center gap-2">
-            <Label htmlFor="anio">Año</Label>
-            <Input id="anio" type="number" className="w-24 h-9" value={anio} onChange={(e) => setAnio(parseInt(e.target.value) || anio)} />
-          </div>
+          {periodo === "dia" ? (
+            <div className="flex items-center gap-2"><Label htmlFor="fecha">Fecha</Label><Input id="fecha" type="date" className="w-40 h-9" value={fecha} onChange={(e) => setFecha(e.target.value)} /></div>
+          ) : <>
+            <div className="flex items-center gap-2"><Label htmlFor="mes">Mes</Label><select id="mes" className="border rounded-md px-3 py-2 text-sm bg-background h-9" value={mes} onChange={(e) => setMes(parseInt(e.target.value))}>{MESES.map((nombre, i) => <option key={nombre} value={i + 1}>{nombre}</option>)}</select></div>
+            <div className="flex items-center gap-2"><Label htmlFor="anio">Año</Label><Input id="anio" type="number" className="w-24 h-9" value={anio} onChange={(e) => setAnio(parseInt(e.target.value) || anio)} /></div>
+          </>}
           <DropdownMenu>
             <DropdownMenuTrigger
               render={

@@ -76,6 +76,7 @@ const estadoStyles: Record<string, string> = {
   Finalizado: "bg-blue-50 text-blue-700 border-blue-200",
   Cancelado: "bg-red-50 text-red-700 border-red-200",
   CerradoSinRenovacion: "bg-orange-50 text-orange-700 border-orange-200",
+  PendienteDesembolso: "bg-amber-50 text-amber-800 border-amber-200",
 };
 
 type PagoHistorial = {
@@ -398,6 +399,19 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
           )}
         </div>
       </div>
+
+      {credito.estado === "PendienteDesembolso" && (
+        <Card className="border-amber-300 bg-amber-50">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-base text-amber-900">
+              <Clock className="h-4 w-4" /> Pendiente de desembolso
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm text-amber-900/90">
+            La renovación aún no ha sido entregada al cliente. No aparecerá en ruta de cobro ni generará mora hasta que el gestor confirme el desembolso.
+          </CardContent>
+        </Card>
+      )}
 
       {mora.en_mora && (
         <Card className="border-destructive/30 bg-destructive/5">

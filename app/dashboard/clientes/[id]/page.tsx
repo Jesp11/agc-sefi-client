@@ -136,7 +136,7 @@ export default function ClienteDetallePage() {
     const campos = seccion === "personal"
       ? ["nombre_completo", "telefono", "curp", "clave_elector", "fecha_nacimiento"]
       : seccion === "domicilio"
-        ? ["direccion", "entre_calles"]
+        ? ["direccion", "entre_calles", "tipo_comprobante_domicilio"]
         : ["ocupacion", "telefono_trabajo", "direccion_trabajo"];
     setClienteForm(Object.fromEntries(campos.map((campo) => [campo, String(cliente?.[campo] ?? "")] )));
   };
@@ -388,6 +388,10 @@ export default function ClienteDetallePage() {
               <div className="flex flex-col gap-1">
                 <span className="text-xs text-muted-foreground font-medium">Entre Calle y Calle</span>
                 <span className="flex items-center gap-2"><MapPin className="h-3 w-3" /> {cliente.entre_calles}</span>
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-xs text-muted-foreground font-medium">Comprobante de domicilio presentado</span>
+                <span>{cliente.tipo_comprobante_domicilio || "No especificado"}</span>
               </div>
             </CardContent>
           </Card>
@@ -818,6 +822,7 @@ export default function ClienteDetallePage() {
             {seccionEditando === "domicilio" && <>
               <div className="grid gap-2"><Label htmlFor="cliente-direccion">Dirección</Label><textarea id="cliente-direccion" className="min-h-20 rounded-md border border-input bg-background px-3 py-2 text-sm" value={clienteForm.direccion ?? ""} onChange={(e) => setClienteForm({ ...clienteForm, direccion: e.target.value })} /></div>
               <div className="grid gap-2"><Label htmlFor="cliente-entre-calles">Entre calles</Label><Input id="cliente-entre-calles" value={clienteForm.entre_calles ?? ""} onChange={(e) => setClienteForm({ ...clienteForm, entre_calles: e.target.value })} /></div>
+              <div className="grid gap-2"><Label htmlFor="cliente-comprobante-domicilio">Tipo de comprobante de domicilio</Label><select id="cliente-comprobante-domicilio" className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={clienteForm.tipo_comprobante_domicilio ?? ""} onChange={(e) => setClienteForm({ ...clienteForm, tipo_comprobante_domicilio: e.target.value })}><option value="">No especificado</option><option value="CFE">CFE</option><option value="COMAPA">COMAPA</option><option value="Telmex">Telmex</option><option value="Predial">Predial</option><option value="Estado de cuenta bancario">Estado de cuenta bancario</option><option value="Otro">Otro</option></select></div>
             </>}
             {seccionEditando === "laboral" && <>
               <div className="grid gap-2"><Label htmlFor="cliente-ocupacion">Ocupación</Label><Input id="cliente-ocupacion" value={clienteForm.ocupacion ?? ""} onChange={(e) => setClienteForm({ ...clienteForm, ocupacion: e.target.value })} /></div>

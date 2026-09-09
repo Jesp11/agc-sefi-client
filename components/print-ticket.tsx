@@ -18,6 +18,8 @@ export interface PrintTicketProps {
   ticketId?: string;
   /** Si true, coloca el botón de imprimir al final del contenedor y agrandado. */
   buttonAtBottom?: boolean;
+  /** Texto del botón de impresión. */
+  buttonLabel?: string;
   className?: string;
 }
 
@@ -29,6 +31,7 @@ export function PrintTicket({
   visible = false,
   ticketId = "print-ticket",
   buttonAtBottom = false,
+  buttonLabel = "Imprimir ticket",
   className,
 }: PrintTicketProps) {
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -60,7 +63,7 @@ export function PrintTicket({
           disabled={isPrinting}
         >
           <Printer className="mr-2 h-4 w-4" />
-          Imprimir ticket
+          {buttonLabel}
         </Button>
       )}
 
@@ -119,7 +122,7 @@ export function PrintTicket({
           disabled={isPrinting}
         >
           <Printer className="mr-2 h-5 w-5" />
-          Imprimir ticket
+          {buttonLabel}
         </Button>
       )}
 

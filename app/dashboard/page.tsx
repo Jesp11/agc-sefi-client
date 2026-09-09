@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { PiggyBank, TrendingUp, ArrowLeftRight } from "lucide-react";
+import { PiggyBank, TrendingUp, ArrowLeftRight, ClipboardCheck } from "lucide-react";
 
 const contabilidadLinks = [
   { title: "Ahorro Personal", desc: "Ahorro voluntario del personal operativo", url: "/dashboard/ahorros-personal", icon: PiggyBank },
   { title: "Ingresos y Egresos", desc: "Control de caja diario", url: "/dashboard/flujo-caja", icon: ArrowLeftRight },
   { title: "Inversionistas", desc: "Registro de inversionistas", url: "/dashboard/inversionistas", icon: TrendingUp },
+  { title: "Confirmación de Movimientos", desc: "Revisión y confirmación de movimientos contables", url: "/dashboard/confirmacion-movimientos", icon: ClipboardCheck },
 ];
 
 export default function DashboardIndex() {

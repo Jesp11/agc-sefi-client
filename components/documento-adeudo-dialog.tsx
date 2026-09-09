@@ -144,7 +144,7 @@ export function DocumentoAdeudoDialog({
 
     setNombreAcreedor("AGC SERVICIOS FINANCIEROS");
     setDomicilioPago("SEXTA PRIVADA NUM. 514, ZONA CENTRO DE LA CIUDAD DE TAMPICO, ESTADO DE TAMAULIPAS");
-    setTipoComprobante("COMAPA");
+    setTipoComprobante(cliente?.tipo_comprobante_domicilio || "COMAPA");
     setTasaMoratoria("20%");
     setLugarExpedicion("TAMPICO, TAMPS.");
 

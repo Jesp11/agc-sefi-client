@@ -34,6 +34,7 @@ import {
   Loader2,
   FolderOpen,
   CheckCircle2,
+  ClipboardCheck,
 } from "lucide-react";
 
 interface SearchItem {
@@ -254,6 +255,17 @@ const STATIC_NAVIGATION_ITEMS: Omit<SearchItem, "onClick">[] = [
     url: "/dashboard/capital",
     icon: Banknote,
     keywords: ["capital", "balance", "patrimonio", "socios", "fondos"],
+    adminOnly: true,
+  },
+  {
+    id: "nav-confirmacion-movimientos",
+    type: "module",
+    title: "Confirmación de Movimientos",
+    subtitle: "Revisión y confirmación de movimientos contables",
+    category: "Contabilidad",
+    url: "/dashboard/confirmacion-movimientos",
+    icon: ClipboardCheck,
+    keywords: ["confirmacion", "confirmar", "movimientos", "contabilidad", "revision"],
     adminOnly: true,
   },
 

@@ -1,6 +1,7 @@
 export const EXPEDIENTE_DOCUMENTOS = [
   { tipo: "SolicitudPrestamo", label: "Solicitud de préstamo" },
   { tipo: "Foto", label: "Foto" },
+  { tipo: "FotoUbicacion", label: "Foto de ubicación" },
   { tipo: "INE", label: "INE (frontal)" },
   { tipo: "INEReverso", label: "INE (reverso)" },
   { tipo: "ComprobanteDomicilio", label: "Comprobante de domicilio" },
