@@ -176,7 +176,7 @@ export type PagoTicketData = {
   multa?: number;
   total: number;
   notas?: string | null;
-  saldo_pendiente?: number;
+    saldo_pendiente?: number;
   num_pago?: number;
   total_pagos?: number;
 };
@@ -208,10 +208,6 @@ export function buildPagoTicketProps(ticket: PagoTicketData) {
 
   if (ticket.notas) {
     items.push({ label: "Notas", value: ticket.notas });
-  }
-
-  if (ticket.saldo_pendiente != null) {
-    items.push({ label: "Saldo pend.", value: money(ticket.saldo_pendiente) });
   }
 
   return {
