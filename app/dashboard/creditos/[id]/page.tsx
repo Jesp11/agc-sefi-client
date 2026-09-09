@@ -13,7 +13,7 @@ import {
   ArrowLeft, User, Users, Calendar, DollarSign, Hash, TrendingUp, Clock,
   Table as TableIcon, History, SlidersHorizontal, CalendarCheck, CalendarX,
   CreditCard, AlertTriangle, FileText, ChevronDown, FileDown, FolderArchive,
-  Pencil, RefreshCw,
+  Pencil, RefreshCw, Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { fmtFecha } from "@/lib/utils";
@@ -107,6 +107,7 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
   const [documentoIntegrante, setDocumentoIntegrante] = useState<any>(null);
   const [documentoIntegranteTipo, setDocumentoIntegranteTipo] = useState<TipoDocumentoAdeudo>("pagare");
   const [editingPago, setEditingPago] = useState<PagoHistorial | null>(null);
+  const [eliminandoPagoId, setEliminandoPagoId] = useState<number | null>(null);
   const [pagoForm, setPagoForm] = useState({
     monto: "",
     fecha: "",
@@ -149,6 +150,22 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
       notas: pago.notas ?? "",
     });
     setEditingPago(pago);
+  };
+
+  const eliminarPago = async (pago: PagoHistorial) => {
+    if (!window.confirm(`¿Eliminar definitivamente el abono de $${Number(pago.monto).toLocaleString()} del ${fmtFecha(pago.fecha)}? También se eliminará su ingreso de caja asociado, si existe, y se ajustarán los saldos del crédito y del corte. Esta acción no se puede deshacer.`)) return;
+    setEliminandoPagoId(pago.id);
+    try {
+      const response = await apiFetch(`/creditos/${id}/pagos/${pago.id}`, { method: "DELETE" });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.message || "No se pudo eliminar el abono.");
+      toast.success(result.message || "Abono eliminado.");
+      await fetchData();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No se pudo eliminar el abono.");
+    } finally {
+      setEliminandoPagoId(null);
+    }
   };
 
   const guardarPago = async () => {
@@ -837,6 +854,12 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
                                   onClick={() => abrirEdicionPago(p)}
                                 >
                                   <Pencil className="mr-1 h-3.5 w-3.5" /> Editar
+                                </Button>
+                                <Button size="sm" variant="destructive" className="h-8"
+                                  disabled={eliminandoPagoId !== null}
+                                  onClick={() => eliminarPago(p)}>
+                                  <Trash2 className="mr-1 h-3.5 w-3.5" />
+                                  {eliminandoPagoId === p.id ? "Eliminando…" : "Eliminar"}
                                 </Button>
                               </div>
                             ) : "—"}

@@ -430,7 +430,7 @@ function AdminPagosView({
   const eliminarAbono = async (pago: any) => {
     const folio = pago.credito?.num_prog ?? pago.num_prog;
     if (!folio || !pago.id) return;
-    if (!window.confirm(`¿Eliminar el abono de ${money(pago.monto)}? El crédito volverá a quedar pendiente.`)) return;
+    if (!window.confirm(`¿Eliminar definitivamente el abono #${pago.id} de ${money(pago.monto)} del ${fmtFecha(pago.fecha)}${pago.hora ? ` a las ${String(pago.hora).slice(0, 5)}` : ""}? También se eliminará su ingreso de caja asociado, si existe, y se ajustarán los saldos del crédito y del corte. Esta acción no se puede deshacer.`)) return;
 
     setEliminandoPagoId(Number(pago.id));
     try {
@@ -633,7 +633,7 @@ function AdminPagosView({
                   };
                   const montoAtrasadoDelPago = (pago: any) => Number(pago.monto_atrasado_hoy || 0);
                   const montoAnticipadoDelPago = (pago: any) => Number(pago.monto_adelantado_hoy || 0);
-                  const botonEliminarAbono = (pago: any) => isAdmin && !Boolean(pago.recibido_en_caja) && (
+                  const botonEliminarAbono = (pago: any) => isAdmin && pago.tipo === "Abono" && (
                     <Button
                       size="sm"
                       variant="destructive"
@@ -644,6 +644,19 @@ function AdminPagosView({
                       <Trash2 className="mr-1 h-3 w-3" />
                       {eliminandoPagoId === Number(pago.id) ? "Eliminando" : "Eliminar"}
                     </Button>
+                  );
+                  const accionesAbonos = (abonos: any[]) => (
+                    <div className="flex flex-col items-end gap-2">
+                      {abonos.filter((pago) => pago.tipo === "Abono").map((pago) => (
+                        <div key={pago.id} className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground">
+                            Abono #{pago.id} · {money(pago.monto)}
+                            {pago.hora ? ` · ${String(pago.hora).slice(0, 5)}` : ""}
+                          </span>
+                          {botonEliminarAbono(pago)}
+                        </div>
+                      ))}
+                    </div>
                   );
                   // La sección de abonos es exclusivamente para la ruta del
                   // día. Un abono a un atrasado conserva su lugar en la lista
@@ -984,9 +997,7 @@ function AdminPagosView({
                                             </TableCell>
                                             {isAdmin && (
                                               <TableCell className="text-right">
-                                                <div className="flex justify-end gap-1">
-                                                  {abonosAtrasados.map((pago: any) => <React.Fragment key={pago.id}>{botonEliminarAbono(pago)}</React.Fragment>)}
-                                                </div>
+                                                {accionesAbonos(abonosAtrasados)}
                                               </TableCell>
                                             )}
                                           </TableRow>
@@ -1044,9 +1055,7 @@ function AdminPagosView({
                                             </TableCell>
                                             {isAdmin && (
                                               <TableCell className="text-right">
-                                                <div className="flex justify-end gap-1">
-                                                  {abonosMora.map((pago: any) => <React.Fragment key={pago.id}>{botonEliminarAbono(pago)}</React.Fragment>)}
-                                                </div>
+                                                {accionesAbonos(abonosMora)}
                                               </TableCell>
                                             )}
                                           </TableRow>
