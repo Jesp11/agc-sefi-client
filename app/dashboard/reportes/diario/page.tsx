@@ -60,6 +60,7 @@ type CreditoMora = {
 };
 
 type PagoDelDia = {
+  monto_adelantado_hoy?: number | string;
   id: number;
   num_prog: number | string;
   monto: number | string;
@@ -160,7 +161,7 @@ function BeneficiarioLink({
   );
 }
 
-function ReimprimirTicketPago({ pago }: { pago: PagoDelDia }) {
+function ReimprimirTicketPago({ pago, seccion = "abonos" }: { pago: PagoDelDia; seccion?: string }) {
   const credito = pago.credito;
   const ticket: PagoTicketData = {
     num_prog: credito?.num_prog ?? pago.num_prog,
@@ -179,7 +180,7 @@ function ReimprimirTicketPago({ pago }: { pago: PagoDelDia }) {
   return (
     <PrintTicket
       {...buildPagoTicketProps(ticket)}
-      ticketId={`reimpresion-pago-${pago.id}`}
+      ticketId={`reimpresion-${seccion}-pago-${pago.id}`}
       buttonLabel="Reimprimir ticket"
     />
   );
@@ -1311,7 +1312,7 @@ function AsesorCobrosView({
       setConfirmandoDesembolsoId(null);
     }
   };
-  const totalAbonosDelDia = abonosDelDia.reduce((total, pago) => total + Number(pago.monto || 0), 0);
+  const pagosAdelantados: PagoDelDia[] = data?.pagos_anticipados ?? [];
   const rutaDelDia = cobros.filter((c) => c.categoria === "del_dia");
   const pagosAtrasados = cobros.filter((c) => c.categoria === "atrasado");
   const rutaFiltrada = filterBySearch(rutaDelDia, search, cobroSearchFields);
@@ -1440,62 +1441,8 @@ function AsesorCobrosView({
         </Card>
       )}
 
-      <Card>
-        <details className="group" open={abonosDelDia.length > 0}>
-          <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden">
-            <CardHeader className="flex-row items-center justify-between gap-3 hover:bg-muted/40">
-              <div>
-                <CardTitle>Abonos del día</CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  Pagos registrados hoy. Puedes reimprimir el comprobante de cualquiera de ellos.
-                </p>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="text-sm font-semibold text-emerald-700">
-                  ${totalAbonosDelDia.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
-                </span>
-                <ChevronDown className="h-5 w-5 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
-              </div>
-            </CardHeader>
-          </summary>
-          <CardContent className="border-t pt-4">
-            {abonosDelDia.length === 0 ? (
-              <p className="py-3 text-center text-sm text-muted-foreground">Sin abonos registrados en esta fecha.</p>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Folio</TableHead>
-                    <TableHead>Cliente / Grupo</TableHead>
-                    <TableHead>Hora</TableHead>
-                    <TableHead>Método</TableHead>
-                    <TableHead className="text-right">Abono</TableHead>
-                    <TableHead className="text-right">Ticket</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {abonosDelDia.map((pago) => (
-                    <TableRow key={pago.id}>
-                      <TableCell className="font-mono text-xs"><FolioLink folio={pago.credito?.num_prog ?? pago.num_prog} /></TableCell>
-                      <TableCell className="font-medium">
-                        <BeneficiarioLink
-                          nombre={pago.credito?.cliente?.nombre_completo || pago.credito?.grupo?.nombre_grupo || "Cliente sin nombre"}
-                        />
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{pago.hora ? String(pago.hora).slice(0, 5) : "—"}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{pago.metodo_pago || "Efectivo"}</TableCell>
-                      <TableCell className="text-right font-bold text-emerald-700">
-                        ${Number(pago.monto || 0).toLocaleString("es-MX", { minimumFractionDigits: 2 })}
-                      </TableCell>
-                      <TableCell className="text-right"><ReimprimirTicketPago pago={pago} /></TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </details>
-      </Card>
+      <PagosRegistradosSection pagos={abonosDelDia} loading={loading} />
+      <PagosRegistradosSection pagos={pagosAdelantados} loading={loading} adelantados />
 
       <CobrosSection
         title="Ruta de cobros del día"
@@ -1536,6 +1483,75 @@ function AsesorCobrosView({
         onCobrar={onCobrar}
       />
     </div>
+  );
+}
+
+function PagosRegistradosSection({
+  pagos,
+  loading,
+  adelantados = false,
+}: {
+  pagos: PagoDelDia[];
+  loading: boolean;
+  adelantados?: boolean;
+}) {
+  const controls = useTableControls();
+  const filtrados = filterBySearch(pagos, controls.search, (pago) => [
+    pago.id, pago.num_prog, pago.credito?.cliente?.nombre_completo,
+    pago.credito?.grupo?.nombre_grupo, pago.metodo_pago,
+  ]);
+  const page = Math.min(controls.page, Math.max(1, Math.ceil(filtrados.length / PAGE_SIZE)));
+  const monto = (pago: PagoDelDia) => Number(adelantados ? pago.monto_adelantado_hoy || 0 : pago.monto || 0);
+  const money = (value: number) => `$${value.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{adelantados ? "Pagos adelantados" : "Abonos del día y reimpresión de tickets"}</CardTitle>
+        <p className="text-sm text-muted-foreground">
+          {adelantados
+            ? "Importes aplicados a cuotas futuras en la fecha seleccionada. Ya están incluidos en los abonos del día; el ticket muestra el pago completo."
+            : "Pagos de la fecha seleccionada. Usa Reimprimir ticket al final de cada fila para obtener el comprobante."}
+        </p>
+        {!loading && <p className="font-semibold text-emerald-700">{pagos.length} pagos · {money(pagos.reduce((total, pago) => total + monto(pago), 0))}</p>}
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <TableSearch placeholder="Buscar por folio, cliente o grupo..." value={controls.search} onChange={controls.handleSearch} />
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Folio</TableHead>
+              <TableHead>Cliente / Grupo</TableHead>
+              <TableHead>Hora</TableHead>
+              <TableHead>Método</TableHead>
+              <TableHead className="text-right">{adelantados ? "Monto adelantado" : "Abono"}</TableHead>
+              <TableHead className="text-right">Ticket</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loading ? (
+              <TableRow><TableCell colSpan={6} className="h-24 text-center text-muted-foreground">Cargando pagos...</TableCell></TableRow>
+            ) : filtrados.length === 0 ? (
+              <TableRow><TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                {controls.search ? "No se encontraron pagos." : adelantados ? "Sin pagos adelantados en esta fecha." : "Sin abonos registrados en esta fecha."}
+              </TableCell></TableRow>
+            ) : paginateItems(filtrados, page).map((pago) => (
+              <TableRow key={pago.id}>
+                <TableCell className="font-mono text-xs"><FolioLink folio={pago.credito?.num_prog ?? pago.num_prog} /></TableCell>
+                <TableCell className="font-medium">{pago.credito?.cliente?.nombre_completo || pago.credito?.grupo?.nombre_grupo || "Cliente sin nombre"}</TableCell>
+                <TableCell className="text-xs text-muted-foreground">{pago.hora ? String(pago.hora).slice(0, 5) : "—"}</TableCell>
+                <TableCell className="text-xs text-muted-foreground">{pago.metodo_pago || "Efectivo"}</TableCell>
+                <TableCell className="text-right font-bold text-emerald-700">{money(monto(pago))}</TableCell>
+                <TableCell className="text-right">
+                  <ReimprimirTicketPago pago={pago} seccion={adelantados ? "adelantados" : "abonos"} />
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+        <TablePagination page={page} totalItems={filtrados.length} pageSize={PAGE_SIZE} onPageChange={controls.setPage} />
+      </CardContent>
+    </Card>
   );
 }
 
