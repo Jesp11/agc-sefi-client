@@ -585,7 +585,8 @@ function AdminPagosView({
                 <TableHead className="text-right">Saldo favor clientes</TableHead>
                 <TableHead className="text-right">Comisión</TableHead>
                 <TableHead className="text-right">Entregó Caja</TableHead>
-                <TableHead className="text-right">Monto pendiente</TableHead>
+                <TableHead className="text-right">Por cobrar</TableHead>
+                <TableHead className="text-right">Por entregar</TableHead>
                 <TableHead className="text-center">Estado</TableHead>
                 <TableHead className="text-right">Acción</TableHead>
               </TableRow>
@@ -593,18 +594,18 @@ function AdminPagosView({
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={10} className="h-24 text-center text-muted-foreground">Cargando...</TableCell>
+                  <TableCell colSpan={11} className="h-24 text-center text-muted-foreground">Cargando...</TableCell>
                 </TableRow>
               ) : filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={10} className="h-24 text-center text-muted-foreground">
+                  <TableCell colSpan={11} className="h-24 text-center text-muted-foreground">
                     {search ? "No se encontraron gestores de cobranza." : "Sin movimientos del día."}
                   </TableCell>
                 </TableRow>
               ) : (
                 paginated.map((a: any) => {
                   const asesorKey = String(a.id_asesor ?? a.nombre_asesor);
-                  const pendienteEntrega = a.pendiente_entrega ?? a.a_recibir ?? 0;
+                  const pendienteEntrega = a.pendiente_entrega ?? Math.max(0, Number(a.a_recibir ?? 0) - Number(a.monto_recibido ?? 0));
                   const pendienteCobro = a.monto_pendiente_cobro ?? 0;
                   const completo = a.recibido && pendienteEntrega <= 0.009;
                   const pagosAsesor = (data?.pagos || []).filter(
@@ -764,6 +765,13 @@ function AdminPagosView({
                             <span className="text-muted-foreground">{money(0)}</span>
                           )}
                         </TableCell>
+                        <TableCell className="text-right font-medium">
+                          {pendienteEntrega > 0.009 ? (
+                            <span className="text-amber-700">{money(pendienteEntrega)}</span>
+                          ) : (
+                            <span className="text-muted-foreground">{money(0)}</span>
+                          )}
+                        </TableCell>
                         <TableCell className="text-center">
                           {completo ? (
                             <Badge variant="default" className="bg-emerald-600 hover:bg-emerald-700">Entregado</Badge>
@@ -795,7 +803,7 @@ function AdminPagosView({
                       {/* La ruta, sus abonos y los atrasados se muestran por separado. */}
                       {isExpanded && (
                         <TableRow className="bg-muted/15 hover:bg-muted/15 border-b-2">
-                          <TableCell colSpan={10} className="p-3 pl-8">
+                          <TableCell colSpan={11} className="p-3 pl-8">
                             <div className="rounded-lg border bg-background p-4 shadow-sm space-y-4">
                               {/* Solo los abonos de la ruta del día van en esta sección. */}
                               {pagosRutaMostrados.length > 0 && (
