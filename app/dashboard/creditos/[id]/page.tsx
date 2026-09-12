@@ -89,6 +89,7 @@ type PagoHistorial = {
   tipo: string;
   id_cliente_integrante?: string | null;
   integrante?: { id_cliente: string; nombre_completo: string } | null;
+  recibido_en_caja?: boolean;
 };
 
 export default function CreditoDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -165,6 +166,19 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
       toast.error(error instanceof Error ? error.message : "No se pudo eliminar el abono.");
     } finally {
       setEliminandoPagoId(null);
+    }
+  };
+
+  const recibirPago = async (pago: PagoHistorial) => {
+    if (!window.confirm(`¿Confirmas que has recibido el abono de $${Number(pago.monto).toLocaleString()} del ${fmtFecha(pago.fecha)}? Se generará un ingreso de caja.`)) return;
+    try {
+      const response = await apiFetch(`/creditos/${id}/pagos/${pago.id}/recibir`, { method: "POST" });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.message || "No se pudo recibir el abono.");
+      toast.success(result.message || "Abono recibido en caja.");
+      await fetchData();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No se pudo recibir el abono.");
     }
   };
 
@@ -847,6 +861,11 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
                           <TableCell className="text-right">
                             {p.tipo === "Abono" ? (
                               <div className="flex justify-end gap-2">
+                                {!p.recibido_en_caja && (
+                                  <Button size="sm" variant="outline" className="h-8 border-emerald-300 text-emerald-700 bg-emerald-50 hover:bg-emerald-100" onClick={() => recibirPago(p)}>
+                                    Recibir
+                                  </Button>
+                                )}
                                 <Button
                                   size="sm"
                                   variant="outline"
