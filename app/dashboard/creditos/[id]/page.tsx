@@ -439,7 +439,7 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
             </CardTitle>
           </CardHeader>
           <CardContent className="text-sm text-amber-900/90">
-            La renovación aún no ha sido entregada al cliente. No aparecerá en ruta de cobro ni generará mora hasta que el gestor confirme el desembolso.
+            El préstamo aún no ha sido entregado al cliente. No aparecerá en ruta de cobro ni generará mora hasta que el gestor confirme el desembolso.
           </CardContent>
         </Card>
       )}

@@ -1396,9 +1396,9 @@ function AsesorCobrosView({
       {(loadingDesembolsos || desembolsosPendientes.length > 0) && (
         <Card>
           <CardHeader>
-            <CardTitle>Desembolsos de renovación</CardTitle>
+            <CardTitle>Desembolsos de préstamos y renovaciones</CardTitle>
             <p className="text-sm text-muted-foreground">
-              Seguimiento de las renovaciones entregadas al gestor en la fecha seleccionada.
+              Seguimiento de los desembolsos entregados al gestor en la fecha seleccionada.
             </p>
           </CardHeader>
           <CardContent>
@@ -1422,7 +1422,7 @@ function AsesorCobrosView({
                     <TableCell>{String(desembolso.fecha).slice(0, 10)}</TableCell>
                     <TableCell className="font-mono text-xs"><FolioLink folio={desembolso.num_prog} /></TableCell>
                     <TableCell className="font-medium">{desembolso.credito?.cliente?.nombre_completo || desembolso.credito?.grupo?.nombre_grupo || "—"}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{desembolso.motivo || "Renovación"}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{desembolso.motivo || "Desembolso"}</TableCell>
                     <TableCell className="text-right font-bold text-amber-700">${Number(desembolso.monto || 0).toLocaleString("es-MX", { minimumFractionDigits: 2 })}</TableCell>
                     <TableCell>
                       {desembolso.estado === "Confirmado" ? <Badge className="border-emerald-300 bg-emerald-200 text-emerald-900 hover:bg-emerald-200">Entregado al cliente</Badge>
