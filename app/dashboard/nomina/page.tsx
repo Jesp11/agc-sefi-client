@@ -1,15 +1,16 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import { PlusCircle, Save, Trash2 } from "lucide-react";
+import { PlusCircle, Save, Trash2, Printer } from "lucide-react";
 import { generarNominaHtml, NominaEmployeeData } from "@/lib/nomina-template";
 import { imprimirDocumentoHtml } from "@/lib/document-templates";
 import { fetchAllPages } from "@/lib/table-utils";
+import { datosNominaGuardada, type NominaGuardada } from "@/lib/nomina-history";
 
 type EmpleadoCatalogo = {
   id: number | string;
@@ -31,6 +32,43 @@ type CampoImporteNomina = "pago_base" | "despensa" | "apoyo_transporte" | "ahorr
 export default function NominaBuilderPage() {
   const [empleadosCatalog, setEmpleadosCatalog] = useState<EmpleadoCatalogo[]>([]);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
+  const [historial, setHistorial] = useState<NominaGuardada[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [historyError, setHistoryError] = useState(false);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [lastPage, setLastPage] = useState(1);
+
+  const loadHistory = useCallback((page: number) =>
+    apiFetch(`/nomina?page=${page}`)
+      .then(res => {
+        if (!res.ok) throw new Error("No se pudo cargar el historial");
+        return res.json();
+      })
+      .then(result => {
+        setHistoryError(false);
+        setHistorial(result.data);
+        setHistoryPage(result.current_page);
+        setLastPage(result.last_page);
+      })
+      .catch(() => setHistoryError(true))
+      .finally(() => setHistoryLoading(false)), []);
+
+  useEffect(() => { void loadHistory(1); }, [loadHistory]);
+
+  const changeHistoryPage = (page: number) => {
+    setHistoryLoading(true);
+    void loadHistory(page);
+  };
+
+  const printPayroll = (periodo: NominaGuardada) => {
+    try {
+      imprimirDocumentoHtml(generarNominaHtml(datosNominaGuardada(periodo)));
+    } catch {
+      toast.error("No se pudo imprimir. Puedes reintentarlo desde el historial.");
+    }
+  };
 
   const [fechaInicio, setFechaInicio] = useState("");
   const [fechaFin, setFechaFin] = useState("");
@@ -109,6 +147,7 @@ export default function NominaBuilderPage() {
   const totalNeto = selectedEmpleados.reduce((acc, curr) => acc + curr.neto, 0);
 
   const handleSaveAndPrint = async () => {
+    if (savingRef.current) return;
     if (selectedEmpleados.length === 0) {
       toast.error("Agrega al menos un empleado");
       return;
@@ -117,7 +156,13 @@ export default function NominaBuilderPage() {
       toast.error("Las fechas son requeridas");
       return;
     }
+    if (fechaFin < fechaInicio || selectedEmpleados.some(e => e.neto < 0)) {
+      toast.error("Revisa las fechas y que el ahorro no supere las percepciones");
+      return;
+    }
 
+    savingRef.current = true;
+    setSaving(true);
     try {
       const payload = {
         fecha_inicio: fechaInicio,
@@ -145,21 +190,18 @@ export default function NominaBuilderPage() {
         return;
       }
 
-      toast.success("Nómina guardada exitosamente");
-
-      // Generate HTML and Print
-      const html = generarNominaHtml({
-        fecha_inicio: fechaInicio,
-        fecha_fin: fechaFin,
-        referencia,
-        firma_director_administrativo: firmaDirAdmin,
-        firma_director_operativo: firmaDirOperativo,
-        empleados: selectedEmpleados
-      });
-      imprimirDocumentoHtml(html);
+      const result = await res.json();
+      toast.success("Nómina guardada. Disponible para reimprimir en el historial.");
+      setSelectedEmpleados([]);
+      printPayroll(result.data);
+      setHistoryLoading(true);
+      await loadHistory(1);
 
     } catch {
       toast.error("Error de conexión");
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
     }
   };
 
@@ -169,12 +211,12 @@ export default function NominaBuilderPage() {
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold">Constructor de Nómina</h1>
-        <Button onClick={handleSaveAndPrint} className="gap-2" size="lg">
-          <Save className="h-4 w-4" /> Guardar y Exportar PDF
+        <Button onClick={handleSaveAndPrint} disabled={saving} className="gap-2" size="lg">
+          <Save className="h-4 w-4" /> {saving ? "Guardando…" : "Guardar y Exportar PDF"}
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+      <fieldset disabled={saving} className="grid grid-cols-1 md:grid-cols-12 gap-6">
         <Card className="md:col-span-12">
           <CardHeader className="pb-3"><CardTitle className="text-sm">Datos del Periodo</CardTitle></CardHeader>
           <CardContent className="grid grid-cols-2 md:grid-cols-5 gap-4">
@@ -265,7 +307,40 @@ export default function NominaBuilderPage() {
             )}
           </CardContent>
         </Card>
-      </div>
+      </fieldset>
+
+      <Card>
+        <CardHeader><CardTitle>Historial de nóminas</CardTitle></CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">Consulta los periodos guardados y reimprime sus recibos.</p>
+          {historyLoading ? <p>Cargando historial…</p> : historyError ? (
+            <div className="flex items-center gap-3"><p>No se pudo cargar el historial.</p><Button variant="outline" onClick={() => changeHistoryPage(historyPage)}>Reintentar</Button></div>
+          ) : historial.length === 0 ? <p className="text-muted-foreground">Todavía no hay nóminas guardadas.</p> : (
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead><tr className="border-b text-left"><th className="p-3">Periodo</th><th className="p-3">Referencia</th><th className="p-3">Empleados</th><th className="p-3 text-right">Ahorro</th><th className="p-3 text-right">Neto</th><th className="p-3">Recibos</th></tr></thead>
+                  <tbody>{historial.map(periodo => (
+                    <tr key={periodo.id} className="border-b">
+                      <td className="p-3">#{periodo.id} · {periodo.fecha_inicio.slice(0, 10)} al {periodo.fecha_fin.slice(0, 10)}</td>
+                      <td className="p-3">{periodo.referencia || "—"}</td>
+                      <td className="p-3">{periodo.detalles.length}</td>
+                      <td className="p-3 text-right">${periodo.detalles.reduce((sum, detalle) => sum + Number(detalle.retencion_ahorro), 0).toLocaleString("es-MX", { minimumFractionDigits: 2 })}</td>
+                      <td className="p-3 text-right">${Number(periodo.total_dispersado).toLocaleString("es-MX", { minimumFractionDigits: 2 })}</td>
+                      <td className="p-3"><Button variant="outline" disabled={!periodo.detalles.length} onClick={() => printPayroll(periodo)}><Printer className="h-4 w-4 mr-2" />Reimprimir PDF</Button></td>
+                    </tr>
+                  ))}</tbody>
+                </table>
+              </div>
+              <div className="flex items-center justify-end gap-3">
+                <Button variant="outline" disabled={historyPage <= 1} onClick={() => changeHistoryPage(historyPage - 1)}>Anterior</Button>
+                <span>Página {historyPage} de {lastPage}</span>
+                <Button variant="outline" disabled={historyPage >= lastPage} onClick={() => changeHistoryPage(historyPage + 1)}>Siguiente</Button>
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
