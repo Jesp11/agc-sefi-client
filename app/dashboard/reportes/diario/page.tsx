@@ -89,6 +89,8 @@ type PagoDelDia = {
   monto_adelantado_hoy?: number | string;
   id: number;
   num_prog: number | string;
+  num_pago?: number;
+  total_pagos?: number;
   monto: number | string;
   fecha: string;
   hora?: string | null;
@@ -201,6 +203,8 @@ function ReimprimirTicketPago({ pago, seccion = "abonos" }: { pago: PagoDelDia; 
     total: Number(pago.monto || 0),
     notas: pago.notas ?? null,
     saldo_pendiente: credito?.saldo_pendiente == null ? undefined : Number(credito.saldo_pendiente),
+    num_pago: pago.num_pago,
+    total_pagos: pago.total_pagos,
   };
 
   return (
