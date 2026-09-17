@@ -22,6 +22,10 @@ interface PrintMethodPickerProps {
   ticketData: TicketData;
 }
 
+// Se conservan los controladores para poder reactivar estos métodos cuando
+// sean necesarios, pero no se ofrecen en la interfaz operativa actual.
+const SHOW_ADVANCED_PRINTER_OPTIONS = false;
+
 export function PrintMethodPicker({
   open,
   onOpenChange,
@@ -84,54 +88,57 @@ export function PrintMethodPicker({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Seleccionar impresora</DialogTitle>
           <DialogDescription>
-            Elige cómo quieres imprimir el ticket. Para la Goojprt PT-210, la
-            opción más estable es RawBT con la app de Android.
+            Elige cómo quieres imprimir o guardar el ticket.
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-3 pt-2">
-          <Button
-            variant="outline"
-            className="justify-start h-auto py-3"
-            onClick={handleBluetooth}
-            disabled={loading !== null}
-          >
-            <Bluetooth className="mr-3 h-5 w-5 text-primary" />
-            <div className="text-left">
-              <p className="font-medium">Bluetooth (BLE)</p>
-              <p className="text-xs text-muted-foreground">
-                Solo para impresoras con Bluetooth Low Energy
-              </p>
-            </div>
-          </Button>
+          {SHOW_ADVANCED_PRINTER_OPTIONS && (
+            <>
+              <Button
+                variant="outline"
+                className="h-auto w-full min-w-0 justify-start whitespace-normal py-3"
+                onClick={handleBluetooth}
+                disabled={loading !== null}
+              >
+                <Bluetooth className="mr-3 h-5 w-5 shrink-0 text-primary" />
+                <div className="min-w-0 text-left">
+                  <p className="font-medium">Bluetooth (BLE)</p>
+                  <p className="text-xs text-muted-foreground">
+                    Solo para impresoras con Bluetooth Low Energy
+                  </p>
+                </div>
+              </Button>
+
+              <Button
+                variant="outline"
+                className="h-auto w-full min-w-0 justify-start whitespace-normal py-3"
+                onClick={handleSerial}
+                disabled={loading !== null}
+              >
+                <Usb className="mr-3 h-5 w-5 shrink-0 text-primary" />
+                <div className="min-w-0 text-left">
+                  <p className="font-medium">USB / Serial</p>
+                  <p className="text-xs text-muted-foreground">
+                    Conectar la impresora por cable USB-OTG
+                  </p>
+                </div>
+              </Button>
+            </>
+          )}
 
           <Button
             variant="outline"
-            className="justify-start h-auto py-3"
-            onClick={handleSerial}
-            disabled={loading !== null}
-          >
-            <Usb className="mr-3 h-5 w-5 text-primary" />
-            <div className="text-left">
-              <p className="font-medium">USB / Serial</p>
-              <p className="text-xs text-muted-foreground">
-                Conectar la impresora por cable USB-OTG
-              </p>
-            </div>
-          </Button>
-
-          <Button
-            variant="outline"
-            className="justify-start h-auto py-3"
+            className="h-auto w-full min-w-0 justify-start whitespace-normal py-3"
             onClick={handleRawBT}
             disabled={loading !== null}
           >
-            <Smartphone className="mr-3 h-5 w-5 text-primary" />
-            <div className="text-left">
+            <Smartphone className="mr-3 h-5 w-5 shrink-0 text-primary" />
+            <div className="min-w-0 text-left">
               <p className="font-medium">RawBT (Android Bridge)</p>
               <p className="text-xs text-muted-foreground">
                 Requiere app RawBT e impresora emparejada por Bluetooth Classic
@@ -141,12 +148,12 @@ export function PrintMethodPicker({
 
           <Button
             variant="outline"
-            className="justify-start h-auto py-3"
+            className="h-auto w-full min-w-0 justify-start whitespace-normal py-3"
             onClick={handleNative}
             disabled={loading !== null}
           >
-            <Printer className="mr-3 h-5 w-5 text-primary" />
-            <div className="text-left">
+            <Printer className="mr-3 h-5 w-5 shrink-0 text-primary" />
+            <div className="min-w-0 text-left">
               <p className="font-medium">Impresión nativa del sistema</p>
               <p className="text-xs text-muted-foreground">
                 Usar el diálogo de impresión del celular o laptop
