@@ -20,14 +20,40 @@ import {
 } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { TablePagination, TableSearch } from "@/components/table-controls";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { PAGE_SIZE, filterBySearch, paginateItems, useTableControls } from "@/hooks/use-paginated-list";
 import { cn, fmtFecha } from "@/lib/utils";
 import { downloadRoutePaymentTemplate } from "@/lib/pagos-ruta-xlsx";
 import { exportarCorteDiarioPdf } from "@/lib/reporte-corte-diario-pdf";
 import { ImportarPagosRutaDialog } from "@/components/importar-pagos-ruta-dialog";
 import { PrintTicket, buildPagoTicketProps, type PagoTicketData } from "@/components/print-ticket";
-import { User, Users, Banknote, ChevronDown, ChevronUp, ChevronsUpDown, Download, Upload, RefreshCw, Plus, Printer, Trash2 } from "lucide-react";
+import { User, Users, Banknote, ChevronDown, ChevronUp, ChevronsUpDown, Download, Upload, RefreshCw, Plus, Printer, Trash2, CircleHelp } from "lucide-react";
 import { toast } from "sonner";
+
+function EncabezadoGestor({ titulo, ayuda }: { titulo: string; ayuda: string }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      {titulo}
+      <TooltipProvider>
+        <Tooltip open={open} onOpenChange={setOpen}>
+          <TooltipTrigger
+            type="button"
+            aria-label={`Información sobre ${titulo}`}
+            onClick={() => setOpen(!open)}
+            className="inline-flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+          >
+            <CircleHelp className="size-3.5" aria-hidden="true" />
+          </TooltipTrigger>
+          <TooltipContent className="max-w-xs whitespace-normal text-left font-normal leading-relaxed">
+            {ayuda}
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    </span>
+  );
+}
 
 type Cobro = {
   num_prog: number;
@@ -346,6 +372,7 @@ function AdminPagosView({
   const [montoRecibido, setMontoRecibido] = useState("");
   const [notasRecepcion, setNotasRecepcion] = useState("");
   const [savingRecepcion, setSavingRecepcion] = useState(false);
+  const [recibiendoPagoId, setRecibiendoPagoId] = useState<number | null>(null);
   const [eliminandoPagoId, setEliminandoPagoId] = useState<number | null>(null);
   const [importandoRuta, setImportandoRuta] = useState(false);
   const montoPosteriorCorte = Math.max(0, Number(recibiendo?.monto_posterior_corte ?? 0));
@@ -426,6 +453,59 @@ function AdminPagosView({
     } finally {
       setSavingRecepcion(false);
     }
+  };
+
+  const recibirAbono = async (pago: any) => {
+    if (recibiendoPagoId !== null) return;
+    setRecibiendoPagoId(Number(pago.id));
+    try {
+      const res = await apiFetch(`/reportes/diario/abonos/${pago.id}/recibir`, { method: "POST" });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(body.message || "No se pudo recibir el abono");
+        return;
+      }
+      toast.success(body.message || "Abono recibido en caja");
+      onRefresh();
+    } catch {
+      toast.error("Error de conexión");
+    } finally {
+      setRecibiendoPagoId(null);
+    }
+  };
+
+  const botonRecibirAbono = (pago: any) => {
+    const recibido = Number(pago.monto_recibido_caja ?? 0);
+    const pendiente = Number(pago.monto_pendiente_caja ?? Math.max(0, Number(pago.monto) - recibido));
+    if (!isAdmin || pago.tipo !== "Abono" || pendiente <= 0.009) return null;
+    return (
+      <Button
+        size="sm"
+        variant="outline"
+        className="h-7 text-xs"
+        disabled={recibiendoPagoId !== null || savingRecepcion || eliminandoPagoId !== null}
+        onClick={() => recibirAbono(pago)}
+        aria-label={`Recibir ${money(pendiente)} del abono #${pago.id}`}
+      >
+        <Banknote className="mr-1 size-3" />
+        {recibiendoPagoId === Number(pago.id) ? "Recibiendo…" : `Recibir ${money(pendiente)}`}
+      </Button>
+    );
+  };
+
+  const detalleCajaAbono = (pago: any) => {
+    if (pago.tipo !== "Abono") return null;
+    const recibido = Number(pago.monto_recibido_caja ?? 0);
+    const pendiente = Number(pago.monto_pendiente_caja ?? Math.max(0, Number(pago.monto) - recibido));
+    return (
+      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs font-normal">
+        <Badge variant="outline" className={pendiente > 0.009 ? "text-amber-700 border-amber-300" : "text-emerald-700 border-emerald-300"}>
+          {pendiente <= 0.009 ? "Recibido en caja" : recibido > 0.009 ? "Recibido parcialmente" : "Pendiente de recibir"}
+        </Badge>
+        <span className="text-muted-foreground">Abono #{pago.id} · Recibido: {money(recibido)} · Falta: {money(pendiente)}</span>
+
+      </div>
+    );
   };
 
   const eliminarAbono = async (pago: any) => {
@@ -578,36 +658,28 @@ function AdminPagosView({
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-10"></TableHead>
-                <TableHead>Gestor Cobranza</TableHead>
-                <TableHead className="text-right">Cobrado App</TableHead>
-                <TableHead className="text-right">A recibir</TableHead>
-                <TableHead className="text-right">Saldo favor clientes</TableHead>
-                <TableHead className="text-right">Comisión</TableHead>
-                <TableHead className="text-right">Entregó Caja</TableHead>
-                <TableHead className="text-right">Por cobrar</TableHead>
-                <TableHead className="text-right">Por entregar</TableHead>
-                <TableHead className="text-center">Estado</TableHead>
+                <TableHead>Gestor</TableHead>
+                <TableHead><EncabezadoGestor titulo="Ruta del día" ayuda="Programado: suma de cuotas de la ruta. Cobrado: suma de los abonos de ruta diaria. Pendiente de cobrar: suma de (cuota − abonos del día) por crédito." /></TableHead>
+                <TableHead><EncabezadoGestor titulo="Cobranza General" ayuda="Cobrado en app: suma de abonos del día. Recibido en caja: total recibido del gestor. Pendiente entrega ruta: suma de (abono de ruta − recibido en caja de ese abono), mínimo $0 por abono. Total por entregar: Cobrado en app − Recibido en caja, mínimo $0; incluye la ruta." /></TableHead>
                 <TableHead className="text-right">Acción</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={11} className="h-24 text-center text-muted-foreground">Cargando...</TableCell>
+                  <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">Cargando...</TableCell>
                 </TableRow>
               ) : filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={11} className="h-24 text-center text-muted-foreground">
+                  <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
                     {search ? "No se encontraron gestores de cobranza." : "Sin movimientos del día."}
                   </TableCell>
                 </TableRow>
               ) : (
                 paginated.map((a: any) => {
                   const asesorKey = String(a.id_asesor ?? a.nombre_asesor);
-                  const pendienteEntrega = a.pendiente_entrega ?? Math.max(0, Number(a.a_recibir ?? 0) - Number(a.monto_recibido ?? 0));
+                  const cobradoPorRecibir = Math.max(0, Number(a.total_cobrado ?? 0) - Number(a.monto_recibido ?? 0));
                   const pendienteCobro = a.monto_pendiente_cobro ?? 0;
-                  const completo = a.recibido && pendienteEntrega <= 0.009;
                   const pagosAsesor = (data?.pagos || []).filter(
                     (p: any) => (p.credito?.id_asesor ?? 0) === Number(a.id_asesor)
                   );
@@ -655,6 +727,7 @@ function AdminPagosView({
                             Abono #{pago.id} · {money(pago.monto)}
                             {pago.hora ? ` · ${String(pago.hora).slice(0, 5)}` : ""}
                           </span>
+                          {botonRecibirAbono(pago)}
                           {botonEliminarAbono(pago)}
                         </div>
                       ))}
@@ -665,6 +738,17 @@ function AdminPagosView({
                   // de atrasados, donde se mostrará como pagado en verde.
                   const pagosRutaAsesor = pagosAsesor.filter((p: any) =>
                     foliosRutaDelDia.has(String(p.credito?.num_prog ?? p.num_prog)),
+                  );
+                  const cobradoRuta = pagosRutaAsesor.reduce(
+                    (total: number, pago: any) => total + montoRutaDelPago(pago),
+                    0,
+                  );
+                  const rutaPorEntregar = pagosRutaAsesor.reduce(
+                    (total: number, pago: any) => total + Math.max(
+                      0,
+                      montoRutaDelPago(pago) - Number(pago.monto_recibido_caja ?? 0),
+                    ),
+                    0,
                   );
                   // La ruta y sus abonos son listas excluyentes: en cuanto un
                   // crédito de la ruta recibe un abono, deja de aparecer como
@@ -728,56 +812,68 @@ function AdminPagosView({
                         className="cursor-pointer hover:bg-muted/40 transition-colors"
                         onClick={() => toggleAsesor(asesorKey)}
                       >
-                        <TableCell className="w-10 pr-0">
-                          {isExpanded ? (
-                            <ChevronUp className="h-4 w-4 text-muted-foreground" />
-                          ) : (
-                            <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <div className="font-semibold text-foreground flex flex-col gap-1">
-                            <div className="flex items-center gap-2">
-                              {a.nombre_asesor}
-                              {a.codigo_asesor && <Badge variant="outline" className="text-[10px] bg-background">#{a.codigo_asesor}</Badge>}
+                        <TableCell className="align-top py-4">
+                          <div className="flex items-start gap-2">
+                            <button
+                              type="button"
+                              aria-label={`${isExpanded ? "Colapsar" : "Expandir"} detalle de ${a.nombre_asesor}`}
+                              aria-expanded={isExpanded}
+                              className="inline-flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground focus-visible:outline-2 focus-visible:outline-ring"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                toggleAsesor(asesorKey);
+                              }}
+                            >
+                              {isExpanded ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+                            </button>
+                            <div className="flex flex-col items-start gap-2">
+                              <div className="flex flex-wrap items-center gap-2 font-semibold">
+                                {a.nombre_asesor}
+                              </div>
                             </div>
                           </div>
                         </TableCell>
-                        <TableCell className="text-right font-medium text-blue-600">
-                          {a.total_cobrado > 0 ? money(a.total_cobrado) : "—"}
+                        <TableCell className="align-top py-4">
+                          <dl className="min-w-60 space-y-2 text-sm">
+                            <div className="flex items-baseline justify-between gap-4">
+                              <dt className="text-muted-foreground">Programado</dt>
+                              <dd className="font-medium tabular-nums">{money(a.a_recibir)}</dd>
+                            </div>
+                            <div className="flex items-baseline justify-between gap-4">
+                              <dt className="text-muted-foreground">Cobrado</dt>
+                              <dd className="font-medium tabular-nums">{money(cobradoRuta)}</dd>
+                            </div>
+                            <div className="flex items-baseline justify-between gap-4 border-t pt-2">
+                              <dt className="text-muted-foreground">Pendiente de cobrar</dt>
+                              <dd className={cn("font-medium tabular-nums", pendienteCobro > 0.009 ? "text-red-600" : "text-muted-foreground")}>
+                                {money(pendienteCobro > 0.009 ? pendienteCobro : 0)}
+                              </dd>
+                            </div>
+                          </dl>
                         </TableCell>
-                        <TableCell className="text-right font-semibold text-primary">
-                          {money(a.a_recibir)}
-                        </TableCell>
-                        <TableCell className="text-right font-medium text-sky-700">
-                          {a.saldo_favor_clientes > 0 ? money(a.saldo_favor_clientes) : "—"}
-                        </TableCell>
-                        <TableCell className="text-right font-medium text-amber-700">
-                          {a.comisiones_renovacion > 0 ? money(a.comisiones_renovacion) : "—"}
-                        </TableCell>
-                        <TableCell className="text-right font-medium text-emerald-700">
-                          {a.recibido ? money(a.monto_recibido) : "—"}
-                        </TableCell>
-                        <TableCell className="text-right font-medium">
-                          {pendienteCobro > 0.009 ? (
-                            <span className="font-medium text-red-600">{money(pendienteCobro)}</span>
-                          ) : (
-                            <span className="text-muted-foreground">{money(0)}</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right font-medium">
-                          {pendienteEntrega > 0.009 ? (
-                            <span className="text-amber-700">{money(pendienteEntrega)}</span>
-                          ) : (
-                            <span className="text-muted-foreground">{money(0)}</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {completo ? (
-                            <Badge variant="default" className="bg-emerald-600 hover:bg-emerald-700">Entregado</Badge>
-                          ) : (
-                            <Badge variant="secondary" className="bg-amber-100 text-amber-800 hover:bg-amber-100 border-amber-200">Pendiente</Badge>
-                          )}
+                        <TableCell className="align-top py-4">
+                          <dl className="min-w-60 space-y-2 text-sm">
+                            <div className="flex items-baseline justify-between gap-4">
+                              <dt className="text-muted-foreground">Cobrado en app</dt>
+                              <dd className="font-medium tabular-nums">{money(a.total_cobrado ?? 0)}</dd>
+                            </div>
+                            <div className="flex items-baseline justify-between gap-4">
+                              <dt className="text-muted-foreground">Recibido en caja</dt>
+                              <dd className="font-medium tabular-nums">{a.recibido ? money(a.monto_recibido) : "—"}</dd>
+                            </div>
+                            <div className="flex items-baseline justify-between gap-4">
+                              <dt className="whitespace-normal text-muted-foreground">Pendiente entrega ruta</dt>
+                              <dd className={cn("font-medium tabular-nums", rutaPorEntregar > 0.009 ? "text-amber-700" : "text-muted-foreground")}>
+                                {money(rutaPorEntregar > 0.009 ? rutaPorEntregar : 0)}
+                              </dd>
+                            </div>
+                            <div className="flex items-baseline justify-between gap-4 border-t pt-2">
+                              <dt className="whitespace-normal font-semibold">Total por entregar</dt>
+                              <dd className={cn("font-semibold tabular-nums", cobradoPorRecibir > 0.009 ? "text-amber-700" : "text-muted-foreground")}>
+                                {money(cobradoPorRecibir > 0.009 ? cobradoPorRecibir : 0)}
+                              </dd>
+                            </div>
+                          </dl>
                         </TableCell>
                         <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                           {a.id_asesor ? a.recibido ? (
@@ -803,7 +899,7 @@ function AdminPagosView({
                       {/* La ruta, sus abonos y los atrasados se muestran por separado. */}
                       {isExpanded && (
                         <TableRow className="bg-muted/15 hover:bg-muted/15 border-b-2">
-                          <TableCell colSpan={11} className="p-3 pl-8">
+                          <TableCell colSpan={4} className="p-3 pl-8">
                             <div className="rounded-lg border bg-background p-4 shadow-sm space-y-4">
                               {/* Solo los abonos de la ruta del día van en esta sección. */}
                               {pagosRutaMostrados.length > 0 && (
@@ -836,6 +932,7 @@ function AdminPagosView({
                                               clienteId={p.credito?.cliente?.id_cliente ?? p.credito?.id_cliente}
                                               grupoId={p.credito?.grupo?.id ?? p.credito?.id_grupo}
                                             />
+                                            {detalleCajaAbono(p)}
                                             {Number(p.saldo_favor_cliente || 0) > 0 && (
                                               <div className="mt-1 text-[11px] font-semibold text-sky-700">
                                                 Saldo a favor: {money(p.saldo_favor_cliente)}
@@ -856,7 +953,7 @@ function AdminPagosView({
                                           <TableCell className="text-right font-medium text-sky-700">
                                             {Number(p.saldo_favor_cliente || 0) > 0 ? money(p.saldo_favor_cliente) : "—"}
                                           </TableCell>
-                                          {isAdmin && <TableCell className="text-right">{botonEliminarAbono(p)}</TableCell>}
+                                          {isAdmin && <TableCell className="text-right"><div className="flex justify-end gap-2">{botonRecibirAbono(p)}{botonEliminarAbono(p)}</div></TableCell>}
                                         </TableRow>
                                       ))}
                                     </TableBody>
@@ -896,6 +993,7 @@ function AdminPagosView({
                                               clienteId={p.credito?.cliente?.id_cliente ?? p.credito?.id_cliente}
                                               grupoId={p.credito?.grupo?.id ?? p.credito?.id_grupo}
                                             />
+                                            {detalleCajaAbono(p)}
                                           </TableCell>
                                           <TableCell>
                                             <Badge variant="outline" className="text-[10px] py-0">
@@ -908,7 +1006,7 @@ function AdminPagosView({
                                           <TableCell className="text-right font-bold text-violet-700">
                                             {money(montoAnticipadoDelPago(p))}
                                           </TableCell>
-                                          {isAdmin && <TableCell className="text-right">{botonEliminarAbono(p)}</TableCell>}
+                                          {isAdmin && <TableCell className="text-right"><div className="flex justify-end gap-2">{botonRecibirAbono(p)}{botonEliminarAbono(p)}</div></TableCell>}
                                         </TableRow>
                                       ))}
                                     </TableBody>
@@ -988,6 +1086,7 @@ function AdminPagosView({
                                                 clienteId={c.cliente?.id_cliente ?? c.id_cliente}
                                                 grupoId={c.grupo?.id ?? c.id_grupo}
                                               />
+                                              {abonosAtrasados.map((pago: any) => <div key={pago.id}>{detalleCajaAbono(pago)}</div>)}
                                             </TableCell>
                                             <TableCell className="text-muted-foreground">{c.pendientes?.[0]?.fecha ? fmtFecha(c.pendientes[0].fecha) : "—"}</TableCell>
                                             <TableCell className="text-center text-amber-800 font-medium">{c.dias_atraso ? `${c.dias_atraso} d` : "—"}</TableCell>
@@ -1051,6 +1150,7 @@ function AdminPagosView({
                                                 clienteId={c.cliente?.id_cliente ?? c.id_cliente}
                                                 grupoId={c.grupo?.id ?? c.id_grupo}
                                               />
+                                              {abonosMora.map((pago: any) => <div key={pago.id}>{detalleCajaAbono(pago)}</div>)}
                                             </TableCell>
                                             <TableCell className="text-muted-foreground">{c.dias_pago || "—"}</TableCell>
                                             <TableCell className="text-center text-red-800 font-medium">{c.dias_mora ? `${c.dias_mora} d` : "—"}</TableCell>
@@ -1323,6 +1423,19 @@ function AsesorCobrosView({
   const pagosAdelantados: PagoDelDia[] = data?.pagos_anticipados ?? [];
   const rutaDelDia = cobros.filter((c) => c.categoria === "del_dia");
   const pagosAtrasados = cobros.filter((c) => c.categoria === "atrasado");
+  const montoRutaProgramado = rutaDelDia.reduce(
+    (total, cobro) => total + Number(cobro.monto_a_cobrar || 0),
+    0,
+  );
+  const montoRutaCobrado = rutaDelDia.reduce(
+    (total, cobro) => total + Math.min(
+      Number(cobro.monto_abonado_hoy || 0),
+      Number(cobro.monto_a_cobrar || 0),
+    ),
+    0,
+  );
+  const montoRutaPendiente = Math.max(0, montoRutaProgramado - montoRutaCobrado);
+  const montoFueraDeRuta = Math.max(0, Number(data?.monto_cobrado || 0) - montoRutaCobrado);
   const rutaFiltrada = filterBySearch(rutaDelDia, search, cobroSearchFields);
   const rutaPaginada = paginateItems(rutaFiltrada, page);
   const atrasadosControls = useTableControls();
@@ -1361,37 +1474,68 @@ function AsesorCobrosView({
       </div>
 
       {data && (
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-6 gap-4">
           <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Monto cobrado</CardTitle></CardHeader>
-            <CardContent className="text-2xl font-bold text-emerald-700">
-              ${Number(data.monto_cobrado || 0).toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+            <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Ruta programada</CardTitle></CardHeader>
+            <CardContent className="text-2xl font-bold text-primary">
+              ${montoRutaProgramado.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
             </CardContent>
           </Card>
           <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Pendientes por cobrar</CardTitle></CardHeader>
-            <CardContent className="text-2xl font-bold">{data.total_cobros}</CardContent>
+            <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Cobrado de ruta</CardTitle></CardHeader>
+            <CardContent className="text-2xl font-bold text-emerald-700">
+              ${montoRutaCobrado.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Pendiente de ruta</CardTitle></CardHeader>
+            <CardContent className="text-2xl font-bold text-amber-700">
+              ${montoRutaPendiente.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+            </CardContent>
           </Card>
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-muted-foreground">
-                Del día{data.dia_semana ? ` (${labelDia(data.dia_semana)})` : ""}
-              </CardTitle>
+              <CardTitle className="text-sm text-muted-foreground">Pagos fuera de ruta</CardTitle>
+              <p className="text-xs text-muted-foreground">Atrasados, mora y adelantos.</p>
             </CardHeader>
-            <CardContent className="text-2xl font-bold text-emerald-700">{data.total_del_dia}</CardContent>
+            <CardContent className="text-2xl font-bold text-blue-700">
+              ${montoFueraDeRuta.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+            </CardContent>
           </Card>
           <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Pendientes anteriores</CardTitle></CardHeader>
-            <CardContent className="text-2xl font-bold text-amber-700">{data.total_atrasados}</CardContent>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm text-muted-foreground">Entregado a caja</CardTitle>
+              <p className="text-xs text-muted-foreground">
+                {data.recepcion_confirmada ? "Recepción confirmada." : "Sin recepción confirmada."}
+              </p>
+            </CardHeader>
+            <CardContent className="text-2xl font-bold text-emerald-700">
+              ${Number(data.entregado_caja || 0).toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+            </CardContent>
           </Card>
           <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Monto a cobrar</CardTitle></CardHeader>
-            <CardContent className="text-2xl font-bold text-primary">
-              ${Number(data.monto_a_cobrar || 0).toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+            <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Pendiente por entregar</CardTitle></CardHeader>
+            <CardContent className="text-2xl font-bold text-amber-700">
+              ${Number(data.pendiente_entrega_caja || 0).toLocaleString("es-MX", { minimumFractionDigits: 2 })}
             </CardContent>
           </Card>
         </div>
       )}
+
+      <CobrosSection
+        title="Ruta de cobros del día"
+        description="Créditos programados para cobrar hoy."
+        emptyMessage="No hay cobros programados para este día."
+        search={search}
+        onSearchChange={handleSearch}
+        page={page}
+        onPageChange={setPage}
+        filtered={rutaFiltrada}
+        paginated={rutaPaginada}
+        loading={loading}
+        onCobrar={onCobrar}
+        initiallyOpen
+      />
 
       {(loadingDesembolsos || desembolsosPendientes.length > 0) && (
         <Card>
@@ -1451,20 +1595,6 @@ function AsesorCobrosView({
 
       <PagosRegistradosSection pagos={abonosDelDia} loading={loading} />
       <PagosRegistradosSection pagos={pagosAdelantados} loading={loading} adelantados />
-
-      <CobrosSection
-        title="Ruta de cobros del día"
-        description="Créditos programados para cobrar en la ruta de hoy."
-        emptyMessage="No hay cobros programados para este día."
-        search={search}
-        onSearchChange={handleSearch}
-        page={page}
-        onPageChange={setPage}
-        filtered={rutaFiltrada}
-        paginated={rutaPaginada}
-        loading={loading}
-        onCobrar={onCobrar}
-      />
 
       <CobrosSection
         title="Pagos atrasados"
@@ -1653,6 +1783,7 @@ function CobrosSection({
   paginated,
   loading,
   onCobrar,
+  initiallyOpen = false,
 }: {
   title: string;
   description: string;
@@ -1665,10 +1796,13 @@ function CobrosSection({
   paginated: Cobro[];
   loading: boolean;
   onCobrar: (numProg: number) => void;
+  initiallyOpen?: boolean;
 }) {
+  const [open, setOpen] = useState(initiallyOpen);
+
   return (
     <Card>
-      <details className="group">
+      <details className="group" open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
         <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden">
           <CardHeader className="flex-row items-center justify-between gap-3 hover:bg-muted/40">
             <div>
@@ -1680,6 +1814,62 @@ function CobrosSection({
         </summary>
         <CardContent className="space-y-4 border-t pt-4">
         <TableSearch placeholder="Buscar por folio, cliente o grupo..." value={search} onChange={onSearchChange} />
+        <div className="space-y-3 md:hidden">
+          {loading ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">Cargando...</p>
+          ) : filtered.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              {search ? "No se encontraron cobros." : emptyMessage}
+            </p>
+          ) : paginated.map((c) => {
+            const isGrupal = c.tipo_credito === "Grupal";
+            const nombre = isGrupal
+              ? (c.grupo?.nombre_grupo ?? "Grupo")
+              : (c.cliente?.nombre_completo ?? "Cliente");
+            const montoAbonadoHoy = Number(c.monto_abonado_hoy || 0);
+            const montoACobrar = Number(c.monto_a_cobrar || 0);
+            const pagadoHoy = montoAbonadoHoy >= montoACobrar - 0.009;
+
+            return (
+              <div key={c.num_prog} className={cn("rounded-lg border p-3", pagadoHoy && "border-emerald-300 bg-emerald-50")}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-medium leading-tight">
+                      <BeneficiarioLink
+                        nombre={nombre}
+                        clienteId={c.cliente?.id_cliente ?? c.id_cliente}
+                        grupoId={c.grupo?.id ?? c.id_grupo}
+                      />
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      <FolioLink folio={c.num_prog} /> · {c.dias_pago ?? "Sin día de pago"}
+                    </p>
+                  </div>
+                  {pagadoHoy ? (
+                    <Badge className="shrink-0 border-emerald-300 bg-emerald-200 text-emerald-900 hover:bg-emerald-200">Pagado</Badge>
+                  ) : montoAbonadoHoy > 0 ? (
+                    <Badge className="shrink-0 border-amber-300 bg-amber-100 text-amber-900 hover:bg-amber-100">Parcial</Badge>
+                  ) : (
+                    <Badge variant="outline" className="shrink-0">Pendiente</Badge>
+                  )}
+                </div>
+                <div className="mt-3 flex items-end justify-between gap-3 border-t pt-3">
+                  <div>
+                    <p className="text-xs text-muted-foreground">A cobrar</p>
+                    <p className="font-bold text-primary">${montoACobrar.toLocaleString("es-MX", { minimumFractionDigits: 2 })}</p>
+                    {montoAbonadoHoy > 0 && (
+                      <p className="text-xs font-medium text-emerald-700">Abonado: ${montoAbonadoHoy.toLocaleString("es-MX", { minimumFractionDigits: 2 })}</p>
+                    )}
+                  </div>
+                  <Button size="sm" onClick={() => onCobrar(c.num_prog)}>
+                    {pagadoHoy ? "Otro pago" : "Cobrar"}
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div className="hidden md:block">
         <Table>
           <TableHeader>
             <TableRow>
@@ -1698,11 +1888,11 @@ function CobrosSection({
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={10} className="h-24 text-center text-muted-foreground">Cargando...</TableCell>
+                <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">Cargando...</TableCell>
               </TableRow>
             ) : filtered.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={10} className="h-24 text-center text-muted-foreground">
+                <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
                   {search ? "No se encontraron cobros." : emptyMessage}
                 </TableCell>
               </TableRow>
@@ -1782,6 +1972,7 @@ function CobrosSection({
             )}
           </TableBody>
         </Table>
+        </div>
         {!loading && (
           <TablePagination
             page={page}
