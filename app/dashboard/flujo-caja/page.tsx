@@ -44,6 +44,7 @@ const emptyForm = () => ({
 });
 
 const isGastoGenerado = (movimiento: { referencia?: string | null } | null) => String(movimiento?.referencia ?? "").startsWith("GASTO-");
+const isDesembolsoGenerado = (movimiento: { referencia?: string | null } | null) => String(movimiento?.referencia ?? "").startsWith("DESEMBOLSO-");
 type MovimientoGenerado = { id: number; motivo?: string | null; pago_id?: number | null; referencia?: string | null; categoria?: string | null };
 
 const isRendimientoRegistradoComoGasto = (movimiento: MovimientoGenerado | null) => isGastoGenerado(movimiento)
@@ -51,7 +52,7 @@ const isRendimientoRegistradoComoGasto = (movimiento: MovimientoGenerado | null)
 
 const isMovimientoGenerado = (movimiento: MovimientoGenerado | null) => Boolean(movimiento?.pago_id)
   || (isGastoGenerado(movimiento) && !isRendimientoRegistradoComoGasto(movimiento))
-  || String(movimiento?.referencia ?? "").startsWith("DESEMBOLSO-");
+  || isDesembolsoGenerado(movimiento);
 
 const amount = (value: unknown) => {
   const number = Number(value);
@@ -136,9 +137,14 @@ export default function FlujoCajaPage() {
 
   const handleSave = async () => {
     const isEditing = Boolean(editingMovimiento);
-    const res = await apiFetch(isEditing ? `/flujo-caja/${editingMovimiento.id}` : "/flujo-caja", {
-      method: isEditing ? "PUT" : "POST",
-      body: JSON.stringify({
+    const correctingDisbursementDate = isDesembolsoGenerado(editingMovimiento);
+    const res = await apiFetch(
+      correctingDisbursementDate
+        ? `/flujo-caja/${editingMovimiento.id}/fecha-desembolso`
+        : (isEditing ? `/flujo-caja/${editingMovimiento.id}` : "/flujo-caja"),
+      {
+      method: correctingDisbursementDate ? "PATCH" : (isEditing ? "PUT" : "POST"),
+      body: JSON.stringify(correctingDisbursementDate ? { fecha: form.fecha } : {
         ...form,
         monto: parseFloat(form.monto),
         id_asesor: form.id_asesor ? parseInt(form.id_asesor) : null,
@@ -147,7 +153,7 @@ export default function FlujoCajaPage() {
       }),
     });
     if (res.ok) {
-      toast.success(isEditing ? "Movimiento actualizado" : "Movimiento registrado");
+      toast.success(correctingDisbursementDate ? "Fecha del egreso corregida" : (isEditing ? "Movimiento actualizado" : "Movimiento registrado"));
       setDialogOpen(false);
       setEditingMovimiento(null);
       setForm(emptyForm());
@@ -165,8 +171,8 @@ export default function FlujoCajaPage() {
   };
 
   const openEdit = (movimiento: any) => {
-    if (movimiento.pago_id || String(movimiento.referencia ?? "").startsWith("DESEMBOLSO-")) {
-      toast.error("Este movimiento se genera automáticamente. Corrige el pago, gasto o desembolso de origen.");
+    if (movimiento.pago_id) {
+      toast.error("Este movimiento se genera automáticamente. Corrige el pago de origen.");
       return;
     }
     setEditingMovimiento(movimiento);
@@ -183,6 +189,7 @@ export default function FlujoCajaPage() {
   };
 
   const editandoGastoGenerado = isGastoGenerado(editingMovimiento);
+  const corrigiendoFechaDesembolso = isDesembolsoGenerado(editingMovimiento);
 
   const handleDelete = async (movimiento: MovimientoGenerado) => {
     if (isMovimientoGenerado(movimiento)) {
@@ -398,8 +405,11 @@ export default function FlujoCajaPage() {
           }}>
             <DialogTrigger render={<Button onClick={openCreate}><Plus className="size-4 mr-1" />Registrar movimiento</Button>} />
             <DialogContent className="max-w-md">
-              <DialogHeader><DialogTitle>{editandoGastoGenerado ? "Editar empleado del gasto" : (editingMovimiento ? "Editar movimiento de caja" : "Nuevo movimiento de caja")}</DialogTitle></DialogHeader>
+              <DialogHeader><DialogTitle>{corrigiendoFechaDesembolso ? "Corregir fecha del egreso" : (editandoGastoGenerado ? "Editar empleado del gasto" : (editingMovimiento ? "Editar movimiento de caja" : "Nuevo movimiento de caja"))}</DialogTitle></DialogHeader>
               <div className="grid gap-3">
+                {corrigiendoFechaDesembolso && (
+                  <p className="text-sm text-muted-foreground">Solo se moverá la fecha contable. La confirmación asociada y los saldos posteriores se actualizarán automáticamente.</p>
+                )}
                 {editandoGastoGenerado && (
                   <p className="text-sm text-muted-foreground">Solo se puede ajustar el empleado; el resto de la información se administra desde Gastos Operativos.</p>
                 )}
@@ -408,7 +418,7 @@ export default function FlujoCajaPage() {
                     type="button"
                     variant={form.tipo === "Ingreso" ? "default" : "outline"}
                     onClick={() => setForm({ ...form, tipo: "Ingreso" })}
-                    disabled={editandoGastoGenerado}
+                    disabled={editandoGastoGenerado || corrigiendoFechaDesembolso}
                   >
                     <ArrowDownCircle className="size-4 mr-1 text-green-600" /> Ingreso
                   </Button>
@@ -416,7 +426,7 @@ export default function FlujoCajaPage() {
                     type="button"
                     variant={form.tipo === "Egreso" ? "default" : "outline"}
                     onClick={() => setForm({ ...form, tipo: "Egreso" })}
-                    disabled={editandoGastoGenerado}
+                    disabled={editandoGastoGenerado || corrigiendoFechaDesembolso}
                   >
                     <ArrowUpCircle className="size-4 mr-1 text-red-600" /> Egreso
                   </Button>
@@ -424,18 +434,18 @@ export default function FlujoCajaPage() {
                 <div><Label>Fecha</Label><Input type="date" value={form.fecha} onChange={(e) => setForm({ ...form, fecha: e.target.value })} disabled={editandoGastoGenerado} /></div>
                 <div>
                   <Label>Empleado</Label>
-                  <select className="w-full border rounded-md px-3 py-2 text-sm bg-background h-9" value={form.id_asesor} onChange={(e) => setForm({ ...form, id_asesor: e.target.value })}>
+                  <select className="w-full border rounded-md px-3 py-2 text-sm bg-background h-9" value={form.id_asesor} onChange={(e) => setForm({ ...form, id_asesor: e.target.value })} disabled={corrigiendoFechaDesembolso}>
                     <option value="">— Sin empleado —</option>
                     {asesores.map((a) => (
                       <option key={a.id} value={a.id}>{a.nombre_asesor}</option>
                     ))}
                   </select>
                 </div>
-                <div><Label>Motivo</Label><Input value={form.motivo} onChange={(e) => setForm({ ...form, motivo: e.target.value })} placeholder="Ej. PAGO 12/16 JUAN PEREZ" disabled={editandoGastoGenerado} /></div>
-                <div><Label>Monto</Label><Input type="number" min="0.01" step="0.01" value={form.monto} onChange={(e) => setForm({ ...form, monto: e.target.value })} disabled={editandoGastoGenerado} /></div>
+                <div><Label>Motivo</Label><Input value={form.motivo} onChange={(e) => setForm({ ...form, motivo: e.target.value })} placeholder="Ej. PAGO 12/16 JUAN PEREZ" disabled={editandoGastoGenerado || corrigiendoFechaDesembolso} /></div>
+                <div><Label>Monto</Label><Input type="number" min="0.01" step="0.01" value={form.monto} onChange={(e) => setForm({ ...form, monto: e.target.value })} disabled={editandoGastoGenerado || corrigiendoFechaDesembolso} /></div>
                 <div>
                   <Label>Categoría</Label>
-                  <select className="w-full border rounded-md px-3 py-2 text-sm bg-background h-9" value={form.categoria} onChange={(e) => setForm({ ...form, categoria: e.target.value })} disabled={editandoGastoGenerado}>
+                  <select className="w-full border rounded-md px-3 py-2 text-sm bg-background h-9" value={form.categoria} onChange={(e) => setForm({ ...form, categoria: e.target.value })} disabled={editandoGastoGenerado || corrigiendoFechaDesembolso}>
                     <option value="">Auto-detectar</option>
                     {FLUJO_CAJA_CATEGORIAS.map((c) => (
                       <option key={c.value} value={c.value}>{c.label}</option>
@@ -444,13 +454,13 @@ export default function FlujoCajaPage() {
                 </div>
                 <div>
                   <Label>Cuenta / forma de pago</Label>
-                  <select className="w-full border rounded-md px-3 py-2 text-sm bg-background h-9" value={form.cuenta} onChange={(e) => setForm({ ...form, cuenta: e.target.value })} disabled={editandoGastoGenerado}>
+                  <select className="w-full border rounded-md px-3 py-2 text-sm bg-background h-9" value={form.cuenta} onChange={(e) => setForm({ ...form, cuenta: e.target.value })} disabled={editandoGastoGenerado || corrigiendoFechaDesembolso}>
                     {cuentas.map((c) => (
                       <option key={c} value={c}>{c}</option>
                     ))}
                   </select>
                 </div>
-                <Button onClick={handleSave}>{editandoGastoGenerado ? "Guardar empleado" : (editingMovimiento ? "Guardar cambios" : "Guardar")}</Button>
+                <Button onClick={handleSave}>{corrigiendoFechaDesembolso ? "Mover egreso" : (editandoGastoGenerado ? "Guardar empleado" : (editingMovimiento ? "Guardar cambios" : "Guardar"))}</Button>
               </div>
             </DialogContent>
           </Dialog>
