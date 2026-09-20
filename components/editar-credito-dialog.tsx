@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type ComponentProps } from "react";
 import { apiFetch } from "@/lib/api";
+import { DIAS_PAGO_HABILES, normalizarDiaPago } from "@/lib/dias-pago";
 import { fetchAllPages } from "@/lib/table-utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -72,7 +73,7 @@ function buildForm(credito: CreditoEditable) {
     abonos_historicos: stringValue(credito.abonos_historicos),
     plazos: stringValue(credito.plazos),
     valor_ficha: stringValue(credito.valor_ficha),
-    dias_pago: stringValue(credito.dias_pago),
+    dias_pago: normalizarDiaPago(credito.dias_pago),
     comision_apertura: stringValue(credito.comision_apertura),
     tasa_asignada: stringValue(credito.tasa_asignada),
     porcentaje_interes: stringValue(credito.porcentaje_interes),
@@ -227,7 +228,13 @@ export function EditarCreditoDialog({ credito, onSuccess }: EditarCreditoDialogP
               <div className="grid gap-1.5 sm:col-span-2"><Label>Asesor responsable</Label><select className={selectClass} value={form.id_asesor} disabled={loadingCatalogs} onChange={(e) => setField("id_asesor", e.target.value)} required><option value="">Selecciona un asesor</option>{asesores.filter((asesor) => asesor.activo !== false || String(asesor.id) === form.id_asesor).map((asesor) => <option key={asesor.id} value={asesor.id}>{asesor.nombre_asesor}{asesor.id_asesor ? ` · ${asesor.id_asesor}` : ""}</option>)}</select><p className="text-xs text-muted-foreground">Este cambio sólo reasigna el crédito; no modifica al cliente ni al grupo.</p></div>
               <Field label="Fecha de desembolso" type="date" value={form.fecha_otorgacion} onChange={(v) => setField("fecha_otorgacion", v)} required />
               <Field label="Primer pago" type="date" value={form.fecha_primer_pago} onChange={(v) => setField("fecha_primer_pago", v)} />
-              <Field label="Día de pago" value={form.dias_pago} onChange={(v) => setField("dias_pago", v)} required />
+              <div className="grid gap-1.5">
+                <Label>Día de pago</Label>
+                <select className={selectClass} value={form.dias_pago} onChange={(e) => setField("dias_pago", e.target.value)} required>
+                  <option value="" disabled>Selecciona un día</option>
+                  {DIAS_PAGO_HABILES.map((dia) => <option key={dia.value} value={dia.value}>{dia.label}</option>)}
+                </select>
+              </div>
               <Field label="Ciclo" type="number" min="0" value={form.ciclo} onChange={(v) => setField("ciclo", v)} required />
               <Field label="Plazos" type="number" min="1" value={form.plazos} onChange={(v) => setField("plazos", v)} required />
               <div className="grid gap-1.5"><Label>Estado</Label><select className={selectClass} value={form.estado} onChange={(e) => setField("estado", e.target.value)}>{["Activo", "EnMora", "Finalizado", "Cancelado", "CerradoSinRenovacion"].map((estado) => <option key={estado}>{estado}</option>)}</select></div>

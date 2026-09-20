@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { DIAS_PAGO_HABILES } from "@/lib/dias-pago";
 import { Badge } from "@/components/ui/badge";
 import { apiFetch } from "@/lib/api";
 import { toast } from "sonner";
@@ -28,7 +29,7 @@ export function GroupCreditForm({ group, onSuccess, onCancel }: GroupCreditFormP
     ciclo: (group.creditos?.length || 0) + 1,
     cantidad_integrantes: group.clientes?.length || 0,
     origen: "nuevo",
-    dias_pago: "Lunes",
+    dias_pago: "LUNES",
     cantidad_referidos: 0
   });
 
@@ -274,11 +275,9 @@ export function GroupCreditForm({ group, onSuccess, onCancel }: GroupCreditFormP
             value={formData.dias_pago}
             onChange={(e) => setFormData({...formData, dias_pago: e.target.value})}
           >
-            <option value="Lunes">Lunes</option>
-            <option value="Martes">Martes</option>
-            <option value="Miércoles">Miércoles</option>
-            <option value="Jueves">Jueves</option>
-            <option value="Viernes">Viernes</option>
+            {DIAS_PAGO_HABILES.map((dia) => (
+              <option key={dia.value} value={dia.value}>{dia.label}</option>
+            ))}
           </select>
         </div>
         <div className="flex items-end">
