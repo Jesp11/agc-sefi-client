@@ -535,7 +535,6 @@ export function generarCalendarioTarjetaCobro(
 export function buildTarjetaCobroParams(credito: any, overrides?: Partial<TarjetaCobroParams>): TarjetaCobroParams {
   const cliente = credito?.cliente || {};
   const referencias = cliente?.referencias || [];
-  const avalPrincipal = cliente?.avales?.[0] || {};
   const refFam = referencias.find((r: any) => r.tipo_referencia === "Familiar") || referencias[0] || {};
   const refPer = referencias.find((r: any) => r.tipo_referencia !== "Familiar" && r.id !== refFam?.id) || referencias[1] || {};
 
@@ -588,8 +587,8 @@ export function buildTarjetaCobroParams(credito: any, overrides?: Partial<Tarjet
     refPerDireccion: (refPer?.direccion || "—").toUpperCase(),
     nombreAsesor: (credito?.asesor?.nombre_asesor || "—").toUpperCase(),
     ocupacionLaboral: (cliente?.ocupacion || "—").toUpperCase(),
-    empresaTrabajo: (cliente?.empresa_trabajo || avalPrincipal?.empresa || "—").toUpperCase(),
-    direccionTrabajo: (cliente?.direccion_trabajo || avalPrincipal?.direccion || "—").toUpperCase(),
+    empresaTrabajo: (cliente?.empresa_trabajo || "—").toUpperCase(),
+    direccionTrabajo: (cliente?.direccion_trabajo || "—").toUpperCase(),
     telefonoTrabajo: cliente?.telefono_trabajo || "—",
     multaHorario: 75,
     multaDia: 100,
