@@ -1,12 +1,13 @@
 "use client";
 
 import React, { useEffect, useState, useMemo } from "react";
+import Link from "next/link";
 import { apiFetch } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { AgendarRenovacionDialog } from "@/components/agendar-renovacion-dialog";
 import { TablePagination, TableSearch } from "@/components/table-controls";
 import { PAGE_SIZE, filterBySearch, paginateItems, useTableControls } from "@/hooks/use-paginated-list";
@@ -198,16 +199,25 @@ export default function ReportePorCerrarPage() {
           </p>
         </div>
 
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-9 gap-1.5 shrink-0 self-start sm:self-auto"
-          onClick={handleExportExcel}
-          disabled={isExporting || items.length === 0}
-        >
-          <Download className="size-4" />
-          {isExporting ? "Exportando..." : "Exportar a Excel"}
-        </Button>
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-9 gap-1.5"
+            onClick={handleExportExcel}
+            disabled={isExporting || items.length === 0}
+          >
+            <Download className="size-4" />
+            {isExporting ? "Exportando..." : "Exportar a Excel"}
+          </Button>
+          <Link
+            href="/dashboard/reportes/agenda-renovaciones"
+            className={buttonVariants({ variant: "outline", size: "sm", className: "h-9 gap-1.5" })}
+          >
+            <Calendar className="size-4" />
+            Agenda
+          </Link>
+        </div>
       </div>
 
       {/* Tarjetas de Resumen (KPIs) */}

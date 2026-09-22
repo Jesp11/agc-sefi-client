@@ -31,6 +31,10 @@ import {
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
 const STORAGE_BASE = API_BASE.replace("/api", "") + "/storage";
+const money = (value: unknown) => `$${Number(value ?? 0).toLocaleString("es-MX", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+})}`;
 type TipoContacto = "aval" | "referencia";
 
 const formularioContactoVacio = (tipo: TipoContacto): Record<string, string> => tipo === "aval"
@@ -443,6 +447,7 @@ export default function ClienteDetallePage() {
                     <TableHead>Monto Otorgado</TableHead>
                     <TableHead>Interés</TableHead>
                     <TableHead>Total</TableHead>
+                    <TableHead className="text-right">Saldo a favor</TableHead>
                     <TableHead className="text-right">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -461,6 +466,9 @@ export default function ClienteDetallePage() {
                         <TableCell>${c.monto_otorgado}</TableCell>
                         <TableCell>${c.interes}</TableCell>
                         <TableCell>${c.total}</TableCell>
+                        <TableCell className="text-right font-semibold text-sky-700">
+                          {money(c.saldo_favor_credito)}
+                        </TableCell>
                         <TableCell className="text-right">
                           <Dialog>
                             <DialogTrigger render={<Button variant="outline" size="sm">Ver Tabla</Button>} />
@@ -525,7 +533,7 @@ export default function ClienteDetallePage() {
                     ))
                   ) : (
                     <TableRow key="empty-creditos">
-                      <TableCell colSpan={10} className="text-center">{creditosControls.search ? "No se encontraron préstamos." : "Sin préstamos registrados"}</TableCell>
+                      <TableCell colSpan={11} className="text-center">{creditosControls.search ? "No se encontraron préstamos." : "Sin préstamos registrados"}</TableCell>
                     </TableRow>
                   )}
                 </TableBody>

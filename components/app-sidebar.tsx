@@ -53,7 +53,6 @@ const reporteItems = [
   { title: "Pagos atrasados", url: "/dashboard/reportes/pagos-atrasados", icon: CircleAlert },
   { title: "Cartera", url: "/dashboard/reportes/cartera", icon: LayoutList },
   { title: "Renovacion de clientes", url: "/dashboard/reportes/por-cerrar", icon: Users },
-  { title: "Agenda de Renovaciones", url: "/dashboard/reportes/agenda-renovaciones", icon: CalendarDays },
   { title: "Global Mensual", url: "/dashboard/reportes/semanal", icon: FileText },
   { title: "Gestor Mensual", url: "/dashboard/reportes/gestor-mensual", icon: CalendarDays },
   { title: "Estado Financiero", url: "/dashboard/reportes/inversionistas-estado", icon: TrendingUp },
@@ -72,7 +71,6 @@ export function AppSidebar() {
       item.url === "/dashboard/reportes/pagos-atrasados" ||
       item.url === "/dashboard/reportes/gestor-mensual" ||
       item.url === "/dashboard/reportes/por-cerrar" ||
-      item.url === "/dashboard/reportes/agenda-renovaciones" ||
       item.url === "/dashboard/reportes/cumpleanos"
   );
 

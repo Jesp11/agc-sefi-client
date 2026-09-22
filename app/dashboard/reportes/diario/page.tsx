@@ -87,6 +87,7 @@ type CreditoMora = {
 
 type PagoDelDia = {
   monto_adelantado_hoy?: number | string;
+  monto_extra_hoy?: number | string;
   id: number;
   num_prog: number | string;
   num_pago?: number;
@@ -694,7 +695,7 @@ function AdminPagosView({
                     (c: any) => c.categoria === "del_dia",
                   );
                   const atrasadosAsesor = (a.clientes_programados || []).filter(
-                    (c: any) => c.categoria === "atrasado",
+                    (c: any) => c.categoria === "atrasado" || Number(c.monto_abonado_atrasado_hoy || 0) > 0.009,
                   );
                   const moraAsesor = a.creditos_mora || [];
                   const pagosAnticipadosAsesor = a.pagos_anticipados || [];
@@ -704,13 +705,21 @@ function AdminPagosView({
                     (p: any) => String(p.credito?.num_prog ?? p.num_prog) === String(folio),
                   );
                   const montoRutaDelPago = (pago: any) => {
-                    const montoClasificado = Number(pago.monto_del_dia_hoy || 0);
-                    return montoClasificado > 0.009
-                      ? montoClasificado
-                      : (foliosRutaDelDia.has(String(pago.credito?.num_prog ?? pago.num_prog)) ? Number(pago.monto || 0) : 0);
+                    // Cero es una clasificación válida: indica que todo el
+                    // movimiento se aplicó a atrasos o a una cuota futura.
+                    // El fallback sólo conserva compatibilidad con respuestas
+                    // antiguas que no incluían el desglose del abono.
+                    if (pago.monto_del_dia_hoy !== undefined && pago.monto_del_dia_hoy !== null) {
+                      return Number(pago.monto_del_dia_hoy);
+                    }
+
+                    return foliosRutaDelDia.has(String(pago.credito?.num_prog ?? pago.num_prog))
+                      ? Number(pago.monto || 0)
+                      : 0;
                   };
                   const montoAtrasadoDelPago = (pago: any) => Number(pago.monto_atrasado_hoy || 0);
                   const montoAnticipadoDelPago = (pago: any) => Number(pago.monto_adelantado_hoy || 0);
+                  const montoExtraDelPago = (pago: any) => Number(pago.monto_extra_hoy || 0);
                   const botonEliminarAbono = (pago: any) => isAdmin && pago.tipo === "Abono" && (
                     <Button
                       size="sm"
@@ -741,7 +750,8 @@ function AdminPagosView({
                   // día. Un abono a un atrasado conserva su lugar en la lista
                   // de atrasados, donde se mostrará como pagado en verde.
                   const pagosRutaAsesor = pagosAsesor.filter((p: any) =>
-                    foliosRutaDelDia.has(String(p.credito?.num_prog ?? p.num_prog)),
+                    foliosRutaDelDia.has(String(p.credito?.num_prog ?? p.num_prog))
+                    && (montoRutaDelPago(p) > 0.009 || montoExtraDelPago(p) > 0.009),
                   );
                   const cobradoRuta = pagosRutaAsesor.reduce(
                     (total: number, pago: any) => total + montoRutaDelPago(pago),
@@ -840,15 +850,15 @@ function AdminPagosView({
                         <TableCell className="align-top py-4">
                           <dl className="min-w-60 space-y-2 text-sm">
                             <div className="flex items-baseline justify-between gap-4">
-                              <dt className="text-muted-foreground">Programado</dt>
+                              <dt className="text-muted-foreground">Programado ruta</dt>
                               <dd className="font-medium tabular-nums">{money(a.a_recibir)}</dd>
                             </div>
                             <div className="flex items-baseline justify-between gap-4">
-                              <dt className="text-muted-foreground">Cobrado</dt>
+                              <dt className="text-muted-foreground">Cobrado de ruta</dt>
                               <dd className="font-medium tabular-nums">{money(cobradoRuta)}</dd>
                             </div>
                             <div className="flex items-baseline justify-between gap-4 border-t pt-2">
-                              <dt className="text-muted-foreground">Pendiente de cobrar</dt>
+                              <dt className="text-muted-foreground">Pendiente de ruta</dt>
                               <dd className={cn("font-medium tabular-nums", pendienteCobro > 0.009 ? "text-red-600" : "text-muted-foreground")}>
                                 {money(pendienteCobro > 0.009 ? pendienteCobro : 0)}
                               </dd>
@@ -858,7 +868,7 @@ function AdminPagosView({
                         <TableCell className="align-top py-4">
                           <dl className="min-w-60 space-y-2 text-sm">
                             <div className="flex items-baseline justify-between gap-4">
-                              <dt className="text-muted-foreground">Cobrado en app</dt>
+                              <dt className="text-muted-foreground">Cobrado total en app</dt>
                               <dd className="font-medium tabular-nums">{money(a.total_cobrado ?? 0)}</dd>
                             </div>
                             <div className="flex items-baseline justify-between gap-4">
@@ -920,7 +930,7 @@ function AdminPagosView({
                                         <TableHead className="text-xs h-8">Tipo</TableHead>
                                         <TableHead className="text-xs h-8">Método</TableHead>
                                         <TableHead className="text-xs h-8 text-right">Abono</TableHead>
-                                        <TableHead className="text-xs h-8 text-right">Saldo a favor</TableHead>
+                                        <TableHead className="text-xs h-8 text-right">Extra</TableHead>
                                         {isAdmin && <TableHead className="text-xs h-8 text-right">Acción</TableHead>}
                                       </TableRow>
                                     </TableHeader>
@@ -937,11 +947,6 @@ function AdminPagosView({
                                               grupoId={p.credito?.grupo?.id ?? p.credito?.id_grupo}
                                             />
                                             {detalleCajaAbono(p)}
-                                            {Number(p.saldo_favor_cliente || 0) > 0 && (
-                                              <div className="mt-1 text-[11px] font-semibold text-sky-700">
-                                                Saldo a favor: {money(p.saldo_favor_cliente)}
-                                              </div>
-                                            )}
                                           </TableCell>
                                           <TableCell>
                                             <Badge variant="outline" className="text-[10px] py-0">
@@ -955,7 +960,7 @@ function AdminPagosView({
                                             {money(montoRutaDelPago(p))}
                                           </TableCell>
                                           <TableCell className="text-right font-medium text-sky-700">
-                                            {Number(p.saldo_favor_cliente || 0) > 0 ? money(p.saldo_favor_cliente) : "—"}
+                                            {montoExtraDelPago(p) > 0.009 ? money(montoExtraDelPago(p)) : "—"}
                                           </TableCell>
                                           {isAdmin && <TableCell className="text-right"><div className="flex justify-end gap-2">{botonRecibirAbono(p)}{botonEliminarAbono(p)}</div></TableCell>}
                                         </TableRow>
@@ -1079,7 +1084,11 @@ function AdminPagosView({
                                     <TableBody>
                                       {atrasadosMostrados.map((c: any) => {
                                         const montoAbonadoHoy = Number(c.monto_abonado_atrasado_hoy ?? c.monto_abonado_hoy ?? 0);
-                                        const pagadoHoy = montoAbonadoHoy >= Number(c.monto_a_cobrar || 0) - 0.009;
+                                        const montoAtrasadoACobrar = (c.pendientes || [])
+                                          .filter((pendiente: any) => pendiente.atrasada)
+                                          .reduce((total: number, pendiente: any) => total + Number(pendiente.monto || 0), 0)
+                                          || Number(c.monto_a_cobrar || 0);
+                                        const pagadoHoy = montoAbonadoHoy >= montoAtrasadoACobrar - 0.009;
                                         const abonosAtrasados = pagosDelFolio(c.num_prog).filter((p: any) => montoAtrasadoDelPago(p) > 0.009);
                                         return (
                                           <TableRow key={c.num_prog} className={cn("text-xs hover:bg-muted/30", pagadoHoy && "bg-emerald-100 text-emerald-950 hover:bg-emerald-200/80 [&_a]:text-emerald-800 [&_a]:decoration-emerald-600/50")}>
@@ -1094,7 +1103,7 @@ function AdminPagosView({
                                             </TableCell>
                                             <TableCell className="text-muted-foreground">{c.pendientes?.[0]?.fecha ? fmtFecha(c.pendientes[0].fecha) : "—"}</TableCell>
                                             <TableCell className="text-center text-amber-800 font-medium">{c.dias_atraso ? `${c.dias_atraso} d` : "—"}</TableCell>
-                                            <TableCell className="text-right font-bold text-amber-700">{money(c.monto_a_cobrar)}</TableCell>
+                                            <TableCell className="text-right font-bold text-amber-700">{money(montoAtrasadoACobrar)}</TableCell>
                                             <TableCell className="text-right font-bold text-emerald-700">
                                               {montoAbonadoHoy > 0 ? money(montoAbonadoHoy) : "—"}
                                             </TableCell>

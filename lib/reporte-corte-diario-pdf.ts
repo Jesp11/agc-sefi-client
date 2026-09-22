@@ -26,20 +26,25 @@ const cliente = (item: any) => item?.credito?.cliente?.nombre_completo
   ?? item?.grupo?.nombre_grupo
   ?? "Cliente sin nombre";
 
-function tablePagos(pagos: any[], emptyMessage: string, monto = (pago: any) => pago.monto): string {
+function tablePagos(
+  pagos: any[],
+  emptyMessage: string,
+  monto = (pago: any) => pago.monto,
+  mostrarExtra = false,
+): string {
   if (pagos.length === 0) {
     return `<p class="empty">${escapeHtml(emptyMessage)}</p>`;
   }
 
   return `<table>
-    <thead><tr><th>Folio</th><th>Cliente / Grupo</th><th>Hora</th><th>Método</th><th class="money">Abono</th><th class="money">Saldo a favor</th></tr></thead>
+    <thead><tr><th>Folio</th><th>Cliente / Grupo</th><th>Hora</th><th>Método</th><th class="money">Abono</th>${mostrarExtra ? '<th class="money">Extra</th>' : ""}</tr></thead>
     <tbody>${pagos.map((pago) => `<tr>
       <td class="mono">#${escapeHtml(pago.credito?.num_prog ?? pago.num_prog)}</td>
       <td>${escapeHtml(cliente(pago))}</td>
       <td>${escapeHtml(pago.hora ? String(pago.hora).slice(0, 5) : "—")}</td>
       <td>${escapeHtml(pago.metodo_pago || "Efectivo")}</td>
       <td class="money strong">${money(monto(pago))}</td>
-      <td class="money">${Number(pago.saldo_favor_cliente ?? 0) > 0 ? money(pago.saldo_favor_cliente) : "—"}</td>
+      ${mostrarExtra ? `<td class="money">${Number(pago.monto_extra_hoy ?? 0) > 0.009 ? money(pago.monto_extra_hoy) : "—"}</td>` : ""}
     </tr>`).join("")}</tbody>
   </table>`;
 }
@@ -94,7 +99,8 @@ export function exportarCorteDiarioPdf(data: CorteDiario): void {
     const montoRuta = (pago: any) => Number(pago.monto_del_dia_hoy ?? 0);
     const montoAtrasado = (pago: any) => Number(pago.monto_atrasado_hoy ?? 0);
     const montoAnticipado = (pago: any) => Number(pago.monto_adelantado_hoy ?? 0);
-    const abonosRuta = pagosAsesor.filter((pago) => montoRuta(pago) > 0.009);
+    const montoExtra = (pago: any) => Number(pago.monto_extra_hoy ?? 0);
+    const abonosRuta = pagosAsesor.filter((pago) => montoRuta(pago) > 0.009 || montoExtra(pago) > 0.009);
     const abonosAnticipados = asesor.pagos_anticipados ?? [];
     const foliosRutaCobrados = new Set(abonosRuta.map((pago) => String(pago.credito?.num_prog ?? pago.num_prog)));
     const rutaPendiente = ruta.filter((cobro: any) => !foliosRutaCobrados.has(String(cobro.num_prog)));
@@ -108,9 +114,9 @@ export function exportarCorteDiarioPdf(data: CorteDiario): void {
       <div class="asesor-content">
       <header class="asesor-header">
         <div><h2>${escapeHtml(asesor.nombre_asesor || "Sin asesor")}</h2><p>${asesor.codigo_asesor ? `Código: ${escapeHtml(asesor.codigo_asesor)}` : "Gestor de cobranza"}</p></div>
-        <div class="asesor-kpis"><span>Cobrado App <strong>${money(asesor.total_cobrado)}</strong></span><span>Saldo favor clientes <strong>${money(asesor.saldo_favor_clientes)}</strong></span><span>Comisión <strong>${money(asesor.comisiones_renovacion)}</strong></span></div>
+        <div class="asesor-kpis"><span>Cobrado App <strong>${money(asesor.total_cobrado)}</strong></span><span>Comisión <strong>${money(asesor.comisiones_renovacion)}</strong></span></div>
       </header>
-      ${section(`Abonos de ruta programada (${abonosRuta.length})`, "green", total(abonosRuta, montoRuta), tablePagos(abonosRuta, "Sin abonos registrados en la ruta programada.", montoRuta))}
+      ${section(`Abonos de ruta programada (${abonosRuta.length})`, "green", total(abonosRuta, montoRuta), tablePagos(abonosRuta, "Sin abonos registrados en la ruta programada.", montoRuta, true))}
       ${section(`Pagos anticipados (${abonosAnticipados.length})`, "purple", total(abonosAnticipados, montoAnticipado), tablePagos(abonosAnticipados, "Sin pagos anticipados registrados.", montoAnticipado))}
       ${section(`Ruta programada pendiente (${rutaPendiente.length})`, "blue", totalPendiente, tablePendientes(rutaPendiente))}
       ${section(`Abonos de pagos atrasados (${abonosAtrasados.length})`, "amber", total(abonosAtrasados, montoAtrasado), tablePagos(abonosAtrasados, "No se recibieron abonos de pagos atrasados.", montoAtrasado))}
