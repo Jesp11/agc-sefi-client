@@ -31,6 +31,19 @@ export interface ContratoInversionistaParams {
   responsables: DocumentoEntregante[];
 }
 
+export interface ComprobanteLiquidacionParams {
+  folio: string;
+  fecha: string;
+  lugar: string;
+  inversionista: string;
+  cuenta: string;
+  capital: number;
+  rendimiento: number;
+  notas: string;
+  responsable1: string;
+  responsable2: string;
+}
+
 function money(value: number): string {
   return Number(value).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
@@ -62,7 +75,7 @@ export function buildReciboInversionistaParams(inversionista: any): ReciboInvers
 
   return {
     folio: `REC-${String(inversionista?.id ?? "1").padStart(3, "0")}/${current.anio}`,
-    monto: Number(ultimoMovimiento?.monto ?? inversionista?.monto_acumulado ?? 0) || 0,
+    monto: Number(inversionista?.rendimiento_mensual ?? ultimoMovimiento?.monto ?? inversionista?.monto_acumulado ?? 0) || 0,
     lugarExpedicion: "TAMPICO, TAMPS.",
     fechaExpedicion: today,
     beneficiario: String(inversionista?.nombre ?? "BENEFICIARIO").toUpperCase(),
@@ -91,7 +104,7 @@ export function buildContratoInversionistaParams(inversionista: any): ContratoIn
     fechaPagoDia: current.dia,
     fechaPagoMes: current.mes,
     fechaPagoAnio: current.anio,
-    tasaMensual: "4%",
+    tasaMensual: `${Number(inversionista?.tasa_mensual ?? 0).toLocaleString("es-MX", { maximumFractionDigits: 2 })}%`,
     inicioRendimiento: today,
     vigenciaMeses: "6",
     responsables: [
@@ -476,6 +489,60 @@ export function generarContratoInversionistaHtml(p: ContratoInversionistaParams)
   </div>
 </body>
 </html>`;
+}
+
+export function buildComprobanteLiquidacionParams(inversionista: any, liquidacion: any): ComprobanteLiquidacionParams {
+  return {
+    folio: `LIQ-INV-${String(liquidacion?.id ?? "").padStart(4, "0")}`,
+    fecha: String(liquidacion?.fecha ?? "").slice(0, 10),
+    lugar: "Tampico, Tamaulipas",
+    inversionista: String(inversionista?.nombre ?? "INVERSIONISTA").toUpperCase(),
+    cuenta: String(liquidacion?.cuenta ?? "—"),
+    capital: Number(liquidacion?.capital ?? 0),
+    rendimiento: Number(liquidacion?.rendimiento_final ?? 0),
+    notas: String(liquidacion?.notas ?? ""),
+    responsable1: "FREDY PONCE SANCHEZ",
+    responsable2: "JOSSUE GIBRAN SOBREVILLA DIAZ",
+  };
+}
+
+export function generarComprobanteLiquidacionHtml(p: ComprobanteLiquidacionParams): string {
+  const fecha = fechaDocumento(p.fecha);
+  const total = Number(p.capital) + Number(p.rendimiento);
+
+  return `<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><title>Comprobante ${p.folio}</title>
+<style>
+  @page { size: letter; margin: 18mm; }
+  body { font-family: Arial, sans-serif; color: #172033; margin: 0; }
+  .sheet { border: 2px solid #9f1239; padding: 28px; }
+  h1 { text-align: center; color: #9f1239; font-size: 22px; letter-spacing: 1px; }
+  .folio { text-align: right; font-weight: bold; font-size: 12px; }
+  .intro { margin: 26px 0; line-height: 1.65; text-align: justify; }
+  table { width: 100%; border-collapse: collapse; margin: 24px 0; }
+  td { border-bottom: 1px solid #d1d5db; padding: 10px; }
+  td:last-child { text-align: right; font-weight: bold; }
+  .total td { border-top: 2px solid #9f1239; color: #9f1239; font-size: 17px; }
+  .signatures { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-top: 75px; }
+  .signature { border-top: 1px solid #111827; text-align: center; padding-top: 8px; font-size: 11px; }
+  .notes { margin-top: 20px; font-size: 11px; color: #4b5563; }
+</style></head><body><div class="sheet">
+  <div class="folio">FOLIO ${p.folio}</div>
+  <h1>COMPROBANTE DE LIQUIDACIÓN DE INVERSIÓN</h1>
+  <p class="intro">En ${p.lugar}, a ${fecha.texto}, se hace constar la liquidación total de la inversión a favor de <strong>${p.inversionista}</strong>, mediante la cuenta <strong>${p.cuenta}</strong>.</p>
+  <table>
+    <tr><td>Capital liquidado</td><td>$${money(p.capital)}</td></tr>
+    <tr><td>Rendimiento final</td><td>$${money(p.rendimiento)}</td></tr>
+    <tr class="total"><td>Total entregado</td><td>$${money(total)}</td></tr>
+  </table>
+  <p>Importe total: <strong>${numeroALetras(total)}</strong>.</p>
+  ${p.notas ? `<p class="notes"><strong>Notas:</strong> ${p.notas}</p>` : ""}
+  <div class="signatures">
+    <div class="signature"><strong>${p.inversionista}</strong><br>RECIBÍ DE CONFORMIDAD</div>
+    <div class="signature"><strong>${p.responsable1}</strong><br>RESPONSABLE</div>
+    <div class="signature"><strong>${p.responsable2}</strong><br>RESPONSABLE</div>
+  </div>
+</div></body></html>`;
 }
 
 export { imprimirDocumentoHtml };
