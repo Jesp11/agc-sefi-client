@@ -30,6 +30,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { apiFetch } from "@/lib/api";
 import { exportWorkbook, printReportHtml } from "@/lib/report-export";
 import { toast } from "sonner";
@@ -93,6 +94,14 @@ type ReportResponse = {
   mes: string;
   corte?: string;
   visual?: VisualData;
+  flujo?: {
+    total_ingresos?: number;
+    total_egresos?: number;
+    distribucion_categorias?: {
+      egresos?: Record<string, number>;
+    };
+  };
+  cierre_confirmado?: boolean;
 };
 
 const fmtMoney = (value: unknown) =>
@@ -158,6 +167,73 @@ function DataListCard({
             <span className="text-right font-medium">{row.value}</span>
           </div>
         ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+type CarteraCierreChartItem = {
+  label: string;
+  value: number;
+  color: string;
+};
+
+const CHART_COLORS = ["#2563eb", "#7c3aed", "#db2777", "#ea580c", "#0f766e", "#4f46e5"];
+
+function CarteraCierreChart({
+  title,
+  items,
+}: {
+  title: string;
+  items: CarteraCierreChartItem[];
+}) {
+  const total = items.reduce((sum, item) => sum + Math.max(0, item.value), 0);
+  let currentPercentage = 0;
+  const gradient = items.map((item) => {
+    const percentage = total > 0 ? (Math.max(0, item.value) / total) * 100 : 0;
+    const start = currentPercentage;
+    currentPercentage += percentage;
+    return `${item.color} ${start}% ${currentPercentage}%`;
+  }).join(", ");
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base">{title}</CardTitle>
+        <CardDescription>Distribución de los importes al cierre del periodo seleccionado.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="grid items-center gap-8 md:grid-cols-[minmax(13rem,0.8fr)_minmax(16rem,1fr)]">
+          <div
+            className="relative mx-auto size-56 rounded-full"
+            role="img"
+            aria-label={`${title}: gráfica de pastel de ${items.map((item) => item.label).join(", ")}`}
+            style={{ background: total > 0 ? `conic-gradient(${gradient})` : "hsl(var(--muted))" }}
+          >
+            <div className="absolute inset-8 flex flex-col items-center justify-center rounded-full bg-card text-center shadow-inner">
+              <span className="text-xs text-muted-foreground">Total mostrado</span>
+              <span className="px-2 text-sm font-bold tabular-nums">{fmtMoney(total)}</span>
+            </div>
+          </div>
+          <div className="space-y-4">
+            {items.map((item) => {
+              const percentage = total > 0 ? (Math.max(0, item.value) / total) * 100 : 0;
+
+              return (
+                <div key={item.label} className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-2.5">
+                    <span className="size-3 rounded-full" style={{ backgroundColor: item.color }} aria-hidden="true" />
+                    <span className="text-sm font-medium">{item.label}</span>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-sm font-semibold tabular-nums">{fmtMoney(item.value)}</div>
+                    <div className="text-xs text-muted-foreground">{percentage.toFixed(1)}%</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </CardContent>
     </Card>
   );
@@ -270,6 +346,7 @@ export default function ReporteCierreMensualPage() {
   const [isExporting, setIsExporting] = useState(false);
   const [isSavingManual, setIsSavingManual] = useState(false);
   const [isSavingShareholders, setIsSavingShareholders] = useState(false);
+  const [isConfirmingCierre, setIsConfirmingCierre] = useState(false);
   const [manualForm, setManualForm] = useState({
     aumento_cartera: "",
     pase_a_cartera_mora: "",
@@ -315,9 +392,15 @@ export default function ReporteCierreMensualPage() {
   const adeudosAccionistas = visual.adeudos_por_accionista ?? [];
   const distribucion = visual.distribucion_carteras?.registros ?? [];
   const cierreMora = visual.cierre_mora ?? {};
+  const categoriasEgresos = Object.entries(data.flujo?.distribucion_categorias?.egresos ?? {});
 
   const distAnteriorLabel = visual.distribucion_carteras?.mes_anterior_label ?? "Mes anterior";
   const distActualLabel = visual.distribucion_carteras?.mes_actual_label ?? "Mes actual";
+  const [anioCierre, numeroMesCierre] = mes.split("-");
+  const mesCierre = new Intl.DateTimeFormat("es-MX", { month: "long" })
+    .format(new Date(Number(anioCierre), Number(numeroMesCierre) - 1, 1))
+    .toUpperCase();
+  const tituloCarteraCierre = `CARTERA CIERRE DE ${mesCierre} DE ${anioCierre}.`;
 
   const handleExport = () => {
     setIsExporting(true);
@@ -461,6 +544,26 @@ export default function ReporteCierreMensualPage() {
     }
   };
 
+  const handleConfirmarCierre = async () => {
+    if (!window.confirm(`¿Confirmar el cierre de ${mes}? Esta acción lo dejará inmutable.`)) return;
+    setIsConfirmingCierre(true);
+    try {
+      const res = await apiFetch("/reportes/cierre-mensual/confirmar", {
+        method: "POST",
+        body: JSON.stringify({ mes }),
+      });
+      const payload = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(payload?.message || "No se pudo confirmar el cierre.");
+      toast.success("Cierre mensual confirmado e inmutable.");
+      const reload = await apiFetch(`/reportes/cierre-mensual?mes=${mes}`);
+      if (reload.ok) setData(await reload.json());
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No se pudo confirmar el cierre.");
+    } finally {
+      setIsConfirmingCierre(false);
+    }
+  };
+
   const openShareholdersEditor = () => {
     setShareholdersForm(
       porcentajes.map((row) => ({
@@ -557,9 +660,19 @@ export default function ReporteCierreMensualPage() {
             <Printer className="mr-2 h-4 w-4" />
             Imprimir
           </Button>
+          <Button onClick={handleConfirmarCierre} disabled={data.cierre_confirmado || isConfirmingCierre || loading}>
+            {data.cierre_confirmado ? "Cierre confirmado" : isConfirmingCierre ? "Confirmando..." : "Confirmar cierre"}
+          </Button>
         </div>
       </div>
 
+      <Tabs defaultValue="resumen">
+        <TabsList aria-label="Secciones del cierre mensual">
+          <TabsTrigger value="resumen">Resumen de cierre</TabsTrigger>
+          <TabsTrigger value="graficas">Gráficas</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="resumen" className="space-y-6 pt-2">
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard
           title="Valor bruto de cartera"
@@ -868,6 +981,53 @@ export default function ReporteCierreMensualPage() {
           ]}
         />
       </div>
+        </TabsContent>
+
+        <TabsContent value="graficas" className="space-y-6 pt-2">
+          <div className="grid gap-6 xl:grid-cols-2">
+            <CarteraCierreChart
+              title={tituloCarteraCierre}
+              items={[
+                { label: "Mora", value: Number(cierreMora.total ?? 0), color: "#f43f5e" },
+                { label: "Adeudo", value: Number(adeudos.total ?? 0), color: "#f59e0b" },
+                { label: "Valor neto", value: Number(valores.valor_neto_cartera ?? 0), color: "#2563eb" },
+              ]}
+            />
+            <CarteraCierreChart
+              title="MORA ACTIVA Y MUERTA"
+              items={[
+                { label: "Mora activa", value: Number(cierreMora.mora_activa ?? 0), color: "#f59e0b" },
+                { label: "Mora muerta", value: Number(cierreMora.mora_muerta ?? 0), color: "#ef4444" },
+              ]}
+            />
+            <CarteraCierreChart
+              title="VALOR BRUTO POR ACCIONISTA"
+              items={accionistas.map((row, index) => ({
+                label: row.nombre ?? `Accionista ${index + 1}`,
+                value: Number(row.valor_bruto ?? 0),
+                color: CHART_COLORS[index % CHART_COLORS.length],
+              }))}
+            />
+            <CarteraCierreChart
+              title="INGRESOS VS. EGRESOS"
+              items={[
+                { label: "Ingresos", value: Number(data.flujo?.total_ingresos ?? 0), color: "#2563eb" },
+                { label: "Egresos", value: Number(data.flujo?.total_egresos ?? 0), color: "#ef4444" },
+              ]}
+            />
+          </div>
+          <div className="grid gap-6">
+            <CarteraCierreChart
+              title="GASTOS OPERATIVOS"
+              items={categoriasEgresos.map(([label, value], index) => ({
+                label,
+                value: Number(value ?? 0),
+                color: CHART_COLORS[index % CHART_COLORS.length],
+              }))}
+            />
+          </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
