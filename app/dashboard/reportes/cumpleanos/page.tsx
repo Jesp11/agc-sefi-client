@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   Table,
   TableBody,
@@ -54,6 +55,9 @@ const MESES = [
   { valor: 12, nombre: "Diciembre" },
 ];
 
+const MENSAJE_CUMPLEANOS_DEFAULT = "¡Hola {nombre}! 🎂🎉 De parte de todo el equipo de AGC SERVICIOS FINANCIEROS te deseamos un muy feliz cumpleaños. Esperamos que pases un excelente día rodeado de tus seres queridos.";
+const MENSAJE_CUMPLEANOS_STORAGE_KEY = "reporte-cumpleanos-mensaje-whatsapp";
+
 export default function ReporteCumpleanosPage() {
   const { user } = useAuth();
   const isGestor = isFieldRoleName(user?.role?.nombre);
@@ -63,6 +67,9 @@ export default function ReporteCumpleanosPage() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
+  const [mensajeCumpleanos, setMensajeCumpleanos] = useState(MENSAJE_CUMPLEANOS_DEFAULT);
+  const [mensajeGuardado, setMensajeGuardado] = useState(MENSAJE_CUMPLEANOS_DEFAULT);
+  const [mensajeOpen, setMensajeOpen] = useState(false);
 
   // Filtros interactivos
   const [filtroAsesor, setFiltroAsesor] = useState("todos");
@@ -89,6 +96,14 @@ export default function ReporteCumpleanosPage() {
   useEffect(() => {
     fetchCumpleanos(mesSeleccionado);
   }, [mesSeleccionado]);
+
+  useEffect(() => {
+    const saved = window.localStorage.getItem(MENSAJE_CUMPLEANOS_STORAGE_KEY);
+    if (saved?.trim()) {
+      setMensajeCumpleanos(saved);
+      setMensajeGuardado(saved);
+    }
+  }, []);
 
   const rawClientes = data?.clientes || [];
 
@@ -222,14 +237,41 @@ export default function ReporteCumpleanosPage() {
     return phone.replace(/\D/g, "");
   };
 
-  const getWhatsappUrl = (nombre: string, phone?: string) => {
-    const clean = getCleanPhone(phone);
+  const construirMensajeCumpleanos = (cliente: any) => {
+    const nombreCompleto = String(cliente?.nombre_completo ?? "estimado cliente").trim();
+    const primerNombre = nombreCompleto.split(/\s+/)[0] || "estimado cliente";
+    return mensajeGuardado
+      .replaceAll("{nombre}", primerNombre)
+      .replaceAll("{nombre_completo}", nombreCompleto)
+      .replaceAll("{edad}", cliente?.edad ? String(cliente.edad) : "")
+      .replaceAll("{dia}", cliente?.dia ? String(cliente.dia) : "")
+      .replaceAll("{mes}", nombreMesActual);
+  };
+
+  const getWhatsappUrl = (cliente: any) => {
+    const clean = getCleanPhone(cliente?.telefono);
     if (!clean) return "#";
-    const primerNombre = nombre.split(" ")[0] || "estimado cliente";
-    const msg = encodeURIComponent(
-      `¡Hola ${primerNombre}! 🎂🎉 De parte de todo el equipo de AGC SERVICIOS FINANCIEROS te deseamos un muy feliz cumpleaños. Esperamos que pases un excelente día rodeado de tus seres queridos.`
-    );
-    return `https://wa.me/52${clean}?text=${msg}`;
+    const numeroWhatsapp = clean.startsWith("52") && clean.length === 12 ? clean : `52${clean.slice(-10)}`;
+    return `https://wa.me/${numeroWhatsapp}?text=${encodeURIComponent(construirMensajeCumpleanos(cliente))}`;
+  };
+
+  const guardarMensajeCumpleanos = () => {
+    const mensaje = mensajeCumpleanos.trim();
+    if (!mensaje) {
+      toast.error("El mensaje de cumpleaños no puede quedar vacío");
+      return;
+    }
+    setMensajeGuardado(mensaje);
+    window.localStorage.setItem(MENSAJE_CUMPLEANOS_STORAGE_KEY, mensaje);
+    setMensajeOpen(false);
+    toast.success("Mensaje de cumpleaños guardado");
+  };
+
+  const restaurarMensajeCumpleanos = () => {
+    setMensajeCumpleanos(MENSAJE_CUMPLEANOS_DEFAULT);
+    setMensajeGuardado(MENSAJE_CUMPLEANOS_DEFAULT);
+    window.localStorage.setItem(MENSAJE_CUMPLEANOS_STORAGE_KEY, MENSAJE_CUMPLEANOS_DEFAULT);
+    toast.success("Mensaje predeterminado restaurado");
   };
 
   return (
@@ -250,6 +292,16 @@ export default function ReporteCumpleanosPage() {
 
         {/* Acciones de Exportación y Mes Actual */}
         <div className="flex items-center gap-2 flex-wrap">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-9 px-3"
+            onClick={() => setMensajeOpen(true)}
+          >
+            <SlidersHorizontal className="mr-1.5 h-4 w-4 text-emerald-700" />
+            Configurar mensaje
+          </Button>
+
           <Button
             variant="outline"
             size="sm"
@@ -622,7 +674,7 @@ export default function ReporteCumpleanosPage() {
                     <TableCell className="text-right">
                       {hasPhone ? (
                         <a
-                          href={getWhatsappUrl(c.nombre_completo, c.telefono)}
+                          href={getWhatsappUrl(c)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-md bg-emerald-600 text-white hover:bg-emerald-700 transition-colors shadow-xs"
@@ -653,6 +705,36 @@ export default function ReporteCumpleanosPage() {
           label="cumpleañeros"
         />
       )}
+
+      <Dialog open={mensajeOpen} onOpenChange={setMensajeOpen}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Mensaje de felicitación por WhatsApp</DialogTitle>
+            <DialogDescription>Personaliza el texto que se cargará al presionar WhatsApp para cada cliente.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <textarea
+              rows={7}
+              maxLength={1000}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm leading-relaxed"
+              value={mensajeCumpleanos}
+              onChange={(event) => setMensajeCumpleanos(event.target.value)}
+              placeholder="Escribe el mensaje que se enviará al cliente"
+            />
+            <div className="rounded-lg border bg-muted/40 p-3 text-xs text-muted-foreground">
+              Variables disponibles: <code>{"{nombre}"}</code>, <code>{"{nombre_completo}"}</code>, <code>{"{edad}"}</code>, <code>{"{dia}"}</code> y <code>{"{mes}"}</code>.
+            </div>
+            <div className="text-right text-[11px] text-muted-foreground">{mensajeCumpleanos.length}/1000 caracteres</div>
+          </div>
+          <DialogFooter className="gap-2 sm:justify-between">
+            <Button type="button" variant="outline" onClick={restaurarMensajeCumpleanos}><RotateCcw className="mr-1 h-3.5 w-3.5" />Restaurar predeterminado</Button>
+            <div className="flex gap-2">
+              <Button type="button" variant="outline" onClick={() => { setMensajeCumpleanos(mensajeGuardado); setMensajeOpen(false); }}>Cancelar</Button>
+              <Button type="button" onClick={guardarMensajeCumpleanos}>Guardar mensaje</Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
