@@ -2,6 +2,7 @@
 
 import { useState, useEffect, use, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -329,6 +330,7 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
             <EliminarCreditoDialog
               numProg={credito.num_prog}
               tipoCredito={credito.tipo_credito}
+              motivoBloqueo={credito.motivo_bloqueo_eliminacion}
               onDeleted={() => router.replace(credito.tipo_credito === "Grupal" ? "/dashboard/creditos-grupales" : "/dashboard/creditos-individuales")}
             />
           )}
@@ -419,6 +421,25 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
         </div>
       </div>
 
+      {isAdmin && credito.movimiento_en_proceso && (
+        <Card className="border-amber-300 bg-amber-50">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-base text-amber-900">
+              <AlertTriangle className="h-4 w-4" /> Edición bloqueada
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm text-amber-900/90">
+            El movimiento de {String(credito.movimiento_en_proceso.categoria ?? "desembolso").toLowerCase()} por $
+            {Number(credito.movimiento_en_proceso.monto).toLocaleString("es-MX", { minimumFractionDigits: 2 })} está{" "}
+            {credito.movimiento_en_proceso.descripcion_estado}. Confírmalo o cancélalo en{" "}
+            <Link href="/dashboard/confirmacion-movimientos" className="font-semibold underline underline-offset-2">
+              Movimientos
+            </Link>{" "}
+            antes de editar el crédito, para que caja y cartera no queden desincronizadas.
+          </CardContent>
+        </Card>
+      )}
+
       {credito.estado === "PendienteDesembolso" && (
         <Card className="border-amber-300 bg-amber-50">
           <CardHeader className="pb-2">
@@ -474,7 +495,7 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
               <CardHeader className="pb-2 flex-row items-center justify-between gap-3 space-y-0">
                 <CardTitle className="text-base">Renovación</CardTitle>
                 {isAdmin && (
-                  <Button size="sm" variant="outline" disabled={syncingRenovacion} onClick={sincronizarRenovacion}>
+                  <Button size="sm" variant="outline" disabled={syncingRenovacion || !!credito.movimiento_en_proceso} onClick={sincronizarRenovacion}>
                     <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${syncingRenovacion ? "animate-spin" : ""}`} />
                     {syncingRenovacion ? "Sincronizando" : "Actualizar efectivo"}
                   </Button>

@@ -34,6 +34,7 @@ type PreviewItem = {
   monto?: number | null;
   motivo?: string | null;
   nombre_archivo?: string | null;
+  estado?: string | null;
 };
 
 const money = (value: unknown) => `$${Number(value ?? 0).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -47,15 +48,19 @@ const impactoLabels: Array<[string, string]> = [
   ["documentos", "Documentos del crédito"],
   ["ciclos_historial", "Historial de ciclo"],
   ["indicadores_operativos", "Indicadores operativos"],
+  ["confirmaciones_movimientos", "Solicitudes en Movimientos (confirmación de desembolso)"],
 ];
 
 export function EliminarCreditoDialog({
   numProg,
   tipoCredito,
+  motivoBloqueo,
   onDeleted,
 }: {
   numProg: number;
   tipoCredito?: string;
+  /** Motivo calculado por la API; si existe, el botón queda deshabilitado. */
+  motivoBloqueo?: string | null;
   onDeleted: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -115,9 +120,18 @@ export function EliminarCreditoDialog({
 
   return (
     <Dialog open={open} onOpenChange={cambiarApertura}>
-      <Button variant="destructive" size="sm" className="h-9 gap-1.5 text-xs" onClick={() => cambiarApertura(true)}>
-        <Trash2 className="h-4 w-4" /> Eliminar crédito
-      </Button>
+      {/* El tooltip va en el contenedor: un botón deshabilitado no recibe eventos del puntero. */}
+      <span title={motivoBloqueo ?? undefined} className={motivoBloqueo ? "cursor-not-allowed" : undefined}>
+        <Button
+          variant="destructive"
+          size="sm"
+          className="h-9 gap-1.5 text-xs"
+          disabled={Boolean(motivoBloqueo)}
+          onClick={() => cambiarApertura(true)}
+        >
+          <Trash2 className="h-4 w-4" /> Eliminar crédito
+        </Button>
+      </span>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl" showCloseButton={!deleting}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-destructive">
@@ -159,7 +173,7 @@ export function EliminarCreditoDialog({
                           <div className="flex items-center justify-between gap-3"><span>{label}</span><span className="font-semibold">{rows.length}</span></div>
                           {rows.slice(0, 3).map((row) => (
                             <p key={row.id} className="mt-1 truncate text-xs text-muted-foreground">
-                              {row.fecha ? `${fmtFecha(row.fecha)} · ` : ""}{row.motivo || row.nombre_archivo || row.tipo || "Registro"}{row.monto !== undefined ? ` · ${money(row.monto)}` : ""}
+                              {row.fecha ? `${fmtFecha(row.fecha)} · ` : ""}{row.motivo || row.nombre_archivo || row.tipo || "Registro"}{row.monto !== undefined ? ` · ${money(row.monto)}` : ""}{row.estado ? ` · ${row.estado}` : ""}
                             </p>
                           ))}
                           {rows.length > 3 && <p className="mt-1 text-xs text-muted-foreground">y {rows.length - 3} más.</p>}

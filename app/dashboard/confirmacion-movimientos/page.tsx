@@ -65,10 +65,11 @@ export default function ConfirmacionMovimientosPage() {
   useEffect(() => { load(); }, [load]);
 
   const resolver = async (movimiento: MovimientoConfirmacion, accion: "confirmar" | "cancelar" | "confirmar-reintegro" | "reprogramar-desembolso" | "cancelar-definitivamente", fechaNueva?: string) => {
-    if (accion === "cancelar" && !window.confirm(`¿Cancelar el egreso pendiente de ${money(movimiento.monto)}?`)) return;
+    const esDesembolso = String(movimiento.categoria).toLowerCase() === "desembolso";
+    if (accion === "cancelar" && !window.confirm(`¿Cancelar el egreso pendiente de ${money(movimiento.monto)}?${esDesembolso ? " El crédito, si aún no tiene pagos, quedará cancelado." : ""}`)) return;
     if (accion === "confirmar-reintegro" && !window.confirm(`¿Confirmas que recibiste ${money(movimiento.monto)} de vuelta en caja? Se registrará un ingreso de compensación.`)) return;
     if (accion === "reprogramar-desembolso" && !window.confirm(`¿Programar de nuevo el desembolso de ${money(movimiento.monto)} para el ${fechaNueva}? Después debes confirmar la nueva entrega al gestor.`)) return;
-    if (accion === "cancelar-definitivamente" && !window.confirm(`¿Cancelar definitivamente esta confirmación de ${money(movimiento.monto)}? El movimiento se cerrará y ya no podrá reprogramarse desde este flujo.`)) return;
+    if (accion === "cancelar-definitivamente" && !window.confirm(`¿Cancelar definitivamente esta confirmación de ${money(movimiento.monto)}? El movimiento se cerrará y ya no podrá reprogramarse desde este flujo.${esDesembolso ? " El crédito, si aún no tiene pagos, quedará cancelado." : ""}`)) return;
     setProcessingId(movimiento.id);
     try {
       const response = await apiFetch(`/confirmaciones-movimientos/${movimiento.id}/${accion}`, {
