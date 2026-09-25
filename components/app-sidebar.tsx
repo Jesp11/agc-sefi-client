@@ -55,7 +55,7 @@ const reporteItems = [
   { title: "Renovacion de clientes", url: "/dashboard/reportes/por-cerrar", icon: Users },
   { title: "Global Mensual", url: "/dashboard/reportes/semanal", icon: FileText },
   { title: "Gestor Mensual", url: "/dashboard/reportes/gestor-mensual", icon: CalendarDays },
-  { title: "Estado Financiero", url: "/dashboard/reportes/inversionistas-estado", icon: TrendingUp },
+  { title: "Reporte de inversionistas", url: "/dashboard/reportes/inversionistas-estado", icon: TrendingUp },
   { title: "Cierre Mensual", url: "/dashboard/reportes/cierre-mensual", icon: BarChart3 },
   { title: "Cumpleaños", url: "/dashboard/reportes/cumpleanos", icon: Cake },
 ];

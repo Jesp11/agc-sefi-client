@@ -31,7 +31,7 @@ export default async function DashboardLayout({
             <HeaderUserMenu />
           </header>
           <GlobalSearchDialog />
-          <div className="relative flex-1 overflow-auto p-4 pb-28 md:pb-8 lg:p-8 bg-gray-50">
+          <div className="relative min-h-0 flex-1 bg-gray-50">
             <div
               aria-hidden="true"
               style={{
@@ -53,7 +53,7 @@ export default async function DashboardLayout({
                 style={{ width: "520px", height: "auto", flexShrink: 0 }}
               />
             </div>
-            <div className="relative z-10">{children}</div>
+            <div className="relative z-10 h-full overflow-auto p-4 pb-28 md:pb-8 lg:p-8">{children}</div>
           </div>
           <MobileBottomNav />
           <PWAProvider />
