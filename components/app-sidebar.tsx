@@ -75,7 +75,12 @@ export function AppSidebar() {
 
   const groups = [
     ...(!isAsesor ? [{ label: "Catálogos", items: catalogItems }] : []),
-    { label: "Carteras", items: carteraItems },
+    {
+      label: "Carteras",
+      items: carteraItems.filter(
+        (item) => item.url !== "/dashboard/cartera-general" || (user?.role && !isAsesor)
+      ),
+    },
     ...(!isAsesor ? [{ label: "Contabilidad", items: contabilidadItems }] : []),
     {
       label: "Reportes",

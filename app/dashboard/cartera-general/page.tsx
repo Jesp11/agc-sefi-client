@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/context/auth-context";
+import { isFieldRoleName } from "@/lib/authz";
 import { apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -47,6 +49,19 @@ import { exportarCarteraPdf } from "@/lib/reporte-cartera-pdf";
 import * as XLSX from "xlsx";
 
 export default function CarteraGeneralPage() {
+  const { user, loading } = useAuth();
+  const router = useRouter();
+  const isField = isFieldRoleName(user?.role?.nombre);
+
+  useEffect(() => {
+    if (!loading && isField) router.replace("/dashboard/creditos-individuales");
+  }, [loading, isField, router]);
+
+  if (loading || !user?.role || isField) return null;
+  return <CarteraGeneralContent />;
+}
+
+function CarteraGeneralContent() {
   const router = useRouter();
   const [creditos, setCreditos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);

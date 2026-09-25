@@ -32,7 +32,6 @@ const adminItems: NavItem[] = [
 ];
 
 const asesorItems: NavItem[] = [
-  { title: "General", url: "/dashboard/cartera-general", icon: LayoutDashboard },
   { title: "Individual", url: "/dashboard/creditos-individuales", icon: User },
   { title: "Cobros", url: "/dashboard/reportes/diario", icon: CalendarDays, primary: true },
   { title: "Global Cobros", url: "/dashboard/reportes/global-cobros", icon: FileText },
@@ -44,6 +43,8 @@ export function MobileBottomNav() {
   const { user } = useAuth();
   const isAsesor = isFieldRoleName(user?.role?.nombre);
   const items = isAsesor ? asesorItems : adminItems;
+
+  if (!user?.role) return null;
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-40 border-t bg-background md:hidden">

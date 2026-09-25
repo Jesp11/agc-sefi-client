@@ -377,6 +377,12 @@ const STATIC_NAVIGATION_ITEMS: Omit<SearchItem, "onClick">[] = [
 ];
 
 export function GlobalSearchDialog() {
+  const { user, loading } = useAuth();
+  if (loading || !user?.role || isFieldRoleName(user.role.nombre)) return null;
+  return <GlobalSearchContent />;
+}
+
+function GlobalSearchContent() {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [selectedFilter, setSelectedFilter] = useState<string>("all");
@@ -901,6 +907,12 @@ export function GlobalSearchDialog() {
 
 /** Trigger button for Header & Topbars */
 export function SearchTriggerButton({ className = "" }: { className?: string }) {
+  const { user, loading } = useAuth();
+  if (loading || !user?.role || isFieldRoleName(user.role.nombre)) return null;
+  return <SearchTriggerContent className={className} />;
+}
+
+function SearchTriggerContent({ className }: { className: string }) {
   const [isMac, setIsMac] = useState(false);
 
   useEffect(() => {
