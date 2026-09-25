@@ -1,4 +1,5 @@
 import { desglosarFecha, generarCalendarioTarjetaCobro, imprimirDocumentoHtml, resolverTasaCredito } from "@/lib/document-templates";
+import { calcularFechaUltimoPago, type ConfigCalendarioPago } from "@/lib/frecuencia-pago";
 
 export interface TarjetaCobroGrupalIntegrante {
   nombre: string;
@@ -36,13 +37,9 @@ export interface TarjetaCobroGrupalParams {
   }>;
 }
 
-function calcFechaTermino(fechaPrimerPago?: string | null, plazos?: number): string {
-  if (!fechaPrimerPago || !plazos) return "—";
-  const [y, m, d] = String(fechaPrimerPago).split("-").map(Number);
-  if (!y || !m || !d) return "—";
-  const date = new Date(y, m - 1, d);
-  date.setDate(date.getDate() + (plazos - 1) * 7);
-  return desglosarFecha(date.toISOString().split("T")[0]).texto;
+function calcFechaTermino(fechaPrimerPago?: string | null, plazos?: number, calendario?: ConfigCalendarioPago): string {
+  const ultimo = calcularFechaUltimoPago(fechaPrimerPago, Number(plazos), calendario);
+  return ultimo ? desglosarFecha(ultimo).texto : "—";
 }
 
 export function buildTarjetaCobroGrupalParams(credito: any): TarjetaCobroGrupalParams {
@@ -65,7 +62,7 @@ export function buildTarjetaCobroGrupalParams(credito: any): TarjetaCobroGrupalP
 
   const plazos = Number(credito?.plazos ?? 0) || 16;
   const valorFicha = Number(credito?.valor_ficha ?? 0);
-  const calendario = generarCalendarioTarjetaCobro(credito?.fecha_primer_pago, plazos, valorFicha);
+  const calendario = generarCalendarioTarjetaCobro(credito?.fecha_primer_pago, plazos, valorFicha, credito);
 
   return {
     empresa: "A G C",
@@ -76,7 +73,7 @@ export function buildTarjetaCobroGrupalParams(credito: any): TarjetaCobroGrupalP
     cicloActual: Number(credito?.ciclo ?? 1) || 1,
     cicloAnterior: Math.max(0, (Number(credito?.ciclo ?? 1) || 1) - 1),
     fechaInicio: desglosarFecha(credito?.fecha_otorgacion || credito?.fecha_primer_pago).texto,
-    fechaTermino: calcFechaTermino(credito?.fecha_primer_pago, plazos),
+    fechaTermino: calcFechaTermino(credito?.fecha_primer_pago, plazos, credito),
     tasaAplicada: resolverTasaCredito(credito, "grupal"),
     plazoSemanas: plazos,
     creditoTotal: Number(credito?.credito_total_grupal ?? credito?.total ?? 0),

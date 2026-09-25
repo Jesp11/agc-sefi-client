@@ -5,6 +5,8 @@
  * 3. Tarjeta de Cobro / Tarjeta de Pagos
  */
 
+import { calcularFechaUltimoPago, generarFechasPago, nombrePeriodos, type ConfigCalendarioPago } from "@/lib/frecuencia-pago";
+
 export interface DocumentoAdeudoParams {
   noPagare: string;
   monto: number;
@@ -335,13 +337,8 @@ export function buildDocumentoAdeudoParams(
 
   // Cálculo de fecha de vencimiento (último pago)
   const calcFechaVencimiento = () => {
-    if (!credito?.fecha_primer_pago || !credito?.plazos) return desglosarFecha(null);
-    const [y, m, d] = String(credito.fecha_primer_pago).split("-").map(Number);
-    if (!y || !m || !d) return desglosarFecha(null);
-    const date = new Date(y, m - 1, d);
-    date.setDate(date.getDate() + (Number(credito.plazos) - 1) * 7);
-    const iso = date.toISOString().split("T")[0];
-    return desglosarFecha(iso);
+    const ultimo = calcularFechaUltimoPago(credito?.fecha_primer_pago, Number(credito?.plazos), credito ?? {});
+    return desglosarFecha(ultimo || null);
   };
 
   const fechaVenc = opciones?.usarSaldoPendiente ? calcFechaVencimiento() : fechaOtorgacion;
@@ -503,26 +500,20 @@ ____________________________________________________
 }
 
 /**
- * Genera el calendario de pagos semanal para la Tarjeta de Cobro.
+ * Genera el calendario de pagos (semanal o quincenal) para la Tarjeta de Cobro.
  */
 export function generarCalendarioTarjetaCobro(
   fechaPrimerPago: string | null | undefined,
   plazos: number,
-  valorFicha: number
+  valorFicha: number,
+  calendario: ConfigCalendarioPago = {}
 ): TarjetaCobroItem[] {
-  if (!fechaPrimerPago || !plazos) return [];
-  const [y, m, d] = String(fechaPrimerPago).split("-").map(Number);
-  if (!y || !m || !d) return [];
-
-  return Array.from({ length: plazos }, (_, i) => {
-    const date = new Date(y, m - 1, d);
-    date.setDate(date.getDate() + i * 7);
-    const iso = date.toISOString().split("T")[0];
+  return generarFechasPago(fechaPrimerPago, plazos, calendario).map((iso, i) => {
     const { formatoCorto } = desglosarFecha(iso);
     const numSem = String(i + 1).padStart(2, "0");
     return {
       semana: i + 1,
-      semanaTexto: `${numSem} SEMANAS`,
+      semanaTexto: `${numSem} ${nombrePeriodos(calendario.frecuencia_pago).toUpperCase()}`,
       fecha: formatoCorto,
       monto: Number(valorFicha) || 0,
     };
@@ -547,18 +538,10 @@ export function buildTarjetaCobroParams(credito: any, overrides?: Partial<Tarjet
   const fechaInicioDesc = desglosarFecha(credito?.fecha_otorgacion || credito?.fecha_primer_pago);
   
   // Calcular fecha de término
-  let fechaTerminoStr = "—";
-  if (credito?.fecha_primer_pago && plazos) {
-    const [y, m, d] = String(credito.fecha_primer_pago).split("-").map(Number);
-    if (y && m && d) {
-      const date = new Date(y, m - 1, d);
-      date.setDate(date.getDate() + (plazos - 1) * 7);
-      const iso = date.toISOString().split("T")[0];
-      fechaTerminoStr = desglosarFecha(iso).texto;
-    }
-  }
+  const fechaTermino = calcularFechaUltimoPago(credito?.fecha_primer_pago, plazos, credito ?? {});
+  const fechaTerminoStr = fechaTermino ? desglosarFecha(fechaTermino).texto : "—";
 
-  const pagos = generarCalendarioTarjetaCobro(credito?.fecha_primer_pago, plazos, valorFicha);
+  const pagos = generarCalendarioTarjetaCobro(credito?.fecha_primer_pago, plazos, valorFicha, credito ?? {});
 
   const base: TarjetaCobroParams = {
     empresa: "A G C",

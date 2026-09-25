@@ -17,6 +17,19 @@ import {
   Save,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  adjetivoPago,
+  calcularFechaUltimoPago,
+  contarPagos,
+  DIA_QUINCENA_1_DEFAULT,
+  DIA_QUINCENA_2_DEFAULT,
+  esDiaQuincena,
+  FRECUENCIAS_PAGO,
+  nombrePeriodos,
+  siguienteDiaQuincena,
+  type ConfigCalendarioPago,
+  type FrecuenciaPago,
+} from "@/lib/frecuencia-pago";
 
 interface CustomLoanFormProps {
   type: "individual" | "grupal";
@@ -48,6 +61,18 @@ export function CustomLoanForm({ type, onSuccess, onClose }: CustomLoanFormProps
   const [catalogo, setCatalogo] = useState<any>(null);
   const [selectedOption, setSelectedOption] = useState<{ tasaKey: string; plazoCatalogo: number; factor: number } | null>(null);
   const [plazosEditables, setPlazosEditables] = useState<number>(0);
+  // Los pagos quincenales no se rigen por el catálogo de tasas: el interés se captura manualmente.
+  const [frecuencia, setFrecuencia] = useState<FrecuenciaPago>("Semanal");
+  const esQuincenal = frecuencia === "Quincenal";
+  // Días del mes en que vencen los pagos quincenales.
+  const [diasQuincena, setDiasQuincena] = useState({
+    dia1: String(DIA_QUINCENA_1_DEFAULT),
+    dia2: String(DIA_QUINCENA_2_DEFAULT),
+  });
+  const dia1 = parseInt(diasQuincena.dia1, 10) || 0;
+  const dia2 = parseInt(diasQuincena.dia2, 10) || 0;
+  const diasQuincenaValidos = dia1 >= 1 && dia2 <= 31 && dia1 < dia2;
+  const calendario: ConfigCalendarioPago = { frecuencia_pago: frecuencia, dia_quincena_1: dia1, dia_quincena_2: dia2 };
 
   const [formData, setFormData] = useState({
     monto_otorgado: "",
@@ -96,20 +121,41 @@ export function CustomLoanForm({ type, onSuccess, onClose }: CustomLoanFormProps
     return ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"][new Date(y, m - 1, d).getDay()];
   };
 
-  const calcPlazos = (first: string, last: string): number => {
-    if (!first || !last) return 0;
-    const [fy, fm, fd] = first.split("-").map(Number);
-    const [ly, lm, ld] = last.split("-").map(Number);
-    const diffMs = new Date(ly, lm - 1, ld).getTime() - new Date(fy, fm - 1, fd).getTime();
-    return Math.round(diffMs / (7 * 24 * 60 * 60 * 1000)) + 1;
+  const calcPlazos = (first: string, last: string): number => contarPagos(first, last, calendario);
+
+  // Fecha del pago número `plazos` contando desde el primer pago.
+  const calcFechaUltimoPago = (dateStr: string, plazos: number, config: ConfigCalendarioPago = calendario): string =>
+    calcularFechaUltimoPago(dateStr, plazos, config);
+
+  // Con días de quincena válidos, el primer pago se propone en el siguiente día de pago tras el desembolso.
+  const recalcularQuincena = (config: ConfigCalendarioPago, fechaOtorgacion: string) => {
+    const d1 = Number(config.dia_quincena_1);
+    const d2 = Number(config.dia_quincena_2);
+    if (!(d1 >= 1 && d2 <= 31 && d1 < d2) || !fechaOtorgacion) return;
+    const primer = siguienteDiaQuincena(fechaOtorgacion, config);
+    setFormData((prev) => ({
+      ...prev,
+      fecha_otorgacion: fechaOtorgacion,
+      fecha_primer_pago: primer,
+      fecha_ultimo_pago: plazosEditables > 0 ? calcFechaUltimoPago(primer, plazosEditables, config) : prev.fecha_ultimo_pago,
+    }));
   };
 
-  const addWeeks = (dateStr: string, weeks: number): string => {
-    if (!dateStr) return "";
-    const [y, m, d] = dateStr.split("-").map(Number);
-    const date = new Date(y, m - 1, d);
-    date.setDate(date.getDate() + (weeks - 1) * 7);
-    return date.toISOString().split("T")[0];
+  const handleDiaQuincenaChange = (campo: "dia1" | "dia2", value: string) => {
+    const nuevos = { ...diasQuincena, [campo]: value };
+    setDiasQuincena(nuevos);
+    recalcularQuincena(
+      { frecuencia_pago: "Quincenal", dia_quincena_1: parseInt(nuevos.dia1, 10) || 0, dia_quincena_2: parseInt(nuevos.dia2, 10) || 0 },
+      formData.fecha_otorgacion
+    );
+  };
+
+  const handleFechaOtorgacionChange = (value: string) => {
+    if (esQuincenal) {
+      recalcularQuincena(calendario, value);
+      return;
+    }
+    setFormData((prev) => ({ ...prev, fecha_otorgacion: value }));
   };
 
   // factor = pago semanal por cada $1,000
@@ -122,7 +168,7 @@ export function CustomLoanForm({ type, onSuccess, onClose }: CustomLoanFormProps
     setPlazosEditables(plazo);
     setFormData((prev) => ({
       ...prev,
-      ...(primer && plazo > 0 ? { fecha_ultimo_pago: addWeeks(primer, plazo) } : {}),
+      ...(primer && plazo > 0 ? { fecha_ultimo_pago: calcFechaUltimoPago(primer, plazo) } : {}),
       ...(monto > 0 && plazo > 0 ? { interes: String(calcInteres(factor, monto, plazo)) } : {}),
     }));
   };
@@ -141,8 +187,28 @@ export function CustomLoanForm({ type, onSuccess, onClose }: CustomLoanFormProps
   const handlePlazosChange = (value: string) => {
     const plazo = parseInt(value, 10) || 0;
     setPlazosEditables(plazo);
-    if (!selectedOption || plazo < 1) return;
-    applyPlazos(plazo, selectedOption.factor);
+    if (plazo < 1) return;
+    if (selectedOption) {
+      applyPlazos(plazo, selectedOption.factor);
+    } else if (formData.fecha_primer_pago) {
+      setFormData((prev) => ({ ...prev, fecha_ultimo_pago: calcFechaUltimoPago(prev.fecha_primer_pago, plazo) }));
+    }
+  };
+
+  const handleFrecuenciaChange = (value: FrecuenciaPago) => {
+    if (value === frecuencia) return;
+    setFrecuencia(value);
+    setSelectedOption(null);
+    setPlazosEditables(0);
+    setFormData((prev) => ({
+      ...prev,
+      fecha_ultimo_pago: "",
+      // El interés precalculado con el catálogo semanal no aplica a otra periodicidad.
+      ...(selectedOption ? { interes: "0" } : {}),
+      ...(value === "Quincenal" && diasQuincenaValidos && prev.fecha_otorgacion
+        ? { fecha_primer_pago: siguienteDiaQuincena(prev.fecha_otorgacion, { ...calendario, frecuencia_pago: value }) }
+        : {}),
+    }));
   };
 
   const handleMontoChange = (value: string) => {
@@ -162,7 +228,7 @@ export function CustomLoanForm({ type, onSuccess, onClose }: CustomLoanFormProps
     setFormData((prev) => ({
       ...prev,
       fecha_primer_pago: value,
-      ...(selectedOption && value && plazo > 0 ? { fecha_ultimo_pago: addWeeks(value, plazo) } : {}),
+      ...((selectedOption || plazosEditables > 0) && value && plazo > 0 ? { fecha_ultimo_pago: calcFechaUltimoPago(value, plazo) } : {}),
     }));
   };
 
@@ -186,6 +252,7 @@ export function CustomLoanForm({ type, onSuccess, onClose }: CustomLoanFormProps
     : calcPlazos(formData.fecha_primer_pago, formData.fecha_ultimo_pago);
   const valorFicha = plazos > 0 ? parseFloat((total / plazos).toFixed(2)) : 0;
   const diaPago = getDiaPago(formData.fecha_primer_pago);
+  const primerPagoEnQuincena = !esQuincenal || !formData.fecha_primer_pago || esDiaQuincena(formData.fecha_primer_pago, calendario);
   const porcentajeInteres = monto > 0 ? parseFloat(((interes / monto) * 100).toFixed(2)) : 0;
   const capitalDistribuido = distribucion.reduce((acumulado, fila) => acumulado + (Number(fila.capital) || 0), 0);
   const distribucionValida = type !== "grupal" || (
@@ -195,7 +262,8 @@ export function CustomLoanForm({ type, onSuccess, onClose }: CustomLoanFormProps
   );
 
   const canSubmit =
-    selected && monto > 0 && formData.fecha_otorgacion && formData.fecha_primer_pago && formData.fecha_ultimo_pago && plazos > 0 && distribucionValida;
+    selected && monto > 0 && formData.fecha_otorgacion && formData.fecha_primer_pago && formData.fecha_ultimo_pago && plazos > 0 && distribucionValida
+    && (!esQuincenal || (diasQuincenaValidos && primerPagoEnQuincena));
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
@@ -209,7 +277,9 @@ export function CustomLoanForm({ type, onSuccess, onClose }: CustomLoanFormProps
         total,
         plazos,
         valor_ficha: valorFicha,
-        dias_pago: diaPago,
+        frecuencia_pago: frecuencia,
+        // En quincenales la API deriva el día de pago de los días del mes.
+        ...(esQuincenal ? { dia_quincena_1: dia1, dia_quincena_2: dia2 } : { dias_pago: diaPago }),
         porcentaje_interes: porcentajeInteres,
         es_personalizado: true,
         ...(selectedOption && { tasa_asignada: selectedOption.tasaKey }),
@@ -358,8 +428,71 @@ export function CustomLoanForm({ type, onSuccess, onClose }: CustomLoanFormProps
               <Button variant="ghost" size="sm" onClick={() => setStep(1)} className="text-xs">Cambiar</Button>
             </div>
 
+            <div className="grid gap-1.5">
+              <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                Frecuencia de pago
+              </Label>
+              <div className="inline-flex w-fit rounded-lg border p-0.5 bg-muted/40" role="radiogroup" aria-label="Frecuencia de pago">
+                {FRECUENCIAS_PAGO.map((opcion) => (
+                  <button
+                    key={opcion}
+                    type="button"
+                    role="radio"
+                    aria-checked={frecuencia === opcion}
+                    onClick={() => handleFrecuenciaChange(opcion)}
+                    className={cn(
+                      "px-4 py-1.5 rounded-md text-xs font-semibold transition-colors",
+                      frecuencia === opcion
+                        ? "bg-primary text-primary-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    {opcion}
+                  </button>
+                ))}
+              </div>
+              {esQuincenal && (
+                <>
+                  <div className="grid grid-cols-2 gap-3 max-w-xs">
+                    <div className="grid gap-1">
+                      <Label className="text-xs">Primer día de pago</Label>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={31}
+                        aria-label="Primer día de pago del mes"
+                        value={diasQuincena.dia1}
+                        onChange={(e) => handleDiaQuincenaChange("dia1", e.target.value)}
+                      />
+                    </div>
+                    <div className="grid gap-1">
+                      <Label className="text-xs">Segundo día de pago</Label>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={31}
+                        aria-label="Segundo día de pago del mes"
+                        value={diasQuincena.dia2}
+                        onChange={(e) => handleDiaQuincenaChange("dia2", e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  {diasQuincenaValidos ? (
+                    <p className="text-[11px] text-muted-foreground">
+                      Pagos los días {dia1} y {dia2} de cada mes (si el mes no tiene ese día, vence el último día del mes).
+                      Sin tasa del catálogo: captura el número de quincenas y el interés manualmente.
+                    </p>
+                  ) : (
+                    <p className="text-[11px] text-amber-700">
+                      Los días deben estar entre 1 y 31 y el primero debe ser menor que el segundo.
+                    </p>
+                  )}
+                </>
+              )}
+            </div>
+
             {/* Catalog selector */}
-            {catalogo?.tasas && plazosDisponibles.length > 0 && (
+            {!esQuincenal && catalogo?.tasas && plazosDisponibles.length > 0 && (
               <div className="grid gap-1.5">
                 <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                   Tasa y Plazo{" "}
@@ -429,13 +562,13 @@ export function CustomLoanForm({ type, onSuccess, onClose }: CustomLoanFormProps
                 />
               </div>
               <div className="grid gap-2">
-                <Label>Semanas</Label>
+                <Label>{esQuincenal ? "Quincenas" : "Semanas"}</Label>
                 <Input
                   type="number"
                   min={1}
                   max={104}
-                  placeholder="Ej. 16"
-                  disabled={!selectedOption}
+                  placeholder={esQuincenal ? "Ej. 8" : "Ej. 16"}
+                  disabled={!selectedOption && !esQuincenal}
                   value={plazosEditables || ""}
                   onChange={(e) => handlePlazosChange(e.target.value)}
                 />
@@ -455,7 +588,7 @@ export function CustomLoanForm({ type, onSuccess, onClose }: CustomLoanFormProps
                 <Input
                   type="date"
                   value={formData.fecha_otorgacion}
-                  onChange={(e) => setFormData({ ...formData, fecha_otorgacion: e.target.value })}
+                  onChange={(e) => handleFechaOtorgacionChange(e.target.value)}
                 />
               </div>
               <div className="grid gap-2">
@@ -465,6 +598,9 @@ export function CustomLoanForm({ type, onSuccess, onClose }: CustomLoanFormProps
                   value={formData.fecha_primer_pago}
                   onChange={(e) => handleFechaPrimerPagoChange(e.target.value)}
                 />
+                {!primerPagoEnQuincena && (
+                  <p className="text-[11px] text-amber-700">Debe caer en día {dia1} o {dia2} del mes.</p>
+                )}
               </div>
               <div className="grid gap-2">
                 <Label>Fecha de Último Pago</Label>
@@ -503,14 +639,16 @@ export function CustomLoanForm({ type, onSuccess, onClose }: CustomLoanFormProps
               <div className="rounded-lg border bg-muted/30 divide-y text-xs">
                 <div className="flex justify-between px-3 py-2">
                   <span className="text-muted-foreground">Día de pago</span>
-                  <Badge variant="secondary" className="font-semibold">{diaPago || "—"}</Badge>
+                  <Badge variant="secondary" className="font-semibold">
+                    {esQuincenal ? `${dia1} y ${dia2} de cada mes` : diaPago || "—"}
+                  </Badge>
                 </div>
                 <div className="flex justify-between px-3 py-2">
                   <span className="text-muted-foreground">Número de pagos</span>
-                  <span className="font-semibold">{plazos} semanas</span>
+                  <span className="font-semibold">{plazos} {nombrePeriodos(frecuencia)}</span>
                 </div>
                 <div className="flex justify-between px-3 py-2">
-                  <span className="text-muted-foreground">Pago semanal</span>
+                  <span className="text-muted-foreground">Pago {adjetivoPago(frecuencia)}</span>
                   <span className="font-semibold">${valorFicha.toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between px-3 py-2">

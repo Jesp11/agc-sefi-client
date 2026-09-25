@@ -21,6 +21,7 @@ import {
   type TarjetaCobroGrupalParams,
 } from "@/lib/group-document-templates";
 import { desglosarFecha } from "@/lib/document-templates";
+import { calcularFechaUltimoPago } from "@/lib/frecuencia-pago";
 
 const EMPTY_DOCUMENT_VALUE = "____________";
 
@@ -34,13 +35,7 @@ function valorOLinea(valor: string): string {
 
 function calcularFechaTermino(credito: any): string {
   const primerPago = String(credito?.fecha_primer_pago || "").split("T")[0];
-  const plazos = Number(credito?.plazos);
-  const [anio, mes, dia] = primerPago.split("-").map(Number);
-  if (!anio || !mes || !dia || !plazos) return "";
-
-  const fecha = new Date(anio, mes - 1, dia);
-  fecha.setDate(fecha.getDate() + (plazos - 1) * 7);
-  return `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, "0")}-${String(fecha.getDate()).padStart(2, "0")}`;
+  return calcularFechaUltimoPago(primerPago, Number(credito?.plazos), credito ?? {});
 }
 
 interface GrupoDocumentoDialogProps {

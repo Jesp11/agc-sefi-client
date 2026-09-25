@@ -40,6 +40,7 @@ import { PAGE_SIZE, filterBySearch, paginateItems, useTableControls } from "@/ho
 import { marcarEstadoCuotas, totalAbonadoFromPagos } from "@/lib/table-utils";
 import { useAuth } from "@/context/auth-context";
 import { isAdminRoleName } from "@/lib/authz";
+import { adjetivoPago, calcularFechaUltimoPago, generarFechasPago, type ConfigCalendarioPago } from "@/lib/frecuencia-pago";
 
 const getDiaSemana = (dateStr: string) => {
   if (!dateStr) return "";
@@ -47,27 +48,14 @@ const getDiaSemana = (dateStr: string) => {
   return ["Domingo","Lunes","Martes","Miércoles","Jueves","Viernes","Sábado"][new Date(y, m - 1, d).getDay()];
 };
 
-const calcFechaUltimoPago = (first: string, plazos: number): string => {
-  if (!first || !plazos) return "";
-  const [y, m, d] = first.split("-").map(Number);
-  const date = new Date(y, m - 1, d);
-  date.setDate(date.getDate() + (plazos - 1) * 7);
-  return date.toISOString().split("T")[0];
-};
-
-const generateSchedule = (fechaPrimerPago: string, plazos: number, valorFicha: number) => {
-  if (!fechaPrimerPago || !plazos || !valorFicha) return [];
-  const [y, m, d] = fechaPrimerPago.split("-").map(Number);
-  return Array.from({ length: plazos }, (_, i) => {
-    const date = new Date(y, m - 1, d);
-    date.setDate(date.getDate() + i * 7);
-    return {
-      semana: i + 1,
-      fecha: date.toISOString().split("T")[0],
-      dia: getDiaSemana(date.toISOString().split("T")[0]),
-      pago: valorFicha,
-    };
-  });
+const generateSchedule = (fechaPrimerPago: string, plazos: number, valorFicha: number, calendario: ConfigCalendarioPago) => {
+  if (!valorFicha) return [];
+  return generarFechasPago(fechaPrimerPago, plazos, calendario).map((fecha, i) => ({
+    semana: i + 1,
+    fecha,
+    dia: getDiaSemana(fecha),
+    pago: valorFicha,
+  }));
 };
 
 const estadoStyles: Record<string, string> = {
@@ -258,8 +246,8 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
   }
 
   const mora = credito.mora || {};
-  const fechaUltimoPago = calcFechaUltimoPago(credito.fecha_primer_pago, credito.plazos);
-  const scheduleBase = generateSchedule(credito.fecha_primer_pago, credito.plazos, credito.valor_ficha);
+  const fechaUltimoPago = calcularFechaUltimoPago(credito.fecha_primer_pago, credito.plazos, credito);
+  const scheduleBase = generateSchedule(credito.fecha_primer_pago, credito.plazos, credito.valor_ficha, credito);
   const schedule = marcarEstadoCuotas(
     scheduleBase,
     totalAbonadoFromPagos(pagos) + (Number(credito.abonos_historicos) || 0),
@@ -579,7 +567,7 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
                 <Badge variant="outline" className="font-bold">{credito.ciclo}</Badge>
               </div>
               <div className="space-y-1">
-                <p className="text-[10px] font-bold text-muted-foreground uppercase">Pago semanal</p>
+                <p className="text-[10px] font-bold text-muted-foreground uppercase">Pago {adjetivoPago(credito.frecuencia_pago)}</p>
                 <div className="flex items-center gap-2 text-sm font-semibold">
                   <CreditCard className="h-4 w-4 text-primary" />
                   ${Number(credito.valor_ficha ?? 0).toLocaleString()}
@@ -651,7 +639,7 @@ export default function CreditoDetailPage({ params }: { params: Promise<{ id: st
             </div>
             <div className="space-y-3 pt-4 border-t border-dashed">
               <div className="flex justify-between items-center">
-                <span className="text-xs text-muted-foreground uppercase flex items-center gap-1"><CreditCard className="h-3 w-3" /> Pago Semanal</span>
+                <span className="text-xs text-muted-foreground uppercase flex items-center gap-1"><CreditCard className="h-3 w-3" /> Pago {adjetivoPago(credito.frecuencia_pago)}</span>
                 <span className="text-sm font-bold">${Number(credito.valor_ficha ?? 0).toLocaleString()}</span>
               </div>
               <div className="flex justify-between items-center">
