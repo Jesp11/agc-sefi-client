@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { apiFetch } from "@/lib/api";
+import { AnnualGroupedBalanceChart, type AnnualBalanceOrigin } from "@/components/annual-grouped-balance-chart";
 import { exportWorkbook, printReportHtml } from "@/lib/report-export";
 import { toast } from "sonner";
 
@@ -94,6 +95,18 @@ type ReportResponse = {
   mes: string;
   corte?: string;
   visual?: VisualData;
+  balance_general_cartera?: Array<{
+    mes: string;
+    valor_bruto: number | null;
+    valor_neto: number | null;
+    origen: AnnualBalanceOrigin;
+  }>;
+  balance_mora_anual?: Array<{
+    mes: string;
+    mora_activa: number | null;
+    mora_muerta: number | null;
+    origen: AnnualBalanceOrigin;
+  }>;
   flujo?: {
     total_ingresos?: number;
     total_egresos?: number;
@@ -180,59 +193,47 @@ type CarteraCierreChartItem = {
 
 const CHART_COLORS = ["#2563eb", "#7c3aed", "#db2777", "#ea580c", "#0f766e", "#4f46e5"];
 
-function CarteraCierreChart({
+function CarteraCierreBarChart({
   title,
   items,
 }: {
   title: string;
   items: CarteraCierreChartItem[];
 }) {
-  const total = items.reduce((sum, item) => sum + Math.max(0, item.value), 0);
-  let currentPercentage = 0;
-  const gradient = items.map((item) => {
-    const percentage = total > 0 ? (Math.max(0, item.value) / total) * 100 : 0;
-    const start = currentPercentage;
-    currentPercentage += percentage;
-    return `${item.color} ${start}% ${currentPercentage}%`;
-  }).join(", ");
+  const maxValue = Math.max(0, ...items.map((item) => item.value));
 
   return (
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="text-base">{title}</CardTitle>
-        <CardDescription>Distribución de los importes al cierre del periodo seleccionado.</CardDescription>
+        <CardDescription>Comparativo de importes al cierre del periodo seleccionado.</CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="grid items-center gap-8 md:grid-cols-[minmax(13rem,0.8fr)_minmax(16rem,1fr)]">
-          <div
-            className="relative mx-auto size-56 rounded-full"
-            role="img"
-            aria-label={`${title}: gráfica de pastel de ${items.map((item) => item.label).join(", ")}`}
-            style={{ background: total > 0 ? `conic-gradient(${gradient})` : "hsl(var(--muted))" }}
-          >
-            <div className="absolute inset-8 flex flex-col items-center justify-center rounded-full bg-card text-center shadow-inner">
-              <span className="text-xs text-muted-foreground">Total mostrado</span>
-              <span className="px-2 text-sm font-bold tabular-nums">{fmtMoney(total)}</span>
-            </div>
-          </div>
-          <div className="space-y-4">
-            {items.map((item) => {
-              const percentage = total > 0 ? (Math.max(0, item.value) / total) * 100 : 0;
-
-              return (
-                <div key={item.label} className="flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-2.5">
-                    <span className="size-3 rounded-full" style={{ backgroundColor: item.color }} aria-hidden="true" />
-                    <span className="text-sm font-medium">{item.label}</span>
+        <div className="overflow-x-auto pb-2">
+          {items.length === 0 ? (
+            <p className="py-12 text-center text-sm text-muted-foreground">Sin datos para el periodo seleccionado.</p>
+          ) : (
+            <div
+              className="grid gap-3"
+              style={{ gridTemplateColumns: `repeat(${items.length}, minmax(6rem, 1fr))` }}
+            >
+              {items.map((item) => (
+                <div key={item.label} className="flex min-w-0 flex-col items-center gap-2 text-center">
+                  <div className="flex h-44 w-full items-end justify-center border-b border-border" aria-hidden="true">
+                    <div
+                      className="w-full max-w-20 rounded-t-sm"
+                      style={{
+                        height: `${maxValue > 0 ? (Math.max(0, item.value) / maxValue) * 100 : 0}%`,
+                        backgroundColor: item.color,
+                      }}
+                    />
                   </div>
-                  <div className="text-right">
-                    <div className="text-sm font-semibold tabular-nums">{fmtMoney(item.value)}</div>
-                    <div className="text-xs text-muted-foreground">{percentage.toFixed(1)}%</div>
-                  </div>
+                  <span className="text-sm font-medium">{item.label}</span>
+                  <span className="text-xs font-semibold tabular-nums sm:text-sm">{fmtMoney(item.value)}</span>
                 </div>
-              );
-            })}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </CardContent>
     </Card>
@@ -392,6 +393,8 @@ export default function ReporteCierreMensualPage() {
   const adeudosAccionistas = visual.adeudos_por_accionista ?? [];
   const distribucion = visual.distribucion_carteras?.registros ?? [];
   const cierreMora = visual.cierre_mora ?? {};
+  const balanceCartera = data.balance_general_cartera ?? [];
+  const balanceMora = data.balance_mora_anual ?? [];
   const categoriasEgresos = Object.entries(data.flujo?.distribucion_categorias?.egresos ?? {});
 
   const distAnteriorLabel = visual.distribucion_carteras?.mes_anterior_label ?? "Mes anterior";
@@ -985,7 +988,7 @@ export default function ReporteCierreMensualPage() {
 
         <TabsContent value="graficas" className="space-y-6 pt-2">
           <div className="grid gap-6 xl:grid-cols-2">
-            <CarteraCierreChart
+            <CarteraCierreBarChart
               title={tituloCarteraCierre}
               items={[
                 { label: "Mora", value: Number(cierreMora.total ?? 0), color: "#f43f5e" },
@@ -993,31 +996,36 @@ export default function ReporteCierreMensualPage() {
                 { label: "Valor neto", value: Number(valores.valor_neto_cartera ?? 0), color: "#2563eb" },
               ]}
             />
-            <CarteraCierreChart
+            <CarteraCierreBarChart
               title="MORA ACTIVA Y MUERTA"
               items={[
                 { label: "Mora activa", value: Number(cierreMora.mora_activa ?? 0), color: "#f59e0b" },
                 { label: "Mora muerta", value: Number(cierreMora.mora_muerta ?? 0), color: "#ef4444" },
               ]}
             />
-            <CarteraCierreChart
-              title="VALOR BRUTO POR ACCIONISTA"
-              items={accionistas.map((row, index) => ({
-                label: row.nombre ?? `Accionista ${index + 1}`,
-                value: Number(row.valor_bruto ?? 0),
-                color: CHART_COLORS[index % CHART_COLORS.length],
-              }))}
-            />
-            <CarteraCierreChart
-              title="INGRESOS VS. EGRESOS"
-              items={[
-                { label: "Ingresos", value: Number(data.flujo?.total_ingresos ?? 0), color: "#2563eb" },
-                { label: "Egresos", value: Number(data.flujo?.total_egresos ?? 0), color: "#ef4444" },
-              ]}
-            />
           </div>
+          <AnnualGroupedBalanceChart
+            year={Number(anioCierre)}
+            title="Balance de cartera en el año"
+            description="Comparación mensual del valor neto y bruto de la cartera."
+            series={[
+              { label: "Neto", color: "#2563eb", values: balanceCartera.map((row) => row.valor_neto) },
+              { label: "Bruto", color: "#dc2626", values: balanceCartera.map((row) => row.valor_bruto) },
+            ]}
+            origins={balanceCartera.map((row) => row.origen)}
+          />
+          <AnnualGroupedBalanceChart
+            year={Number(anioCierre)}
+            title="Balance de mora activa y mora muerta del año"
+            description="Comparación mensual de mora activa y mora muerta."
+            series={[
+              { label: "Mora activa", color: "#2563eb", values: balanceMora.map((row) => row.mora_activa) },
+              { label: "Mora muerta", color: "#dc2626", values: balanceMora.map((row) => row.mora_muerta) },
+            ]}
+            origins={balanceMora.map((row) => row.origen)}
+          />
           <div className="grid gap-6">
-            <CarteraCierreChart
+            <CarteraCierreBarChart
               title="GASTOS OPERATIVOS"
               items={categoriasEgresos.map(([label, value], index) => ({
                 label,
