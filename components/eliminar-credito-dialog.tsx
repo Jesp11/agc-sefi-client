@@ -35,6 +35,19 @@ type PreviewItem = {
   motivo?: string | null;
   nombre_archivo?: string | null;
   estado?: string | null;
+  ciclo?: number | null;
+  resultado?: string | null;
+};
+
+// Texto de una fila de impacto; los ciclos no tienen motivo ni tipo.
+const describirFila = (row: PreviewItem) => {
+  const partes = [
+    row.fecha ? fmtFecha(row.fecha) : null,
+    row.motivo || row.nombre_archivo || row.tipo || (row.ciclo != null ? `Ciclo ${row.ciclo}${row.resultado ? ` · ${row.resultado}` : ""}` : "Registro"),
+    row.monto != null ? money(row.monto) : null,
+    row.estado ?? null,
+  ];
+  return partes.filter(Boolean).join(" · ");
 };
 
 const money = (value: unknown) => `$${Number(value ?? 0).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -149,7 +162,7 @@ export function EliminarCreditoDialog({
         )}
 
         {preview && !loading && (
-          <div className="grid gap-5 py-1">
+          <div className="grid min-w-0 gap-5 py-1">
             {preview.bloqueado ? (
               <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive">
                 <p className="font-semibold">No se puede eliminar este crédito.</p>
@@ -157,23 +170,23 @@ export function EliminarCreditoDialog({
               </div>
             ) : (
               <>
-                <div className="rounded-lg border bg-muted/40 p-3 text-sm">
+                <div className="min-w-0 rounded-lg border bg-muted/40 p-3 text-sm">
                   <p className="font-semibold">Folio #{preview.credito.num_prog} · {preview.credito.tipo_credito || tipoCredito}</p>
                   <p className="text-muted-foreground">{preview.credito.beneficiario || preview.credito.origen} · Desembolso {fmtFecha(preview.credito.fecha_desembolso)}</p>
                   <p className="mt-1 text-xs text-muted-foreground">Otorgado: {money(preview.credito.monto_otorgado)} · Neto: {money(preview.credito.monto_neto_desembolsado)}</p>
                 </div>
 
-                <div className="grid gap-2">
+                <div className="grid min-w-0 gap-2">
                   <p className="text-sm font-semibold">Se eliminarán y revertirán</p>
-                  <div className="rounded-lg border divide-y">
+                  <div className="min-w-0 rounded-lg border divide-y">
                     {impactoLabels.map(([key, label]) => {
                       const rows = preview.impactos[key] || [];
                       return (
-                        <div key={key} className="px-3 py-2 text-sm">
-                          <div className="flex items-center justify-between gap-3"><span>{label}</span><span className="font-semibold">{rows.length}</span></div>
+                        <div key={key} className="min-w-0 px-3 py-2 text-sm">
+                          <div className="flex items-center justify-between gap-3"><span className="min-w-0">{label}</span><span className="shrink-0 font-semibold tabular-nums">{rows.length}</span></div>
                           {rows.slice(0, 3).map((row) => (
-                            <p key={row.id} className="mt-1 truncate text-xs text-muted-foreground">
-                              {row.fecha ? `${fmtFecha(row.fecha)} · ` : ""}{row.motivo || row.nombre_archivo || row.tipo || "Registro"}{row.monto !== undefined ? ` · ${money(row.monto)}` : ""}{row.estado ? ` · ${row.estado}` : ""}
+                            <p key={row.id} className="mt-1 truncate text-xs text-muted-foreground" title={describirFila(row)}>
+                              {describirFila(row)}
                             </p>
                           ))}
                           {rows.length > 3 && <p className="mt-1 text-xs text-muted-foreground">y {rows.length - 3} más.</p>}
@@ -183,11 +196,11 @@ export function EliminarCreditoDialog({
                   </div>
                 </div>
 
-                <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
+                <div className="min-w-0 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
                   <p className="font-semibold">Coincidencias posibles que permanecerán intactas: {preview.coincidencias_posibles.length}</p>
                   <p className="mt-1 text-xs">Son movimientos sin vínculo, con la misma fecha de desembolso y monto otorgado o neto. Son sólo una advertencia.</p>
                   {preview.coincidencias_posibles.slice(0, 3).map((row) => (
-                    <p key={row.id} className="mt-1 text-xs">{fmtFecha(row.fecha)} · {row.motivo} · {money(row.monto)}</p>
+                    <p key={row.id} className="mt-1 truncate text-xs" title={describirFila(row)}>{describirFila(row)}</p>
                   ))}
                 </div>
 
